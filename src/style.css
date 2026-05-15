@@ -1,0 +1,701 @@
+:root {
+  --bg: #eef7f1;
+  --surface: #fffdf8;
+  --surface-2: #f7fbff;
+  --ink: #17312b;
+  --muted: #64746f;
+  --line: #d8e5de;
+  --green: #177a57;
+  --green-dark: #0d5b42;
+  --blue: #2f6ea8;
+  --yellow: #f1b33b;
+  --red: #cf4d3f;
+  --red-soft: #fff0ec;
+  --shadow: 0 18px 48px rgba(32, 78, 62, 0.18);
+  --radius: 8px;
+  font-family:
+    'Aptos',
+    'Microsoft YaHei UI',
+    'Microsoft YaHei',
+    'PingFang SC',
+    sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 0;
+}
+
+.app-shell {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: 28px 14px;
+  background:
+    radial-gradient(circle at 10% 12%, rgba(255, 255, 255, 0.9), transparent 28%),
+    linear-gradient(135deg, #e7f3ee 0%, #f6fbff 52%, #fdf6ec 100%);
+}
+
+.phone-frame {
+  width: min(100%, 430px);
+  min-height: min(900px, calc(100svh - 56px));
+  max-height: 920px;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(23, 49, 43, 0.12);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  background: var(--surface);
+}
+
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 22px 20px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 253, 248, 0.94);
+}
+
+.eyebrow,
+.topbar h1,
+.hero-panel h2,
+.hero-panel p,
+.section-title h3,
+.section-title span,
+.exercise-card h4,
+.exercise-card p,
+.metric small,
+.metric strong {
+  margin: 0;
+}
+
+.eyebrow {
+  color: var(--green);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.topbar h1 {
+  margin-top: 4px;
+  font-size: 27px;
+  line-height: 1.14;
+  letter-spacing: 0;
+}
+
+.role-switch,
+.copy-button,
+.coach-actions button,
+.penalty-actions button,
+.review-item button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: var(--radius);
+  color: var(--ink);
+  background: #ecf5ef;
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.role-switch {
+  flex: 0 0 auto;
+  padding: 0 11px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.screen {
+  flex: 1;
+  overflow: auto;
+  padding: 18px 18px 24px;
+}
+
+.with-bottom-nav {
+  padding-bottom: 100px;
+}
+
+.hero-panel {
+  padding: 18px;
+  border-radius: var(--radius);
+  background:
+    linear-gradient(145deg, rgba(23, 122, 87, 0.95), rgba(25, 74, 95, 0.94)),
+    #177a57;
+  color: white;
+  box-shadow: 0 14px 28px rgba(23, 122, 87, 0.22);
+}
+
+.date-chip {
+  width: fit-content;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.hero-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.hero-title h2 {
+  font-size: 30px;
+  line-height: 1.12;
+  letter-spacing: 0;
+}
+
+.hero-title p,
+.hero-meta {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.hero-meta span {
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.metric-row,
+.coach-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.coach-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 0;
+}
+
+.metric {
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.metric > span {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 7px;
+  color: var(--green);
+  background: #e4f4eb;
+}
+
+.metric svg {
+  width: 20px;
+  height: 20px;
+}
+
+.metric small {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.metric strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.metric.danger > span {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+.metric.warning > span {
+  color: #925f08;
+  background: #fff4d9;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 0 10px;
+}
+
+.section-title h3 {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.section-title span {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.status-pill {
+  flex: 0 0 auto;
+  padding: 7px 9px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 800;
+  background: #edf1ef;
+}
+
+.status-pill.success {
+  color: var(--green-dark);
+  background: #dff3e7;
+}
+
+.status-pill.warning {
+  color: #8a5b08;
+  background: #fff1cc;
+}
+
+.status-pill.danger {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+.status-pill.calm {
+  color: var(--blue);
+  background: #e7f1fb;
+}
+
+.exercise-list,
+.timeline,
+.penalty-list {
+  display: grid;
+  gap: 10px;
+}
+
+.exercise-card,
+.day-card,
+.form-card,
+.reminder-box,
+.coach-card,
+.empty-state,
+.penalty-card,
+.qr-placeholder {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.exercise-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px;
+}
+
+.exercise-card h4 {
+  font-size: 18px;
+}
+
+.exercise-card p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.exercise-card strong {
+  min-width: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  color: var(--green-dark);
+  font-size: 16px;
+}
+
+.exercise-card strong span {
+  margin-top: 3px;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.safety-strip,
+.warning-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: var(--radius);
+  color: #744b05;
+  background: #fff4d9;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.primary-action {
+  width: 100%;
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 14px;
+  border-radius: var(--radius);
+  color: white;
+  background: var(--green);
+  font-size: 19px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.primary-action:disabled {
+  color: #6e7d78;
+  background: #d7e5de;
+  cursor: default;
+}
+
+.bottom-nav {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgba(23, 49, 43, 0.12);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.96);
+  box-shadow: 0 10px 22px rgba(23, 49, 43, 0.12);
+}
+
+.bottom-nav button {
+  min-height: 56px;
+  display: grid;
+  place-items: center;
+  gap: 3px;
+  border-radius: 7px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.bottom-nav button.active {
+  color: white;
+  background: var(--green);
+}
+
+.day-card {
+  padding: 14px;
+}
+
+.day-card.is-today {
+  border-color: rgba(23, 122, 87, 0.42);
+  box-shadow: inset 3px 0 0 var(--green);
+}
+
+.day-head,
+.penalty-card,
+.review-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.day-head strong,
+.penalty-card strong,
+.review-item strong {
+  display: block;
+  font-size: 16px;
+}
+
+.day-head span,
+.penalty-card span,
+.review-item p,
+.day-card p {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.day-card p {
+  margin: 8px 0 0;
+}
+
+.mini-exercises {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.mini-exercises span {
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--green-dark);
+  background: #e7f5ed;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.form-card,
+.reminder-box,
+.coach-card {
+  padding: 15px;
+}
+
+.field {
+  display: grid;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.field > span {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+input[type='range'] {
+  width: 100%;
+  accent-color: var(--green);
+}
+
+textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  color: var(--ink);
+  background: white;
+}
+
+.issue-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.issue {
+  min-height: 46px;
+  border-radius: var(--radius);
+  color: var(--ink);
+  background: #edf4f1;
+  border: 1px solid var(--line);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.issue.selected {
+  color: white;
+  background: var(--red);
+  border-color: var(--red);
+}
+
+.ledger-hero {
+  padding: 18px;
+  border-radius: var(--radius);
+  color: white;
+  background: linear-gradient(145deg, #17312b, #245d73);
+}
+
+.ledger-hero span,
+.ledger-hero p {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.ledger-hero strong {
+  display: block;
+  margin: 6px 0;
+  font-size: 42px;
+  line-height: 1;
+}
+
+.ledger-hero p {
+  margin: 0;
+}
+
+.qr-placeholder {
+  min-height: 118px;
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  color: var(--muted);
+  background:
+    linear-gradient(90deg, rgba(23, 122, 87, 0.08) 1px, transparent 1px),
+    linear-gradient(rgba(23, 122, 87, 0.08) 1px, transparent 1px),
+    white;
+  background-size: 18px 18px;
+}
+
+.reminder-box p {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.55;
+}
+
+.copy-button {
+  padding: 0 10px;
+}
+
+.penalty-card {
+  padding: 13px;
+}
+
+.penalty-actions {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.penalty-actions button {
+  min-height: 38px;
+  padding: 0 9px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.penalty-actions button.active {
+  color: white;
+  background: var(--green);
+  border-color: var(--green);
+}
+
+.empty-state {
+  min-height: 92px;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.coach-screen {
+  padding-bottom: 24px;
+}
+
+.coach-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin: 12px 0 4px;
+}
+
+.coach-actions button {
+  padding: 0 10px;
+  font-weight: 800;
+}
+
+.review-item {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.review-item:first-of-type {
+  border-top: 0;
+}
+
+.review-item p {
+  margin: 3px 0 0;
+}
+
+.review-item button {
+  min-width: 64px;
+  color: white;
+  background: var(--blue);
+  border-color: var(--blue);
+  font-weight: 800;
+}
+
+.timeline.compact {
+  gap: 8px;
+}
+
+.timeline.compact .day-card {
+  padding: 11px;
+}
+
+@media (max-width: 520px) {
+  .app-shell {
+    padding: 0;
+  }
+
+  .phone-frame {
+    width: 100%;
+    min-height: 100svh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .topbar {
+    padding-top: 18px;
+  }
+}
+
+@media (max-width: 370px) {
+  .topbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .role-switch {
+    width: 100%;
+  }
+
+  .metric-row,
+  .coach-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .exercise-card,
+  .penalty-card,
+  .day-head,
+  .review-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .exercise-card strong {
+    align-items: flex-start;
+  }
+}

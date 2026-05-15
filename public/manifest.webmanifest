@@ -1,11 +1,11 @@
 {
   "name": "家庭健身契约",
   "short_name": "健身契约",
-  "description": "家庭内训练计划、打卡监督和保证金账本。",
+  "description": "家庭内训练计划、打卡审核、罚款流水和推送配置骨架。",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#eef7f1",
-  "theme_color": "#177a57",
+  "background_color": "#120f0d",
+  "theme_color": "#ff6a2a",
   "icons": [
     {
       "src": "/app-icon.svg",

@@ -4,29 +4,36 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import type { Penalty } from '../lib/types'
 
 export function usePenalties(userId?: string) {
-  const [penalties, setPenalties] = useState<Penalty[]>(() => readCache().penalties)
+  const cacheScope = userId ?? 'demo'
+  const [penalties, setPenalties] = useState<Penalty[]>(() => readCache(cacheScope).penalties)
   const [loading, setLoading] = useState(false)
+  const [loadedUserId, setLoadedUserId] = useState<string | null>(null)
+  const loadingState = loading || Boolean(userId && isSupabaseConfigured && loadedUserId !== userId)
 
   const load = useCallback(async () => {
     if (!userId) return
     if (!isSupabaseConfigured || !supabase) return
-    setLoading(true)
-    const { data } = await supabase
-      .from('penalties')
-      .select('*')
-      .eq('user_id', userId)
-      .order('date', { ascending: false })
-    setPenalties(data ?? [])
-    writeCache({ ...readCache(), penalties: data ?? [] })
-    setLoading(false)
-  }, [userId])
+    try {
+      setLoading(true)
+      const { data } = await supabase
+        .from('penalties')
+        .select('*')
+        .eq('user_id', userId)
+        .order('date', { ascending: false })
+      setPenalties(data ?? [])
+      writeCache({ ...readCache(cacheScope), penalties: data ?? [] }, cacheScope)
+      setLoadedUserId(userId)
+    } finally {
+      setLoading(false)
+    }
+  }, [cacheScope, userId])
 
   useEffect(() => {
     if (userId && !isSupabaseConfigured) {
-      setPenalties(readCache().penalties.filter((item) => item.user_id === userId))
+      setPenalties(readCache(cacheScope).penalties.filter((item) => item.user_id === userId))
     }
     void load()
-  }, [load])
+  }, [cacheScope, load, userId])
 
   useEffect(() => {
     if (!userId || !supabase) return
@@ -48,24 +55,26 @@ export function usePenalties(userId?: string) {
   const upsertPenalty = async (penalty: Omit<Penalty, 'id'> & { id?: string }) => {
     const next = { ...penalty, id: penalty.id ?? `local-penalty-${penalty.date}` } as Penalty
     if (!supabase) {
-      const cache = readCache()
+      const cache = readCache(cacheScope)
       const penalties = [
         ...cache.penalties.filter((item) => !(item.user_id === next.user_id && item.date === next.date)),
         next,
       ]
-      writeCache({ ...cache, penalties })
+      writeCache({ ...cache, penalties }, cacheScope)
       setPenalties(penalties.filter((item) => item.user_id === userId))
       return
     }
-    await supabase.from('penalties').upsert(penalty, { onConflict: 'user_id,date' })
+    const row = { ...penalty }
+    if (row.id?.startsWith('local-')) delete row.id
+    await supabase.from('penalties').upsert(row, { onConflict: 'user_id,date' })
     await load()
   }
 
   const updatePenalty = async (id: string, status: Penalty['status']) => {
     if (!supabase) {
-      const cache = readCache()
+      const cache = readCache(cacheScope)
       const penalties = cache.penalties.map((penalty) => (penalty.id === id ? { ...penalty, status } : penalty))
-      writeCache({ ...cache, penalties })
+      writeCache({ ...cache, penalties }, cacheScope)
       setPenalties(penalties.filter((item) => item.user_id === userId))
       return
     }
@@ -73,5 +82,5 @@ export function usePenalties(userId?: string) {
     await load()
   }
 
-  return { penalties, loading, reload: load, upsertPenalty, updatePenalty, setPenalties }
+  return { penalties, loading: loadingState, reload: load, upsertPenalty, updatePenalty, setPenalties }
 }

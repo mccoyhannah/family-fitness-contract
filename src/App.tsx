@@ -32,16 +32,20 @@ function App() {
           <Route path="/admin/stats" element={<CoachStats />} />
         </Route>
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<RoleAwareFallback />} />
     </Routes>
   )
 }
 
 function RequireRole({ role }: { role: 'student' | 'coach' }) {
-  const { loading, profile } = useAuth()
+  const { authError, loading, profile } = useAuth()
   const location = useLocation()
 
-  if (loading) return <ConfigMissing title="正在检查登录状态" detail="正在读取 Supabase session 和 profile。" />
+  if (loading) return <LoadingScreen />
+
+  if (authError) {
+    return <ConfigMissing title="账号状态无法确认" detail={authError} />
+  }
 
   if (!profile) return <Navigate to="/login" replace state={{ from: location.pathname }} />
 
@@ -50,6 +54,27 @@ function RequireRole({ role }: { role: 'student' | 'coach' }) {
   }
 
   return <Outlet />
+}
+
+function RoleAwareFallback() {
+  const { authError, loading, profile } = useAuth()
+
+  if (loading) return <LoadingScreen />
+  if (authError) return <Navigate to="/login" replace />
+  if (!profile) return <Navigate to="/login" replace />
+
+  return <Navigate to={profile.role === 'coach' ? '/admin' : '/'} replace />
+}
+
+function LoadingScreen() {
+  return (
+    <main className="center-screen">
+      <section className="config-card">
+        <h1>正在检查登录状态</h1>
+        <p>正在读取 Supabase session 和 profile。</p>
+      </section>
+    </main>
+  )
 }
 
 export default App

@@ -7,7 +7,7 @@ import { isSupabaseConfigured } from '../lib/supabase'
 import type { Role } from '../lib/types'
 
 export default function Login() {
-  const { previewAs, signIn } = useAuth()
+  const { authError, previewAs, signIn } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
@@ -57,7 +57,7 @@ export default function Login() {
               placeholder="Supabase Auth 密码"
             />
           </label>
-          {error && <strong className="form-error">{error}</strong>}
+          {(error || authError) && <strong className="form-error">{error || authError}</strong>}
           <button className="primary-action" disabled={!isSupabaseConfigured} type="submit">
             登录
           </button>

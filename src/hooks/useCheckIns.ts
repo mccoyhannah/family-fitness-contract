@@ -4,29 +4,36 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import type { CheckIn } from '../lib/types'
 
 export function useCheckIns(userId?: string) {
-  const [checkIns, setCheckIns] = useState<CheckIn[]>(() => readCache().checkIns)
+  const cacheScope = userId ?? 'demo'
+  const [checkIns, setCheckIns] = useState<CheckIn[]>(() => readCache(cacheScope).checkIns)
   const [loading, setLoading] = useState(false)
+  const [loadedUserId, setLoadedUserId] = useState<string | null>(null)
+  const loadingState = loading || Boolean(userId && isSupabaseConfigured && loadedUserId !== userId)
 
   const load = useCallback(async () => {
     if (!userId) return
     if (!isSupabaseConfigured || !supabase) return
-    setLoading(true)
-    const { data } = await supabase
-      .from('check_ins')
-      .select('*')
-      .eq('user_id', userId)
-      .order('date', { ascending: false })
-    setCheckIns(data ?? [])
-    writeCache({ ...readCache(), checkIns: data ?? [] })
-    setLoading(false)
-  }, [userId])
+    try {
+      setLoading(true)
+      const { data } = await supabase
+        .from('check_ins')
+        .select('*')
+        .eq('user_id', userId)
+        .order('date', { ascending: false })
+      setCheckIns(data ?? [])
+      writeCache({ ...readCache(cacheScope), checkIns: data ?? [] }, cacheScope)
+      setLoadedUserId(userId)
+    } finally {
+      setLoading(false)
+    }
+  }, [cacheScope, userId])
 
   useEffect(() => {
     if (userId && !isSupabaseConfigured) {
-      setCheckIns(readCache().checkIns.filter((item) => item.user_id === userId))
+      setCheckIns(readCache(cacheScope).checkIns.filter((item) => item.user_id === userId))
     }
     void load()
-  }, [load])
+  }, [cacheScope, load, userId])
 
   useEffect(() => {
     if (!userId || !supabase) return
@@ -48,15 +55,17 @@ export function useCheckIns(userId?: string) {
   const upsertCheckIn = async (checkIn: Omit<CheckIn, 'id'> & { id?: string }) => {
     const next = { ...checkIn, id: checkIn.id ?? `local-${checkIn.date}` } as CheckIn
     if (!supabase) {
-      const cache = readCache()
+      const cache = readCache(cacheScope)
       const checkIns = [...cache.checkIns.filter((item) => !(item.user_id === next.user_id && item.date === next.date)), next]
-      writeCache({ ...cache, checkIns })
+      writeCache({ ...cache, checkIns }, cacheScope)
       setCheckIns(checkIns.filter((item) => item.user_id === userId))
       return
     }
-    await supabase.from('check_ins').upsert(checkIn, { onConflict: 'user_id,date' })
+    const row = { ...checkIn }
+    if (row.id?.startsWith('local-')) delete row.id
+    await supabase.from('check_ins').upsert(row, { onConflict: 'user_id,date' })
     await load()
   }
 
-  return { checkIns, loading, reload: load, upsertCheckIn, setCheckIns }
+  return { checkIns, loading: loadingState, reload: load, upsertCheckIn, setCheckIns }
 }

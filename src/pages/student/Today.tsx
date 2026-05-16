@@ -1,5 +1,5 @@
 import { CalendarCheck, Flame, Umbrella } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import ExerciseCard from '../../components/ExerciseCard'
 import Metric from '../../components/Metric'
 import StatusPill from '../../components/StatusPill'
@@ -13,9 +13,10 @@ import type { CheckIn } from '../../lib/types'
 
 export default function Today() {
   const { profile } = useAuth()
-  const { checkIns, setCheckIns, upsertCheckIn } = useCheckIns(profile?.id)
-  const { penalties, setPenalties, updatePenalty, upsertPenalty } = usePenalties(profile?.id)
+  const { checkIns, loading: checkInsLoading, reload: reloadCheckIns, setCheckIns, upsertCheckIn } = useCheckIns(profile?.id)
+  const { penalties, loading: penaltiesLoading, reload: reloadPenalties, setPenalties, upsertPenalty } = usePenalties(profile?.id)
   const [leaveReason, setLeaveReason] = useState('')
+  const syncedKeyRef = useRef<string | null>(null)
   const today = toISODate(new Date())
   const plan = useMemo(() => buildPlan(new Date()), [])
   const todayPlan = plan.find((day) => day.date === today) ?? plan[0]
@@ -26,6 +27,11 @@ export default function Today() {
 
   useEffect(() => {
     if (!profile) return
+    if (checkInsLoading || penaltiesLoading) return
+    const syncKey = `${profile.id}:${today}`
+    if (syncedKeyRef.current === syncKey) return
+    syncedKeyRef.current = syncKey
+
     const synced = buildMissedSync(profile.id, plan, checkIns, penalties)
     const userCheckIns = synced.checkIns.filter((checkIn) => checkIn.user_id === profile.id)
     const userPenalties = synced.penalties.filter((penalty) => penalty.user_id === profile.id)
@@ -36,12 +42,32 @@ export default function Today() {
       (penalty) => !penalties.some((existing) => existing.user_id === penalty.user_id && existing.date === penalty.date),
     )
 
-    newCheckIns.forEach((checkIn) => void upsertCheckIn(checkIn))
-    newPenalties.forEach((penalty) => void upsertPenalty(penalty))
+    const persist = async () => {
+      await Promise.all([
+        ...newCheckIns.map((checkIn) => upsertCheckIn(checkIn)),
+        ...newPenalties.map((penalty) => upsertPenalty(penalty)),
+      ])
+      await Promise.all([reloadCheckIns(), reloadPenalties()])
+    }
 
     if (newCheckIns.length > 0) setCheckIns(userCheckIns)
     if (newPenalties.length > 0) setPenalties(userPenalties)
-  }, [checkIns, penalties, plan, profile, setCheckIns, setPenalties, upsertCheckIn, upsertPenalty])
+    if (newCheckIns.length > 0 || newPenalties.length > 0) void persist()
+  }, [
+    checkIns,
+    checkInsLoading,
+    penalties,
+    penaltiesLoading,
+    plan,
+    profile,
+    reloadCheckIns,
+    reloadPenalties,
+    setCheckIns,
+    setPenalties,
+    today,
+    upsertCheckIn,
+    upsertPenalty,
+  ])
 
   const complete = async () => {
     if (!profile) return
@@ -50,9 +76,7 @@ export default function Today() {
 
   const askLeave = async () => {
     if (!profile) return
-    await upsertCheckIn(buildCheckIn(profile.id, today, 'excused', '今天请假', leaveReason))
-    const penalty = penalties.find((item) => item.date === today)
-    if (penalty) await updatePenalty(penalty.id, 'waived')
+    await upsertCheckIn(buildCheckIn(profile.id, today, 'pending_review', '请假申请，等待教练确认', leaveReason))
     setLeaveReason('')
   }
 
@@ -101,9 +125,9 @@ export default function Today() {
             placeholder="出差 / 身体不适 / 今天休息"
           />
         </label>
-        <button disabled={todayCheckIn?.status === 'excused'} type="button" onClick={askLeave}>
+        <button disabled={Boolean(todayCheckIn)} type="button" onClick={askLeave}>
           <Umbrella size={20} />
-          今天请假，自动豁免
+          申请请假，待教练确认
         </button>
       </div>
     </section>

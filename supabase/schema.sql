@@ -81,14 +81,20 @@ drop policy if exists "students_upsert_own_check_ins" on public.check_ins;
 create policy "students_upsert_own_check_ins"
 on public.check_ins for insert
 to authenticated
-with check (user_id = auth.uid());
+with check (
+  user_id = auth.uid()
+  and status in ('completed', 'missed', 'pending_review')
+);
 
 drop policy if exists "students_update_own_check_ins" on public.check_ins;
 create policy "students_update_own_check_ins"
 on public.check_ins for update
 to authenticated
 using (user_id = auth.uid())
-with check (user_id = auth.uid());
+with check (
+  user_id = auth.uid()
+  and status in ('completed', 'missed', 'pending_review')
+);
 
 drop policy if exists "coach_update_all_check_ins" on public.check_ins;
 create policy "coach_update_all_check_ins"
@@ -114,14 +120,20 @@ drop policy if exists "students_insert_own_penalties" on public.penalties;
 create policy "students_insert_own_penalties"
 on public.penalties for insert
 to authenticated
-with check (user_id = auth.uid());
+with check (
+  user_id = auth.uid()
+  and status = 'pending'
+);
 
 drop policy if exists "students_update_own_penalties" on public.penalties;
 create policy "students_update_own_penalties"
 on public.penalties for update
 to authenticated
 using (user_id = auth.uid())
-with check (user_id = auth.uid());
+with check (
+  user_id = auth.uid()
+  and status = 'paid'
+);
 
 drop policy if exists "coach_update_all_penalties" on public.penalties;
 create policy "coach_update_all_penalties"

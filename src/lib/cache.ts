@@ -7,9 +7,13 @@ export type OfflineCache = {
 
 const CACHE_KEY = 'family-fitness-contract:v2-cache'
 
-export function readCache(): OfflineCache {
+function cacheKey(scope = 'demo') {
+  return `${CACHE_KEY}:${scope}`
+}
+
+export function readCache(scope = 'demo'): OfflineCache {
   try {
-    const raw = localStorage.getItem(CACHE_KEY)
+    const raw = localStorage.getItem(cacheKey(scope))
     if (!raw) return { checkIns: [], penalties: [] }
     const parsed = JSON.parse(raw) as OfflineCache
     return {
@@ -21,6 +25,10 @@ export function readCache(): OfflineCache {
   }
 }
 
-export function writeCache(cache: OfflineCache) {
-  localStorage.setItem(CACHE_KEY, JSON.stringify(cache))
+export function writeCache(cache: OfflineCache, scope = 'demo') {
+  localStorage.setItem(cacheKey(scope), JSON.stringify(cache))
+}
+
+export function clearCache(scope = 'demo') {
+  localStorage.removeItem(cacheKey(scope))
 }

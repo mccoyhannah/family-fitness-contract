@@ -6,7 +6,14 @@ import App from './App'
 import { AuthProvider } from './hooks/useAuth'
 import './style.css'
 
-registerSW({ immediate: true })
+const updateSW = registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    if (window.confirm('家庭健身契约有新版本，是否现在刷新？')) {
+      void updateSW(true)
+    }
+  },
+})
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -11,12 +11,12 @@ const demoStudent: Profile = {
 
 export function useCoachData() {
   const [profiles, setProfiles] = useState<Profile[]>([demoStudent])
-  const [checkIns, setCheckIns] = useState<CheckIn[]>(() => readCache().checkIns)
-  const [penalties, setPenalties] = useState<Penalty[]>(() => readCache().penalties)
+  const [checkIns, setCheckIns] = useState<CheckIn[]>(() => readCache('coach').checkIns)
+  const [penalties, setPenalties] = useState<Penalty[]>(() => readCache('coach').penalties)
 
   const load = useCallback(async () => {
     if (!isSupabaseConfigured || !supabase) {
-      const cache = readCache()
+      const cache = readCache('coach')
       setProfiles([demoStudent])
       setCheckIns(cache.checkIns)
       setPenalties(cache.penalties)
@@ -30,7 +30,7 @@ export function useCoachData() {
     setProfiles(profileRows ?? [])
     setCheckIns(checkInRows ?? [])
     setPenalties(penaltyRows ?? [])
-    writeCache({ checkIns: checkInRows ?? [], penalties: penaltyRows ?? [] })
+    writeCache({ checkIns: checkInRows ?? [], penalties: penaltyRows ?? [] }, 'coach')
   }, [])
 
   useEffect(() => {
@@ -53,9 +53,9 @@ export function useCoachData() {
 
   const updateCheckIn = async (id: string, status: CheckIn['status']) => {
     if (!supabase) {
-      const cache = readCache()
+      const cache = readCache('coach')
       const next = cache.checkIns.map((item) => (item.id === id ? { ...item, status } : item))
-      writeCache({ ...cache, checkIns: next })
+      writeCache({ ...cache, checkIns: next }, 'coach')
       setCheckIns(next)
       return
     }
@@ -65,9 +65,9 @@ export function useCoachData() {
 
   const updatePenalty = async (id: string, status: Penalty['status']) => {
     if (!supabase) {
-      const cache = readCache()
+      const cache = readCache('coach')
       const next = cache.penalties.map((item) => (item.id === id ? { ...item, status } : item))
-      writeCache({ ...cache, penalties: next })
+      writeCache({ ...cache, penalties: next }, 'coach')
       setPenalties(next)
       return
     }

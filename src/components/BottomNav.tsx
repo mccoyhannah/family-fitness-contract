@@ -22,7 +22,13 @@ export default function BottomNav({ role }: { role: Role }) {
   return (
     <nav className="bottom-nav">
       {items.map(([to, label, Icon]) => (
-        <NavLink className={({ isActive }) => (isActive ? 'active' : '')} key={to} to={to} end={to === '/' || to === '/admin'}>
+        <NavLink
+          aria-label={label}
+          className={({ isActive }) => (isActive ? 'active' : '')}
+          key={to}
+          to={to}
+          end={to === '/' || to === '/admin'}
+        >
           <Icon size={21} />
           <span>{label}</span>
         </NavLink>

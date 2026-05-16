@@ -3,8 +3,14 @@ import { useCoachData } from '../../hooks/useCoachData'
 import { formatDay } from '../../lib/date'
 
 export default function CoachReview() {
-  const { checkIns, profiles, updateCheckIn } = useCoachData()
+  const { checkIns, penalties, profiles, updateCheckIn, updatePenalty } = useCoachData()
   const pending = checkIns.filter((item) => item.status === 'pending_review')
+
+  const approveLeave = async (id: string, userId: string, date: string) => {
+    await updateCheckIn(id, 'excused')
+    const penalty = penalties.find((item) => item.user_id === userId && item.date === date)
+    if (penalty) await updatePenalty(penalty.id, 'waived')
+  }
 
   return (
     <section className="screen with-nav">
@@ -25,6 +31,9 @@ export default function CoachReview() {
               <StatusPill status={item.status} />
               <div className="row-actions">
                 <button type="button" onClick={() => void updateCheckIn(item.id, 'completed')}>通过</button>
+                {item.leave_reason && (
+                  <button type="button" onClick={() => void approveLeave(item.id, item.user_id, item.date)}>准假</button>
+                )}
                 <button type="button" onClick={() => void updateCheckIn(item.id, 'missed')}>记缺卡</button>
               </div>
             </article>

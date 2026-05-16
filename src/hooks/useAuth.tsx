@@ -17,8 +17,31 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 const demoProfiles: Record<Role, Profile> = {
-  student: { id: '00000000-0000-0000-0000-000000000101', name: '爸爸', role: 'student' },
-  coach: { id: '00000000-0000-0000-0000-000000000102', name: '我', role: 'coach' },
+  student: {
+    id: '00000000-0000-0000-0000-000000000101',
+    name: '爸爸',
+    role: 'student',
+    email: 'dad@example.com',
+    member_code: 'DAD001',
+  },
+  coach: {
+    id: '00000000-0000-0000-0000-000000000102',
+    name: '我',
+    role: 'coach',
+    email: 'coach@example.com',
+    member_code: 'COACH01',
+  },
+}
+
+const PREVIEW_ROLE_KEY = 'family-fitness-contract:preview-role'
+
+function isLocalhost() {
+  return ['127.0.0.1', 'localhost'].includes(window.location.hostname)
+}
+
+function readPreviewRole(): Role | null {
+  const role = localStorage.getItem(PREVIEW_ROLE_KEY)
+  return role === 'student' || role === 'coach' ? role : null
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -28,6 +51,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
 
   useEffect(() => {
+    const loadPreview = () => {
+      const previewRole = isLocalhost() ? readPreviewRole() : null
+      if (!previewRole) return false
+      setSession(null)
+      setProfile(demoProfiles[previewRole])
+      setAuthError(null)
+      setLoading(false)
+      return true
+    }
+
+    if (loadPreview()) return
+
     if (!isSupabaseConfigured || !supabase) {
       setLoading(false)
       return
@@ -36,13 +71,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth
       .getSession()
       .then(({ data, error }) => {
+        if (loadPreview()) return
         if (error) {
           setAuthError('无法读取登录状态，请检查网络或 Supabase 配置。')
           setLoading(false)
           return
         }
         setSession(data.session)
-        if (data.session?.user.id) void loadProfile(data.session.user.id)
+        if (data.session?.user.id) void loadProfile(data.session.user.id, data.session.user.email ?? null)
         else setLoading(false)
       })
       .catch(() => {
@@ -51,8 +87,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
 
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (loadPreview()) return
       setSession(nextSession)
-      if (nextSession?.user.id) void loadProfile(nextSession.user.id)
+      if (nextSession?.user.id) void loadProfile(nextSession.user.id, nextSession.user.email ?? null)
       else {
         setProfile(null)
         setLoading(false)
@@ -62,16 +99,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => data.subscription.unsubscribe()
   }, [])
 
-  const loadProfile = async (userId: string) => {
+  const loadProfile = async (userId: string, email?: string | null) => {
     if (!supabase) return
     setLoading(true)
     setAuthError(null)
     const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
-    if (error) {
+    if (error || !data) {
       setProfile(null)
       setAuthError('无法加载账号档案。请确认 Supabase profiles 已创建，或稍后重试。')
     } else {
-      setProfile(data)
+      const nextProfile = data as Profile
+      if (email && nextProfile.email !== email) {
+        const { data: updated } = await supabase
+          .from('profiles')
+          .update({ email: email.toLowerCase() })
+          .eq('id', userId)
+          .select('*')
+          .single()
+        setProfile((updated as Profile | null) ?? { ...nextProfile, email: email.toLowerCase() })
+      } else {
+        setProfile(nextProfile)
+      }
     }
     setLoading(false)
   }
@@ -93,12 +141,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signOut: async () => {
         if (supabase) await supabase.auth.signOut()
         if (profile?.id) clearCache(profile.id)
+        localStorage.removeItem(PREVIEW_ROLE_KEY)
         setSession(null)
         setProfile(null)
         setAuthError(null)
       },
       previewAs: (role) => {
-        if (isSupabaseConfigured) return
+        if (isSupabaseConfigured && !isLocalhost()) return
+        localStorage.setItem(PREVIEW_ROLE_KEY, role)
         setProfile(demoProfiles[role])
         setSession(null)
         setAuthError(null)

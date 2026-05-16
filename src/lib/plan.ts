@@ -1,5 +1,5 @@
 import { addDays, getWeekStart, toISODate } from './date'
-import type { Exercise, PlanDay } from './types'
+import type { Exercise, Plan, PlanDay, PlanDraft, PlanSource } from './types'
 
 const ex = (id: string, name: string, sets: string, reps: string, note: string): Exercise => ({
   id,
@@ -52,4 +52,41 @@ function day(
   exercises: Exercise[],
 ): PlanDay {
   return { date, dayOfWeek, title, focus, deadline, isTraining, exercises }
+}
+
+export function findTemplateDay(date: string, today = new Date()) {
+  return buildPlan(today).find((dayItem) => dayItem.date === date)
+}
+
+export function planFromTemplate(userId: string, planDay: PlanDay, source: PlanSource): PlanDraft {
+  return {
+    user_id: userId,
+    date: planDay.date,
+    title: planDay.title,
+    focus: planDay.focus,
+    deadline: planDay.deadline,
+    is_training: planDay.isTraining,
+    source,
+    items: planDay.exercises.map((exercise, index) => ({
+      id: exercise.id,
+      name: exercise.name,
+      sets: exercise.sets,
+      reps: exercise.reps,
+      note: exercise.note,
+      sort_order: index,
+    })),
+  }
+}
+
+export function planToExercises(plan: Pick<Plan, 'items'>): Exercise[] {
+  return plan.items
+    .slice()
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      sets: item.sets,
+      reps: item.reps,
+      note: item.note,
+    }))
 }

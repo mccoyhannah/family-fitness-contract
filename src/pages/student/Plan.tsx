@@ -1,28 +1,42 @@
 import ExerciseCard from '../../components/ExerciseCard'
+import { useAuth } from '../../hooks/useAuth'
+import { usePlans } from '../../hooks/usePlans'
 import { formatDay } from '../../lib/date'
-import { buildPlan } from '../../lib/plan'
+import { buildPlan, planToExercises } from '../../lib/plan'
 
 export default function Plan() {
-  const plan = buildPlan(new Date())
+  const { profile } = useAuth()
+  const { plans } = usePlans(profile?.id)
+  const week = buildPlan(new Date())
 
   return (
     <section className="screen with-nav">
       <div className="page-title">
         <h2>本周计划</h2>
-        <p>计划仍然 hardcode；v3 再做教练端编辑。</p>
+        <p>优先显示教练制定计划；没有教练计划时，可以在今日页自己制定当天计划。</p>
       </div>
       <div className="week-list">
-        {plan.map((day) => (
-          <article className="day-card" key={day.date}>
-            <div className="day-head">
-              <strong>{formatDay(day.date)}</strong>
-              <span>{day.isTraining ? day.title : '恢复 / 请假不罚'}</span>
-            </div>
-            {day.exercises.map((exercise) => (
-              <ExerciseCard exercise={exercise} key={exercise.id} />
-            ))}
-          </article>
-        ))}
+        {week.map((day) => {
+          const plan = plans.find((item) => item.date === day.date)
+          return (
+            <article className="day-card" key={day.date}>
+              <div className="day-head">
+                <strong>{formatDay(day.date)}</strong>
+                <span>{plan ? (plan.source === 'coach' ? '教练制定' : '自己制定') : '未制定'}</span>
+              </div>
+              {plan ? (
+                <>
+                  <p className="muted">{plan.title} · {plan.focus} · 截止 {plan.deadline}</p>
+                  {planToExercises(plan).map((exercise) => (
+                    <ExerciseCard exercise={exercise} key={exercise.id} />
+                  ))}
+                </>
+              ) : (
+                <p className="muted">当天没有明确计划，不会自动罚款。</p>
+              )}
+            </article>
+          )
+        })}
       </div>
     </section>
   )

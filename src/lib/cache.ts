@@ -1,8 +1,10 @@
-import type { CheckIn, Penalty } from './types'
+import type { CheckIn, CheckInEvidence, Penalty, Plan } from './types'
 
 export type OfflineCache = {
   checkIns: CheckIn[]
+  evidence: CheckInEvidence[]
   penalties: Penalty[]
+  plans: Plan[]
 }
 
 const CACHE_KEY = 'family-fitness-contract:v2-cache'
@@ -14,14 +16,16 @@ function cacheKey(scope = 'demo') {
 export function readCache(scope = 'demo'): OfflineCache {
   try {
     const raw = localStorage.getItem(cacheKey(scope))
-    if (!raw) return { checkIns: [], penalties: [] }
+    if (!raw) return { checkIns: [], evidence: [], penalties: [], plans: [] }
     const parsed = JSON.parse(raw) as OfflineCache
     return {
       checkIns: parsed.checkIns ?? [],
+      evidence: parsed.evidence ?? [],
       penalties: parsed.penalties ?? [],
+      plans: parsed.plans ?? [],
     }
   } catch {
-    return { checkIns: [], penalties: [] }
+    return { checkIns: [], evidence: [], penalties: [], plans: [] }
   }
 }
 

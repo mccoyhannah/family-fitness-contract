@@ -31,6 +31,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -140,7 +141,10 @@ button {
 .leave-card button,
 .row-actions button,
 .preview-actions button,
-.admin-button {
+.admin-button,
+.icon-action,
+.week-tabs button,
+.member-card {
   min-height: 42px;
   display: inline-flex;
   align-items: center;
@@ -178,6 +182,7 @@ button {
 .review-card,
 .stats-card,
 .metric,
+.member-card,
 .login-card,
 .config-card {
   border-radius: var(--radius);
@@ -216,7 +221,8 @@ button {
 .exercise-card p,
 .day-card span,
 .penalty-card span,
-.review-card span {
+.review-card span,
+.member-card span {
   color: var(--muted);
 }
 
@@ -327,6 +333,7 @@ button {
 }
 
 input,
+select,
 textarea {
   width: 100%;
   border: 1px solid var(--line);
@@ -335,7 +342,8 @@ textarea {
   background: rgba(255, 247, 234, 0.08);
 }
 
-input {
+input,
+select {
   min-height: 44px;
   padding: 0 11px;
 }
@@ -377,6 +385,127 @@ label {
 .leave-card {
   display: grid;
   gap: 10px;
+}
+
+.form-grid,
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.switch-row {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 247, 234, 0.06);
+}
+
+.switch-row input {
+  width: 18px;
+  min-height: 18px;
+}
+
+.compact-heading {
+  margin: 4px 0 0;
+}
+
+.icon-action {
+  width: 42px;
+  min-height: 42px;
+  padding: 0;
+}
+
+.danger-action {
+  align-self: end;
+  color: #fff;
+  background: rgba(240, 68, 56, 0.22);
+}
+
+.plan-editor,
+.plan-item-list,
+.plan-item-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.plan-item-editor {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 247, 234, 0.045);
+}
+
+.member-select {
+  margin-top: 12px;
+}
+
+.member-list,
+.week-tabs {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.member-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.member-card {
+  min-height: 72px;
+  display: grid;
+  justify-items: start;
+  align-content: center;
+  text-align: left;
+}
+
+.member-card.active,
+.week-tabs button.active {
+  color: #17110e;
+  background: var(--orange);
+}
+
+.member-card.active span,
+.week-tabs button.active {
+  color: #17110e;
+}
+
+.week-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.evidence-grid,
+.compact-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.evidence-grid img {
+  width: 74px;
+  height: 74px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+}
+
+.mini-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  max-width: 100%;
+  padding: 0 9px;
+  border-radius: 6px;
+  color: var(--ink);
+  background: rgba(255, 247, 234, 0.1);
+  font-size: 13px;
+  font-weight: 850;
+  overflow-wrap: anywhere;
 }
 
 .status-pill {
@@ -527,6 +656,10 @@ code {
 
 @media (max-width: 380px) {
   .metric-row,
+  .form-grid,
+  .check-grid,
+  .member-list,
+  .week-tabs,
   .penalty-card,
   .review-card,
   .exercise-card {

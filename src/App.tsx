@@ -3,9 +3,9 @@ import AppShell from './components/AppShell'
 import ConfigMissing from './components/ConfigMissing'
 import { useAuth } from './hooks/useAuth'
 import CoachDashboard from './pages/coach/Dashboard'
+import CoachMembers from './pages/coach/Members'
 import CoachPayments from './pages/coach/Payments'
 import CoachReview from './pages/coach/Review'
-import CoachStats from './pages/coach/Stats'
 import Login from './pages/Login'
 import CheckIn from './pages/student/CheckIn'
 import Ledger from './pages/student/Ledger'
@@ -27,9 +27,9 @@ function App() {
       <Route element={<RequireRole role="coach" />}>
         <Route element={<AppShell role="coach" />}>
           <Route path="/admin" element={<CoachDashboard />} />
+          <Route path="/admin/members" element={<CoachMembers />} />
           <Route path="/admin/review" element={<CoachReview />} />
           <Route path="/admin/payments" element={<CoachPayments />} />
-          <Route path="/admin/stats" element={<CoachStats />} />
         </Route>
       </Route>
       <Route path="*" element={<RoleAwareFallback />} />

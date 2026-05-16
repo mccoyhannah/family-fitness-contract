@@ -2,24 +2,28 @@ import { CalendarCheck, Flame, Umbrella } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import ExerciseCard from '../../components/ExerciseCard'
 import Metric from '../../components/Metric'
+import PlanEditor from '../../components/PlanEditor'
 import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
 import { useCheckIns } from '../../hooks/useCheckIns'
 import { usePenalties } from '../../hooks/usePenalties'
+import { usePlans } from '../../hooks/usePlans'
 import { toISODate } from '../../lib/date'
-import { buildPlan } from '../../lib/plan'
+import { buildPlan, planFromTemplate, planToExercises } from '../../lib/plan'
 import { buildMissedSync } from '../../lib/sync'
-import type { CheckIn } from '../../lib/types'
+import type { CheckIn, PlanDraft } from '../../lib/types'
 
 export default function Today() {
   const { profile } = useAuth()
   const { checkIns, loading: checkInsLoading, reload: reloadCheckIns, setCheckIns, upsertCheckIn } = useCheckIns(profile?.id)
   const { penalties, loading: penaltiesLoading, reload: reloadPenalties, setPenalties, upsertPenalty } = usePenalties(profile?.id)
+  const { loading: plansLoading, plans, savePlan } = usePlans(profile?.id)
   const [leaveReason, setLeaveReason] = useState('')
   const syncedKeyRef = useRef<string | null>(null)
   const today = toISODate(new Date())
-  const plan = useMemo(() => buildPlan(new Date()), [])
-  const todayPlan = plan.find((day) => day.date === today) ?? plan[0]
+  const templatePlan = useMemo(() => buildPlan(new Date()), [])
+  const todayTemplate = templatePlan.find((day) => day.date === today) ?? templatePlan[0]
+  const todayPlan = plans.find((plan) => plan.date === today)
   const todayCheckIn = checkIns.find((checkIn) => checkIn.date === today)
   const pendingTotal = penalties
     .filter((penalty) => penalty.status === 'pending')
@@ -27,12 +31,12 @@ export default function Today() {
 
   useEffect(() => {
     if (!profile) return
-    if (checkInsLoading || penaltiesLoading) return
-    const syncKey = `${profile.id}:${today}`
+    if (checkInsLoading || penaltiesLoading || plansLoading) return
+    const syncKey = `${profile.id}:${today}:${plans.map((plan) => plan.id).join(',')}`
     if (syncedKeyRef.current === syncKey) return
     syncedKeyRef.current = syncKey
 
-    const synced = buildMissedSync(profile.id, plan, checkIns, penalties)
+    const synced = buildMissedSync(profile.id, plans, checkIns, penalties)
     const userCheckIns = synced.checkIns.filter((checkIn) => checkIn.user_id === profile.id)
     const userPenalties = synced.penalties.filter((penalty) => penalty.user_id === profile.id)
     const newCheckIns = userCheckIns.filter(
@@ -58,7 +62,8 @@ export default function Today() {
     checkInsLoading,
     penalties,
     penaltiesLoading,
-    plan,
+    plans,
+    plansLoading,
     profile,
     reloadCheckIns,
     reloadPenalties,
@@ -70,15 +75,20 @@ export default function Today() {
   ])
 
   const complete = async () => {
-    if (!profile) return
-    await upsertCheckIn(buildCheckIn(profile.id, today, 'completed', '完成今日训练'))
+    if (!profile || !todayPlan) return
+    await upsertCheckIn(buildCheckIn(profile.id, todayPlan.id, today, 'completed', '完成今日训练'))
   }
 
   const askLeave = async () => {
-    if (!profile) return
-    await upsertCheckIn(buildCheckIn(profile.id, today, 'pending_review', '请假申请，等待教练确认', leaveReason))
+    if (!profile || !todayPlan) return
+    await upsertCheckIn(buildCheckIn(profile.id, todayPlan.id, today, 'pending_review', '请假申请，等待教练确认', leaveReason))
     setLeaveReason('')
   }
+
+  const selfPlanDraft = useMemo<PlanDraft | null>(() => {
+    if (!profile) return null
+    return planFromTemplate(profile.id, todayTemplate, 'student')
+  }, [profile, todayTemplate])
 
   return (
     <section className="screen with-nav">
@@ -87,13 +97,20 @@ export default function Today() {
           <Flame size={18} />
           云同步 v2
         </span>
-        <h2>{todayPlan.title}</h2>
-        <p>{todayPlan.focus} · 截止 {todayPlan.deadline}</p>
+        <h2>{todayPlan?.title ?? '今天还没有计划'}</h2>
+        <p>{todayPlan ? `${todayPlan.focus} · 截止 ${todayPlan.deadline}` : '可以等教练制定，也可以自己先定今天的训练。'}</p>
         <div className="metric-row">
           <Metric icon={<CalendarCheck />} label="今日状态" value={todayCheckIn ? '已记录' : '待完成'} />
           <Metric icon={<Flame />} label="待付罚款" value={`¥${pendingTotal}`} />
         </div>
       </div>
+
+      {profile?.member_code && (
+        <div className="status-card">
+          <strong>我的成员码：{profile.member_code}</strong>
+          <p>把这个码发给管理者，就能把你的账号绑定进家庭成员列表。</p>
+        </div>
+      )}
 
       {todayCheckIn && (
         <div className="status-card">
@@ -102,40 +119,59 @@ export default function Today() {
         </div>
       )}
 
-      <div className="section-heading">
-        <h3>今日训练</h3>
-        <span>{todayPlan.isTraining ? `${todayPlan.exercises.length} 个动作` : '恢复日'}</span>
-      </div>
-      <div className="exercise-list">
-        {todayPlan.exercises.map((exercise) => (
-          <ExerciseCard exercise={exercise} key={exercise.id} />
-        ))}
-      </div>
+      {todayPlan ? (
+        <>
+          <div className="section-heading">
+            <h3>今日训练</h3>
+            <span>{todayPlan.is_training ? `${todayPlan.items.length} 个动作` : '恢复日'}</span>
+          </div>
+          <div className="exercise-list">
+            {planToExercises(todayPlan).map((exercise) => (
+              <ExerciseCard exercise={exercise} key={exercise.id} />
+            ))}
+          </div>
 
-      <button className="primary-action" disabled={Boolean(todayCheckIn)} type="button" onClick={complete}>
-        完成今日训练
-      </button>
+          <button className="primary-action" disabled={Boolean(todayCheckIn)} type="button" onClick={complete}>
+            完成今日训练
+          </button>
 
-      <div className="leave-card">
-        <label>
-          请假理由，可空
-          <input
-            value={leaveReason}
-            onChange={(event) => setLeaveReason(event.target.value)}
-            placeholder="出差 / 身体不适 / 今天休息"
-          />
-        </label>
-        <button disabled={Boolean(todayCheckIn)} type="button" onClick={askLeave}>
-          <Umbrella size={20} />
-          申请请假，待教练确认
-        </button>
-      </div>
+          <div className="leave-card">
+            <label>
+              请假理由，可空
+              <input
+                value={leaveReason}
+                onChange={(event) => setLeaveReason(event.target.value)}
+                placeholder="出差 / 身体不适 / 今天休息"
+              />
+            </label>
+            <button disabled={Boolean(todayCheckIn)} type="button" onClick={askLeave}>
+              <Umbrella size={20} />
+              申请请假，待教练确认
+            </button>
+          </div>
+        </>
+      ) : (
+        selfPlanDraft && (
+          <>
+            <div className="section-heading">
+              <h3>自己制定今日计划</h3>
+              <span>不等于罚款</span>
+            </div>
+            <PlanEditor
+              initial={selfPlanDraft}
+              submitLabel="保存今日自定计划"
+              onSubmit={async (draft) => void (await savePlan(draft))}
+            />
+          </>
+        )
+      )}
     </section>
   )
 }
 
 function buildCheckIn(
   userId: string,
+  planId: string,
   date: string,
   status: CheckIn['status'],
   note: string,
@@ -144,6 +180,7 @@ function buildCheckIn(
   return {
     id: `local-${date}`,
     user_id: userId,
+    plan_id: planId,
     date,
     status,
     fatigue: status === 'completed' ? 3 : null,

@@ -5,7 +5,7 @@ import { formatDay } from '../../lib/date'
 
 export default function Ledger() {
   const { profile } = useAuth()
-  const { penalties } = usePenalties(profile?.id)
+  const { penalties, updatePenalty } = usePenalties(profile?.id)
   const total = penalties.filter((item) => item.status === 'pending').reduce((sum, item) => sum + item.amount, 0)
 
   return (
@@ -24,6 +24,11 @@ export default function Ledger() {
               <span>{formatDay(penalty.date)} · 连续第 {penalty.consecutive_count} 天</span>
             </div>
             <StatusPill status={penalty.status} />
+            {penalty.status === 'pending' && (
+              <div className="row-actions">
+                <button type="button" onClick={() => void updatePenalty(penalty.id, 'paid')}>我已付款</button>
+              </div>
+            )}
           </article>
         ))}
       </div>

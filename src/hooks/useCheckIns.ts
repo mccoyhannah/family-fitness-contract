@@ -59,12 +59,14 @@ export function useCheckIns(userId?: string) {
       const checkIns = [...cache.checkIns.filter((item) => !(item.user_id === next.user_id && item.date === next.date)), next]
       writeCache({ ...cache, checkIns }, cacheScope)
       setCheckIns(checkIns.filter((item) => item.user_id === userId))
-      return
+      return next
     }
     const row = { ...checkIn }
     if (row.id?.startsWith('local-')) delete row.id
-    await supabase.from('check_ins').upsert(row, { onConflict: 'user_id,date' })
+    const { data, error } = await supabase.from('check_ins').upsert(row, { onConflict: 'user_id,date' }).select('*').single()
+    if (error) throw error
     await load()
+    return data as CheckIn
   }
 
   return { checkIns, loading: loadingState, reload: load, upsertCheckIn, setCheckIns }

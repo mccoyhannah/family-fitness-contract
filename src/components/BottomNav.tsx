@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, ClipboardCheck, Home, ReceiptText, WalletCards } from 'lucide-react'
+import { CalendarDays, ClipboardCheck, Home, ReceiptText, Users, WalletCards } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import type { Role } from '../lib/types'
 
@@ -11,9 +11,9 @@ const studentItems = [
 
 const coachItems = [
   ['/admin', '总览', Home],
+  ['/admin/members', '成员', Users],
   ['/admin/review', '审核', ClipboardCheck],
-  ['/admin/payments', '罚款', WalletCards],
-  ['/admin/stats', '统计', BarChart3],
+  ['/admin/payments', '账款', WalletCards],
 ] as const
 
 export default function BottomNav({ role }: { role: Role }) {

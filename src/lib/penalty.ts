@@ -1,5 +1,5 @@
 import { addDays, toISODate } from './date'
-import type { CheckIn, Penalty, PlanDay } from './types'
+import type { CheckIn, Penalty, Plan } from './types'
 
 export function computePenaltyAmount(consecutiveDays: number) {
   return Math.min(10 * Math.max(1, consecutiveDays), 50)
@@ -7,7 +7,7 @@ export function computePenaltyAmount(consecutiveDays: number) {
 
 export function computeConsecutiveMisses(
   date: string,
-  plan: PlanDay[],
+  plan: Array<Pick<Plan, 'date' | 'is_training'>>,
   checkIns: CheckIn[],
   penalties: Penalty[],
 ) {
@@ -17,7 +17,7 @@ export function computeConsecutiveMisses(
   for (let index = 0; index < 30; index += 1) {
     const cursorDate = toISODate(cursor)
     const day = plan.find((item) => item.date === cursorDate)
-    if (!day?.isTraining) break
+    if (!day?.is_training) break
 
     const checkIn = checkIns.find((item) => item.date === cursorDate)
     const penalty = penalties.find((item) => item.date === cursorDate)

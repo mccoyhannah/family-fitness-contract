@@ -1,10 +1,10 @@
 import { isPastDeadline } from './date'
 import { computeConsecutiveMisses, computePenaltyAmount } from './penalty'
-import type { CheckIn, Penalty, PlanDay } from './types'
+import type { CheckIn, Penalty, Plan } from './types'
 
 export function buildMissedSync(
   userId: string,
-  plan: PlanDay[],
+  plan: Array<Pick<Plan, 'id' | 'date' | 'deadline' | 'is_training'>>,
   checkIns: CheckIn[],
   penalties: Penalty[],
   now = new Date(),
@@ -13,7 +13,7 @@ export function buildMissedSync(
   const nextPenalties = [...penalties]
 
   plan
-    .filter((day) => day.isTraining && isPastDeadline(day.date, day.deadline, now))
+    .filter((day) => day.is_training && isPastDeadline(day.date, day.deadline, now))
     .forEach((day) => {
       const existingCheckIn = nextCheckIns.find(
         (checkIn) => checkIn.user_id === userId && checkIn.date === day.date,
@@ -34,6 +34,7 @@ export function buildMissedSync(
       nextCheckIns.push({
         id: `local-missed-${day.date}`,
         user_id: userId,
+        plan_id: day.id,
         date: day.date,
         status: 'missed',
         fatigue: null,

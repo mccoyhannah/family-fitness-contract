@@ -16,21 +16,22 @@ export function useCoachData() {
 
   const load = useCallback(async () => {
     if (!isSupabaseConfigured || !supabase) {
-      const cache = readCache('coach')
+      const cache = readCache(demoStudent.id)
       setProfiles([demoStudent])
       setCheckIns(cache.checkIns)
       setPenalties(cache.penalties)
       return
     }
     const [{ data: profileRows }, { data: checkInRows }, { data: penaltyRows }] = await Promise.all([
-      supabase.from('profiles').select('*').order('created_at', { ascending: true }),
+      supabase.from('profiles').select('*').eq('role', 'student').order('created_at', { ascending: true }),
       supabase.from('check_ins').select('*').order('date', { ascending: false }),
       supabase.from('penalties').select('*').order('date', { ascending: false }),
     ])
-    setProfiles(profileRows ?? [])
+    setProfiles((profileRows ?? []) as Profile[])
     setCheckIns(checkInRows ?? [])
     setPenalties(penaltyRows ?? [])
-    writeCache({ checkIns: checkInRows ?? [], penalties: penaltyRows ?? [] }, 'coach')
+    const cache = readCache('coach')
+    writeCache({ ...cache, checkIns: checkInRows ?? [], penalties: penaltyRows ?? [] }, 'coach')
   }, [])
 
   useEffect(() => {
@@ -53,9 +54,9 @@ export function useCoachData() {
 
   const updateCheckIn = async (id: string, status: CheckIn['status']) => {
     if (!supabase) {
-      const cache = readCache('coach')
+      const cache = readCache(demoStudent.id)
       const next = cache.checkIns.map((item) => (item.id === id ? { ...item, status } : item))
-      writeCache({ ...cache, checkIns: next }, 'coach')
+      writeCache({ ...cache, checkIns: next }, demoStudent.id)
       setCheckIns(next)
       return
     }
@@ -65,9 +66,9 @@ export function useCoachData() {
 
   const updatePenalty = async (id: string, status: Penalty['status']) => {
     if (!supabase) {
-      const cache = readCache('coach')
+      const cache = readCache(demoStudent.id)
       const next = cache.penalties.map((item) => (item.id === id ? { ...item, status } : item))
-      writeCache({ ...cache, penalties: next }, 'coach')
+      writeCache({ ...cache, penalties: next }, demoStudent.id)
       setPenalties(next)
       return
     }

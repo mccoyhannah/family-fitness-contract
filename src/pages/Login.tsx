@@ -1,7 +1,7 @@
 import { AlertTriangle, Dumbbell } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { isSupabaseConfigured } from '../lib/supabase'
 import type { Role } from '../lib/types'
@@ -10,10 +10,24 @@ export default function Login() {
   const { authError, previewAs, signIn } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const autoPreviewRef = useRef(false)
   const from = typeof location.state?.from === 'string' ? location.state.from : '/'
+  const canPreview = !isSupabaseConfigured || ['127.0.0.1', 'localhost'].includes(window.location.hostname)
+
+  useEffect(() => {
+    if (!canPreview || autoPreviewRef.current) return
+    const previewRole = searchParams.get('preview')
+    if (previewRole !== 'student' && previewRole !== 'coach') return
+    autoPreviewRef.current = true
+    previewAs(previewRole)
+    window.setTimeout(() => {
+      navigate(searchParams.get('to') || (previewRole === 'coach' ? '/admin' : '/'), { replace: true })
+    }, 0)
+  }, [canPreview, navigate, previewAs, searchParams])
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -24,7 +38,9 @@ export default function Login() {
 
   const preview = (role: Role) => {
     previewAs(role)
-    navigate(role === 'coach' ? '/admin' : '/', { replace: true })
+    window.setTimeout(() => {
+      navigate(role === 'coach' ? '/admin' : '/', { replace: true })
+    }, 0)
   }
 
   return (
@@ -63,7 +79,7 @@ export default function Login() {
           </button>
         </form>
 
-        {!isSupabaseConfigured && (
+        {canPreview && (
           <div className="preview-actions">
             <button type="button" onClick={() => preview('student')}>
               预览学员端

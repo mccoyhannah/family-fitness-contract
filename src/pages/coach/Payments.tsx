@@ -78,7 +78,7 @@ export default function CoachPayments() {
   }
 
   return (
-    <section className="screen with-nav">
+    <section className="screen with-nav payments-screen">
       <div className="page-title">
         <h2>账款列表</h2>
         <p>按当前成员查看欠款，教练可标记已支付或豁免。</p>
@@ -89,41 +89,45 @@ export default function CoachPayments() {
         <Metric icon={<CheckCircle2 />} label="已支付" value={`¥${formatAmount(penaltySummary.paidTotal)}`} />
         <Metric icon={<CircleSlash />} label="已豁免" value={`¥${formatAmount(penaltySummary.waivedTotal)}`} />
       </div>
-      <div className="status-card action-card">
-        <strong>{membersReady ? `${visiblePenalties.length} 条当前记录` : '正在同步成员'}</strong>
-        <p>{membersReady ? `${scopeLabel}：${penaltySummary.pendingCount} 条待支付，${penaltySummary.settledCount} 条已处理；筛选只影响下方列表。` : '成员列表稳定后再显示账款记录。'}</p>
+      <div className="payments-controls">
+        <div className="status-card action-card payments-summary">
+          <strong>{membersReady ? `${visiblePenalties.length} 条当前记录` : '正在同步成员'}</strong>
+          <p>{membersReady ? `${scopeLabel}：${penaltySummary.pendingCount} 条待支付，${penaltySummary.settledCount} 条已处理；筛选只影响下方列表。` : '成员列表稳定后再显示账款记录。'}</p>
+        </div>
+        <div className="payments-toolbar" aria-label="账款筛选">
+          <label>
+            状态筛选
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
+              <option value="all">全部</option>
+              <option value="pending">待支付</option>
+              <option value="paid">已付</option>
+              <option value="waived">豁免</option>
+            </select>
+          </label>
+          <label>
+            排序
+            <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value as typeof sortOrder)}>
+              <option value="newest">最新优先</option>
+              <option value="oldest">最早优先</option>
+              <option value="amount-desc">金额降序</option>
+            </select>
+          </label>
+        </div>
       </div>
-      <div className="form-grid">
-        <label>
-          状态筛选
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
-            <option value="all">全部</option>
-            <option value="pending">待支付</option>
-            <option value="paid">已付</option>
-            <option value="waived">豁免</option>
-          </select>
-        </label>
-        <label>
-          排序
-          <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value as typeof sortOrder)}>
-            <option value="newest">最新优先</option>
-            <option value="oldest">最早优先</option>
-            <option value="amount-desc">金额降序</option>
-          </select>
-        </label>
-      </div>
-      <div className="penalty-list">
+      <div className="penalty-list payment-list">
         {visiblePenalties.length === 0 && <p className="muted">当前没有符合筛选条件的罚款记录。</p>}
         {visiblePenalties.map((penalty) => {
           const displayName = memberNameById.get(penalty.user_id) || '成员'
           return (
-            <article className="penalty-card" key={penalty.id}>
-              <div>
+            <article className="penalty-card payment-card" key={penalty.id}>
+              <div className="payment-copy">
                 <strong>¥{formatAmount(penalty.amount)}</strong>
                 <span>{displayName} · {formatDay(penalty.date)} · 连续第 {penalty.consecutive_count} 天</span>
               </div>
-              <StatusPill status={penalty.status} />
-              <div className="row-actions">
+              <div className="payment-status">
+                <StatusPill status={penalty.status} />
+              </div>
+              <div className="row-actions payment-actions">
                 <button
                   type="button"
                   disabled={Boolean(updatingPenaltyId)}

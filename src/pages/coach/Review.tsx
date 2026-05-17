@@ -13,6 +13,7 @@ export default function CoachReview() {
   const { checkIns, penalties, profiles, updateCheckIn, updatePenalty } = useCoachData()
   const { evidenceFor } = useCheckInEvidence('coach')
   const { plans } = usePlans(selectedMember?.id)
+  const memberNameById = new Map(members.map((member) => [member.id, member.display_name]))
   const pending = checkIns.filter(
     (item) => item.status === 'pending_review' && (!selectedMember || item.user_id === selectedMember.id),
   )
@@ -34,12 +35,13 @@ export default function CoachReview() {
         {pending.length === 0 && <p className="muted">当前没有待确认打卡。</p>}
         {pending.map((item) => {
           const profile = profiles.find((row) => row.id === item.user_id)
+          const displayName = memberNameById.get(item.user_id) ?? profile?.name ?? '学员'
           const plan = plans.find((row) => row.id === item.plan_id || row.date === item.date)
           const evidence = evidenceFor(item.id)
           return (
             <article className="review-card" key={item.id}>
               <div>
-                <strong>{profile?.name ?? '学员'} · {formatDay(item.date)}</strong>
+                <strong>{displayName} · {formatDay(item.date)}</strong>
                 <span>{plan ? `${plan.title} · ${plan.source === 'coach' ? '教练制定' : '成员自定'}` : '旧打卡或计划未同步'}</span>
                 <span>{item.note || '等待确认'}</span>
                 {item.issues.length > 0 && <span>异常：{item.issues.join('、')}</span>}

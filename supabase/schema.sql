@@ -30,10 +30,19 @@ where member_code is not null;
 create table if not exists public.coach_members (
   coach_id uuid not null references public.profiles(id) on delete cascade,
   student_id uuid not null references public.profiles(id) on delete cascade,
+  display_name text not null default '',
   created_at timestamptz default now(),
   primary key (coach_id, student_id),
   check (coach_id <> student_id)
 );
+
+alter table public.coach_members add column if not exists display_name text not null default '';
+
+update public.coach_members cm
+set display_name = p.name
+from public.profiles p
+where cm.student_id = p.id
+  and nullif(trim(cm.display_name), '') is null;
 
 create table if not exists public.plans (
   id uuid primary key default gen_random_uuid(),
@@ -194,18 +203,24 @@ create trigger prevent_profile_role_change
 before update on public.profiles
 for each row execute function public.prevent_profile_role_change();
 
-create or replace function public.coach_add_member(identifier text)
+drop function if exists public.coach_add_member(text);
+create or replace function public.coach_add_member(identifier text, display_name text)
 returns uuid
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  normalized text := lower(trim(identifier));
+  normalized text := lower(trim(coalesce(identifier, '')));
+  nickname text := trim(coalesce(display_name, ''));
   target_student uuid;
 begin
   if not public.is_coach() then
     raise exception 'only coach can add members';
+  end if;
+
+  if nickname = '' then
+    raise exception 'display name is required';
   end if;
 
   select id into target_student
@@ -221,15 +236,16 @@ begin
     raise exception 'member not found';
   end if;
 
-  insert into public.coach_members (coach_id, student_id)
-  values (auth.uid(), target_student)
-  on conflict do nothing;
+  insert into public.coach_members (coach_id, student_id, display_name)
+  values (auth.uid(), target_student, nickname)
+  on conflict (coach_id, student_id) do update
+  set display_name = excluded.display_name;
 
   return target_student;
 end;
 $$;
 
-grant execute on function public.coach_add_member(text) to authenticated;
+grant execute on function public.coach_add_member(text, text) to authenticated;
 
 drop policy if exists "profiles_select_own_or_coach" on public.profiles;
 drop policy if exists "profiles_select_own_or_bound_coach" on public.profiles;
@@ -272,6 +288,19 @@ create policy "coach_members_delete_own"
 on public.coach_members for delete
 to authenticated
 using (
+  coach_id = auth.uid()
+  and public.is_coach()
+);
+
+drop policy if exists "coach_members_update_own_display_name" on public.coach_members;
+create policy "coach_members_update_own_display_name"
+on public.coach_members for update
+to authenticated
+using (
+  coach_id = auth.uid()
+  and public.is_coach()
+)
+with check (
   coach_id = auth.uid()
   and public.is_coach()
 );
@@ -533,6 +562,7 @@ grant update (name, email, member_code) on public.profiles to authenticated;
 
 grant select, delete on public.coach_members to authenticated;
 revoke insert on public.coach_members from authenticated;
+grant update (display_name) on public.coach_members to authenticated;
 grant select, insert, update, delete on public.plans to authenticated;
 grant select, insert, update, delete on public.plan_items to authenticated;
 grant select, insert, update, delete on public.check_ins to authenticated;

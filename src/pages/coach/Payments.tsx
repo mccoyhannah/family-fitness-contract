@@ -10,6 +10,7 @@ export default function CoachPayments() {
   const { members, selectedMember, selectedMemberId, setSelectedMemberId } = useMembers(profile?.id)
   const { penalties, profiles, updatePenalty } = useCoachData()
   const scopedPenalties = selectedMember ? penalties.filter((penalty) => penalty.user_id === selectedMember.id) : penalties
+  const memberNameById = new Map(members.map((member) => [member.id, member.display_name]))
 
   return (
     <section className="screen with-nav">
@@ -22,11 +23,12 @@ export default function CoachPayments() {
         {scopedPenalties.length === 0 && <p className="muted">当前没有罚款记录。</p>}
         {scopedPenalties.map((penalty) => {
           const profile = profiles.find((row) => row.id === penalty.user_id)
+          const displayName = memberNameById.get(penalty.user_id) ?? profile?.name ?? '学员'
           return (
             <article className="penalty-card" key={penalty.id}>
               <div>
                 <strong>¥{penalty.amount}</strong>
-                <span>{profile?.name ?? '学员'} · {formatDay(penalty.date)} · 连续第 {penalty.consecutive_count} 天</span>
+                <span>{displayName} · {formatDay(penalty.date)} · 连续第 {penalty.consecutive_count} 天</span>
               </div>
               <StatusPill status={penalty.status} />
               <div className="row-actions">

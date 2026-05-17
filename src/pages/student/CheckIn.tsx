@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import FatigueCards from '../../components/FatigueCards'
 import { useAuth } from '../../hooks/useAuth'
 import { useCheckIns } from '../../hooks/useCheckIns'
 import { useCheckInEvidence } from '../../hooks/useCheckInEvidence'
@@ -55,6 +56,13 @@ export default function CheckIn() {
     setIssues((current) => (current.includes(issue) ? current.filter((item) => item !== issue) : [...current, issue]))
   }
 
+  const changeFatigue = (nextFatigue: number) => {
+    setFatigue(nextFatigue)
+    if (nextFatigue === 5) {
+      setIssues((current) => (current.includes('不舒服') ? current : [...current, '不舒服']))
+    }
+  }
+
   return (
     <section className="screen with-nav">
       <div className="page-title">
@@ -82,10 +90,7 @@ export default function CheckIn() {
         </div>
       )}
       <div className="form-card">
-        <label>
-          疲劳程度：{fatigue}/5
-          <input min="1" max="5" type="range" value={fatigue} onChange={(event) => setFatigue(Number(event.target.value))} />
-        </label>
+        <FatigueCards value={fatigue} onChange={changeFatigue} />
         <div className="check-grid">
           {['疼痛', '头晕', '胸闷', '不舒服'].map((issue) => (
             <label className="switch-row" key={issue}>

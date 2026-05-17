@@ -22,7 +22,7 @@ export default function CoachDashboard() {
       <div className="hero-panel">
         <span className="hero-kicker">Coach Console</span>
         <h2>远程监督台</h2>
-        <p>{selectedMember ? `当前正在看 ${selectedMember.name} 的计划、打卡和账款。` : '先添加成员，再制定计划。'}</p>
+        <p>{selectedMember ? `当前正在看 ${selectedMember.display_name} 的计划、打卡和账款。` : '先添加成员，再制定计划。'}</p>
       </div>
       <MemberSelect members={members} selectedMemberId={selectedMemberId} onChange={setSelectedMemberId} />
       <div className="metric-row">

@@ -7,7 +7,7 @@ v1.1 家庭成员版：`Vite + React + TypeScript + Supabase + React Router + PW
 - 已接入 Supabase SDK、Realtime 订阅骨架和私有 Storage 图片证据桶。
 - 已拆路由：`/login`、`/`、`/plan`、`/checkin`、`/ledger`、`/admin`、`/admin/members`、`/admin/review`、`/admin/payments`。
 - 已拆角色：`student` 只能进学员端，`coach` 只能进管理端。
-- 已加成员绑定：管理者可用成员邮箱或成员码绑定已有学员账号。
+- 已加成员绑定：管理者可用成员邮箱或成员码绑定已有学员账号，并给每个成员设置管理端显示昵称。
 - 已加云端计划：管理者给成员制定计划；无计划时，成员可自己制定当天计划。
 - 已加图片打卡：成员可上传 1-3 张图片，管理端审核页可查看证据。
 - 已加请假按钮：当天写入 `check_ins.status='excused'`，如有当天罚款则置为 `waived`。
@@ -61,7 +61,7 @@ insert into public.profiles (id, name, role, email) values ('<dad-auth-user-uuid
 insert into public.profiles (id, name, role, email) values ('<your-auth-user-uuid>', '你的名字', 'coach', '<your-email>');
 ```
 
-7. 登录管理端后，在“成员”页输入成员邮箱或成员码绑定成员。
+7. 登录管理端后，在“成员”页填写“我怎么称呼这个成员”和成员邮箱/成员码来绑定成员。这个显示昵称保存在 `coach_members.display_name`，不会修改成员账号自己的 `profiles.name`。
 
 ## 验证
 

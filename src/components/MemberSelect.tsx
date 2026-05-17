@@ -12,15 +12,23 @@ export default function MemberSelect({ members, onChange, selectedMemberId }: Me
   }
 
   return (
-    <label className="member-select">
-      当前成员
-      <select value={selectedMemberId} onChange={(event) => onChange(event.target.value)}>
+    <div className="member-select" aria-label="当前成员">
+      <div className="field-label">当前成员</div>
+      <div className="member-choice-list">
         {members.map((member) => (
-          <option key={member.id} value={member.id}>
-            {member.name}
-          </option>
+          <button
+            aria-pressed={member.id === selectedMemberId}
+            className={member.id === selectedMemberId ? 'member-choice active' : 'member-choice'}
+            key={member.id}
+            type="button"
+            onClick={() => onChange(member.id)}
+          >
+            <strong>{member.display_name}</strong>
+            <span>{member.account_name}</span>
+            <small>{member.email || member.member_code || '成员账号'}</small>
+          </button>
         ))}
-      </select>
-    </label>
+      </div>
+    </div>
   )
 }

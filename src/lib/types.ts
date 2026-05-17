@@ -13,6 +13,8 @@ export type Profile = {
 }
 
 export type MemberProfile = Profile & {
+  account_name: string
+  display_name: string
   member_since?: string
 }
 

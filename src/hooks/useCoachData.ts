@@ -25,6 +25,10 @@ function shouldUseDemoCoachData() {
   return !isSupabaseConfigured || !supabase || (isLocalhostPreview() && localStorage.getItem(PREVIEW_ROLE_KEY) === 'coach')
 }
 
+export function clearCoachDataCache() {
+  coachDataCache = null
+}
+
 function initialCoachDataState(): CoachDataState {
   if (coachDataCache) return { ...coachDataCache, loading: false }
   if (shouldUseDemoCoachData()) {

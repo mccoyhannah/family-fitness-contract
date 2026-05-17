@@ -4,6 +4,7 @@ import { clearCache } from '../lib/cache'
 import { DEMO_COACH_ID, DEMO_STUDENT_ID, PREVIEW_ROLE_KEY, isLocalhostPreview, readPreviewRole } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import type { Profile, Role } from '../lib/types'
+import { clearCoachDataCache } from './useCoachData'
 
 type AuthContextValue = {
   loading: boolean
@@ -141,6 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (profile?.id) clearCache(profile.id)
         clearCache('coach')
         clearCache('demo')
+        clearCoachDataCache()
         localStorage.removeItem(PREVIEW_ROLE_KEY)
         setSession(null)
         setProfile(null)

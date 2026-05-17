@@ -125,6 +125,17 @@ export default function Today() {
 
   if (showLoadingSkeleton) return <TodayLoadingSkeleton />
 
+  if (!todayTemplate) {
+    return (
+      <section className="screen with-nav">
+        <div className="status-card action-card">
+          <strong>今天还没有默认训练模板</strong>
+          <p>可以先等管理端下发计划，或稍后刷新页面。</p>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="screen with-nav">
       <TodayHeroSection

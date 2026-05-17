@@ -116,7 +116,7 @@ export default function Today() {
         </span>
         <h2>{todayPlan?.title ?? '今天还没有计划'}</h2>
         <p>{todayPlan ? `${todayPlan.focus} · 截止 ${todayPlan.deadline}` : '可以等教练制定，也可以自己先定今天的训练。'}</p>
-        <div className="metric-row">
+        <div className="metric-row three-col">
           <Metric icon={<CalendarCheck />} label="今日状态" value={todayCheckIn ? '已记录' : '待完成'} />
           <Metric icon={<Flame />} label="待付罚款" value={`¥${pendingTotal}`} />
           <Metric icon={<CalendarCheck />} label="今日动作" value={todayPlan ? (todayPlan.is_training ? `${todayExercises.length} 个` : '恢复日') : '未制定'} />

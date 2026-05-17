@@ -51,7 +51,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
 
   const loadProfile = useCallback(async (userId: string, email?: string | null) => {
-    if (!supabase) return
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setAuthError(null)
     const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()

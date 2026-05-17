@@ -51,8 +51,8 @@ export default function AppNotice() {
   }, [])
 
   useEffect(() => {
-    if (!notice || notice.action) return
-    const timer = window.setTimeout(() => setNotice(null), 4200)
+    if (!notice) return
+    const timer = window.setTimeout(() => setNotice(null), notice.action ? 9000 : 4200)
     return () => window.clearTimeout(timer)
   }, [notice])
 

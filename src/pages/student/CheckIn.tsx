@@ -69,6 +69,10 @@ export default function CheckIn() {
     setFiles(images)
   }
 
+  const removeFile = (index: number) => {
+    setFiles((current) => current.filter((_, currentIndex) => currentIndex !== index))
+  }
+
   const toggleIssue = (issue: string) => {
     setIssues((current) => (current.includes(issue) ? current.filter((item) => item !== issue) : [...current, issue]))
   }
@@ -126,8 +130,11 @@ export default function CheckIn() {
         </label>
         {files.length > 0 && (
           <div className="evidence-grid">
-            {filePreviews.map((preview) => (
-              <figure className="evidence-preview" key={`${preview.file.name}-${preview.file.size}`}>
+            {filePreviews.map((preview, index) => (
+              <figure className="evidence-preview" key={`${preview.file.name}-${preview.file.size}-${index}`}>
+                <button aria-label={`移除 ${preview.file.name}`} type="button" onClick={() => removeFile(index)}>
+                  ×
+                </button>
                 <img alt={preview.file.name} src={preview.url} />
                 <figcaption>{preview.file.name}</figcaption>
               </figure>

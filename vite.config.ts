@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'app-icon.svg', 'app-icon-192.png', 'app-icon-512.png'],
+      includeAssets: ['favicon.svg', 'app-icon-192.png', 'app-icon-512.png'],
       manifest: {
         name: '家庭健身契约',
         short_name: '健身契约',

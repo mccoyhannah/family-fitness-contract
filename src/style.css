@@ -242,6 +242,10 @@ button {
   margin-top: 12px;
 }
 
+.metric-row.three-col {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .metric {
   min-height: 84px;
   display: grid;
@@ -873,10 +877,29 @@ code {
 }
 
 .evidence-preview {
+  position: relative;
   width: 96px;
   display: grid;
   gap: 6px;
   margin: 0;
+}
+
+.evidence-preview button {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 1px solid rgba(19, 34, 29, 0.14);
+  border-radius: 50%;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 18px rgba(35, 48, 42, 0.14);
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .evidence-preview img {
@@ -914,6 +937,7 @@ code {
 
 @media (max-width: 380px) {
   .metric-row,
+  .metric-row.three-col,
   .form-grid,
   .check-grid,
   .fatigue-grid,

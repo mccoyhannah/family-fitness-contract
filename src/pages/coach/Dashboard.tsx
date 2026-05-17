@@ -20,7 +20,9 @@ export default function CoachDashboard() {
   const pendingPenalty = scopedPenalties.filter((item) => item.status === 'pending')
   const pendingTotal = pendingPenalty.reduce((sum, item) => sum + item.amount, 0)
   const completed = scopedCheckIns.filter((item) => item.status === 'completed').length
-  const completionRate = scopedCheckIns.length > 0 ? `${Math.round((completed / scopedCheckIns.length) * 100)}%` : '0%'
+  const missed = scopedCheckIns.filter((item) => item.status === 'missed').length
+  const finishedTotal = completed + missed
+  const completionRate = finishedTotal > 0 ? `${Math.round((completed / finishedTotal) * 100)}%` : '0%'
   const recentCheckIns = scopedCheckIns
     .slice()
     .sort((a, b) => b.date.localeCompare(a.date))

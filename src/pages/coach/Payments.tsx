@@ -8,12 +8,12 @@ import { useAuth } from '../../hooks/useAuth'
 import { useCoachData } from '../../hooks/useCoachData'
 import { useMembers } from '../../hooks/useMembers'
 import { formatDay } from '../../lib/date'
-import { cleanMemberLabel, displayMemberLabel } from '../../lib/memberLabels'
+import { displayMemberLabel } from '../../lib/memberLabels'
 
 export default function CoachPayments() {
   const { profile } = useAuth()
   const { members, selectedMember, selectedMemberId, setSelectedMemberId } = useMembers(profile?.id)
-  const { penalties, profiles, updatePenalty } = useCoachData()
+  const { penalties, updatePenalty } = useCoachData()
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'paid' | 'waived'>('all')
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'amount-desc'>('newest')
   const [updatingPenaltyId, setUpdatingPenaltyId] = useState('')
@@ -100,8 +100,7 @@ export default function CoachPayments() {
       <div className="penalty-list">
         {visiblePenalties.length === 0 && <p className="muted">当前没有符合筛选条件的罚款记录。</p>}
         {visiblePenalties.map((penalty) => {
-          const profile = profiles.find((row) => row.id === penalty.user_id)
-          const displayName = memberNameById.get(penalty.user_id) || cleanMemberLabel(profile?.name) || '学员'
+          const displayName = memberNameById.get(penalty.user_id) || '成员'
           return (
             <article className="penalty-card" key={penalty.id}>
               <div>

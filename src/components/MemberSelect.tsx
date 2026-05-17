@@ -1,5 +1,5 @@
 import type { MemberProfile } from '../lib/types'
-import { accountMemberLabel, contactMemberLabel, displayMemberLabel, shouldShowAccountLabel } from '../lib/memberLabels'
+import { displayMemberLabel } from '../lib/memberLabels'
 
 type MemberSelectProps = {
   members: MemberProfile[]
@@ -16,22 +16,17 @@ export default function MemberSelect({ members, onChange, selectedMemberId }: Me
     <div className="member-select" aria-label="当前成员">
       <div className="field-label">当前成员</div>
       <div className="member-choice-list">
-        {members.map((member) => {
-          const contactLabel = contactMemberLabel(member)
-          return (
-            <button
-              aria-pressed={member.id === selectedMemberId}
-              className={member.id === selectedMemberId ? 'member-choice active' : 'member-choice'}
-              key={member.id}
-              type="button"
-              onClick={() => onChange(member.id)}
-            >
-              <strong>{displayMemberLabel(member)}</strong>
-              {shouldShowAccountLabel(member) && <span>{accountMemberLabel(member)}</span>}
-              {contactLabel && <small>{contactLabel}</small>}
-            </button>
-          )
-        })}
+        {members.map((member) => (
+          <button
+            aria-pressed={member.id === selectedMemberId}
+            className={member.id === selectedMemberId ? 'member-choice active' : 'member-choice'}
+            key={member.id}
+            type="button"
+            onClick={() => onChange(member.id)}
+          >
+            <strong>{displayMemberLabel(member)}</strong>
+          </button>
+        ))}
       </div>
     </div>
   )

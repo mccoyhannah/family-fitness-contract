@@ -61,7 +61,7 @@ insert into public.profiles (id, name, role, email) values ('<dad-auth-user-uuid
 insert into public.profiles (id, name, role, email) values ('<your-auth-user-uuid>', '你的名字', 'coach', '<your-email>');
 ```
 
-7. 登录管理端后，在“成员”页填写“我怎么称呼这个成员”和成员邮箱/成员码来绑定成员。这个显示昵称保存在 `coach_members.display_name`，不会修改成员账号自己的 `profiles.name`。
+7. 登录管理端后，在“成员”页填写“成员昵称”和成员邮箱/成员码来绑定成员。这个显示昵称保存在 `coach_members.display_name`，不会修改成员账号自己的 `profiles.name`。
 
 ## 验证
 

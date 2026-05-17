@@ -8,12 +8,12 @@ import { useCoachData } from '../../hooks/useCoachData'
 import { useMembers } from '../../hooks/useMembers'
 import { usePlans } from '../../hooks/usePlans'
 import { formatDay } from '../../lib/date'
-import { cleanMemberLabel, displayMemberLabel } from '../../lib/memberLabels'
+import { displayMemberLabel } from '../../lib/memberLabels'
 
 export default function CoachReview() {
   const { profile: coach } = useAuth()
   const { members, selectedMember, selectedMemberId, setSelectedMemberId } = useMembers(coach?.id)
-  const { checkIns, penalties, profiles, updateCheckIn, updatePenalty } = useCoachData()
+  const { checkIns, penalties, updateCheckIn, updatePenalty } = useCoachData()
   const { evidenceFor, reload: reloadEvidence } = useCheckInEvidence('coach')
   const retriedEvidenceKeysRef = useRef(new Set<string>())
   const reviewingCheckInIdRef = useRef('')
@@ -87,8 +87,7 @@ export default function CoachReview() {
       <div className="review-list">
         {pending.length === 0 && <p className="muted">当前没有待确认打卡。</p>}
         {pending.map((item) => {
-          const profile = profiles.find((row) => row.id === item.user_id)
-          const displayName = memberNameById.get(item.user_id) || cleanMemberLabel(profile?.name) || '学员'
+          const displayName = memberNameById.get(item.user_id) || '成员'
           const plan = plans.find((row) => row.id === item.plan_id || row.date === item.date)
           const itemEvidence = evidenceFor(item.id)
           return (

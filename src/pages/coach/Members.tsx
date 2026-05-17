@@ -7,7 +7,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useMembers } from '../../hooks/useMembers'
 import { usePlans } from '../../hooks/usePlans'
 import { formatDay, toISODate } from '../../lib/date'
-import { accountMemberLabel, contactMemberLabel, displayMemberLabel, shouldShowAccountLabel } from '../../lib/memberLabels'
+import { displayMemberLabel } from '../../lib/memberLabels'
 import { buildPlan, planFromTemplate, planToExercises } from '../../lib/plan'
 import type { PlanDraft } from '../../lib/types'
 
@@ -66,7 +66,7 @@ export default function CoachMembers() {
     setSavingMemberId(editingMemberId)
     try {
       const result = await updateMemberDisplayName(editingMemberId, editingDisplayName)
-      setEditMessage(result ?? '称呼已更新。')
+      setEditMessage(result ?? '昵称已更新。')
       if (!result) {
         setEditingMemberId('')
         setEditingDisplayName('')
@@ -95,14 +95,14 @@ export default function CoachMembers() {
           <span>成员先登录或创建账号，你在这里给他起管理端昵称并绑定。</span>
         </div>
         <label>
-          我怎么称呼这个成员
+          成员昵称
           <input
             value={displayName}
             onChange={(event) => {
               setDisplayName(event.target.value)
               setAddMessage('')
             }}
-            placeholder="例如：爸爸、妈妈、叔叔"
+            placeholder="例如：1号、妈妈、叔叔"
           />
         </label>
         <label>
@@ -128,7 +128,6 @@ export default function CoachMembers() {
         {members.length === 0 && <p className="muted">还没有绑定成员。</p>}
         {members.map((member) => {
           const isEditing = editingMemberId === member.id
-          const contactLabel = contactMemberLabel(member)
           const savingThisMember = savingMemberId === member.id
           return (
             <article className={member.id === selectedMemberId ? 'member-card active' : 'member-card'} key={member.id}>
@@ -139,8 +138,6 @@ export default function CoachMembers() {
                 onClick={() => setSelectedMemberId(member.id)}
               >
                 <strong>{displayMemberLabel(member)}</strong>
-                {shouldShowAccountLabel(member) && <span>{accountMemberLabel(member)}</span>}
-                {contactLabel && <small>{contactLabel}</small>}
               </button>
               {isEditing ? (
                 <form
@@ -151,7 +148,7 @@ export default function CoachMembers() {
                   }}
                 >
                   <label>
-                    成员称呼
+                    成员昵称
                     <input
                       autoFocus
                       maxLength={24}
@@ -181,14 +178,14 @@ export default function CoachMembers() {
                   onClick={() => startEditing(member.id)}
                 >
                   <Pencil size={16} />
-                  改称呼
+                  改昵称
                 </button>
               )}
             </article>
           )
         })}
       </div>
-      {editMessage && <p className={editMessage === '称呼已更新。' ? 'form-success' : 'form-error'}>{editMessage}</p>}
+      {editMessage && <p className={editMessage === '昵称已更新。' ? 'form-success' : 'form-error'}>{editMessage}</p>}
 
       {selectedMember && draft && (
         <>

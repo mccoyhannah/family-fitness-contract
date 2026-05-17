@@ -13,12 +13,14 @@ const demoStudent: MemberProfile = {
   id: '00000000-0000-0000-0000-000000000101',
   name: '爸爸',
   account_name: '爸爸',
-  display_name: '爸爸',
+  display_name: '1号',
   role: 'student',
   email: 'dad@example.com',
   member_code: 'DAD001',
   member_since: 'demo',
 }
+
+const demoCoachId = '00000000-0000-0000-0000-000000000102'
 
 function selectedKey(coachId?: string) {
   return `family-fitness-contract:selected-member:${coachId ?? 'demo'}`
@@ -33,9 +35,17 @@ function demoMember(coachId?: string) {
   return { ...demoStudent, name: displayName, display_name: displayName }
 }
 
+function isLocalhostPreview() {
+  return ['127.0.0.1', 'localhost'].includes(window.location.hostname)
+}
+
+function shouldUseDemoMembers(coachId?: string) {
+  return !isSupabaseConfigured || !supabase || (coachId === demoCoachId && isLocalhostPreview())
+}
+
 function toMemberProfile(profile: Profile, binding?: Pick<CoachMemberRow, 'display_name' | 'created_at'>): MemberProfile {
   const accountName = cleanMemberLabel(profile.name) || cleanMemberLabel(profile.email) || cleanMemberLabel(profile.member_code) || '成员'
-  const displayName = cleanMemberLabel(binding?.display_name) || accountName
+  const displayName = cleanMemberLabel(binding?.display_name) || '成员'
   return {
     ...profile,
     name: displayName,
@@ -46,20 +56,28 @@ function toMemberProfile(profile: Profile, binding?: Pick<CoachMemberRow, 'displ
 }
 
 export function useMembers(coachId?: string) {
-  const [members, setMembers] = useState<MemberProfile[]>(() => [demoMember(coachId)])
+  const [members, setMembers] = useState<MemberProfile[]>(() => shouldUseDemoMembers(coachId) ? [demoMember(coachId)] : [])
   const [selectedMemberId, setSelectedMemberIdState] = useState<string>(() => localStorage.getItem(selectedKey(coachId)) ?? '')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
 
   const load = useCallback(async () => {
-    if (!isSupabaseConfigured || !supabase || !coachId) {
+    if (shouldUseDemoMembers(coachId)) {
       setMembers([demoMember(coachId)])
       setSelectedMemberIdState((current) => current || demoStudent.id)
       return
     }
 
+    if (!coachId) {
+      setMembers([])
+      setSelectedMemberIdState('')
+      return
+    }
+
+    const client = supabase
+    if (!client) return
     setLoading(true)
-    const { data: bindingRows, error: bindingError } = await supabase
+    const { data: bindingRows, error: bindingError } = await client
       .from('coach_members')
       .select('student_id, display_name, created_at')
       .eq('coach_id', coachId)
@@ -80,7 +98,7 @@ export function useMembers(coachId?: string) {
       return
     }
 
-    const { data: profileRows, error } = await supabase.from('profiles').select('*').in('id', bindings.map((row) => row.student_id))
+    const { data: profileRows, error } = await client.from('profiles').select('*').in('id', bindings.map((row) => row.student_id))
     setLoading(false)
 
     if (error) {
@@ -126,14 +144,18 @@ export function useMembers(coachId?: string) {
   const addMember = async (identifier: string, displayName: string) => {
     const trimmed = identifier.trim()
     const nickname = cleanMemberLabel(displayName)
-    if (!nickname) return '请先填写你怎么称呼这个成员。'
+    if (!nickname) return '请先填写成员昵称。'
     if (!trimmed) return '请输入成员邮箱或成员码。'
-    if (!supabase) {
+    if (shouldUseDemoMembers(coachId)) {
+      localStorage.setItem(demoDisplayNameKey(coachId), nickname)
+      setMembers([demoMember(coachId)])
       setSelectedMemberId(demoStudent.id)
       return null
     }
 
-    const { error } = await supabase.rpc('coach_add_member', { identifier: trimmed, display_name: nickname })
+    const client = supabase
+    if (!client) return 'Supabase 未配置，无法绑定成员。'
+    const { error } = await client.rpc('coach_add_member', { identifier: trimmed, display_name: nickname })
     if (error) return error.message || '绑定成员失败，请确认成员账号已创建。'
     await load()
     return null
@@ -141,9 +163,9 @@ export function useMembers(coachId?: string) {
 
   const updateMemberDisplayName = async (studentId: string, displayName: string) => {
     const nickname = cleanMemberLabel(displayName)
-    if (!nickname) return '请填写新的称呼。'
+    if (!nickname) return '请填写新的昵称。'
 
-    if (!isSupabaseConfigured || !supabase || !coachId) {
+    if (shouldUseDemoMembers(coachId)) {
       localStorage.setItem(demoDisplayNameKey(coachId), nickname)
       setMembers((current) =>
         current.map((member) =>
@@ -154,13 +176,15 @@ export function useMembers(coachId?: string) {
       return null
     }
 
-    const { error } = await supabase
+    const client = supabase
+    if (!client || !coachId) return 'Supabase 未配置，无法更新昵称。'
+    const { error } = await client
       .from('coach_members')
       .update({ display_name: nickname })
       .eq('coach_id', coachId)
       .eq('student_id', studentId)
 
-    if (error) return error.message || '更新称呼失败，请稍后再试。'
+    if (error) return error.message || '更新昵称失败，请稍后再试。'
     setMembers((current) =>
       current.map((member) =>
         member.id === studentId ? { ...member, name: nickname, display_name: nickname } : member,

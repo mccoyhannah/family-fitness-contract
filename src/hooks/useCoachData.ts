@@ -9,23 +9,35 @@ const demoStudent: Profile = {
   role: 'student',
 }
 
+const previewRoleKey = 'family-fitness-contract:preview-role'
+
+function isLocalhostPreview() {
+  return ['127.0.0.1', 'localhost'].includes(window.location.hostname)
+}
+
+function shouldUseDemoCoachData() {
+  return !isSupabaseConfigured || !supabase || (isLocalhostPreview() && localStorage.getItem(previewRoleKey) === 'coach')
+}
+
 export function useCoachData() {
-  const [profiles, setProfiles] = useState<Profile[]>([demoStudent])
+  const [profiles, setProfiles] = useState<Profile[]>(() => shouldUseDemoCoachData() ? [demoStudent] : [])
   const [checkIns, setCheckIns] = useState<CheckIn[]>(() => readCache('coach').checkIns)
   const [penalties, setPenalties] = useState<Penalty[]>(() => readCache('coach').penalties)
 
   const load = useCallback(async () => {
-    if (!isSupabaseConfigured || !supabase) {
+    if (shouldUseDemoCoachData()) {
       const cache = readCache(demoStudent.id)
       setProfiles([demoStudent])
       setCheckIns(cache.checkIns)
       setPenalties(cache.penalties)
       return
     }
+    const client = supabase
+    if (!client) return
     const [{ data: profileRows }, { data: checkInRows }, { data: penaltyRows }] = await Promise.all([
-      supabase.from('profiles').select('*').eq('role', 'student').order('created_at', { ascending: true }),
-      supabase.from('check_ins').select('*').order('date', { ascending: false }),
-      supabase.from('penalties').select('*').order('date', { ascending: false }),
+      client.from('profiles').select('*').eq('role', 'student').order('created_at', { ascending: true }),
+      client.from('check_ins').select('*').order('date', { ascending: false }),
+      client.from('penalties').select('*').order('date', { ascending: false }),
     ])
     setProfiles((profileRows ?? []) as Profile[])
     setCheckIns(checkInRows ?? [])

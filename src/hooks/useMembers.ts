@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { cleanMemberLabel } from '../lib/memberLabels'
+import { DEMO_COACH_ID, DEMO_STUDENT_ID, isLocalhostPreview } from '../lib/preview'
 import type { MemberProfile, Profile } from '../lib/types'
+
+type MembersState = {
+  loading: boolean
+  members: MemberProfile[]
+  message: string
+  ready: boolean
+  selectedMemberId: string
+}
 
 type CoachMemberRow = {
   student_id: string
@@ -10,17 +19,17 @@ type CoachMemberRow = {
 }
 
 const demoStudent: MemberProfile = {
-  id: '00000000-0000-0000-0000-000000000101',
-  name: '爸爸',
-  account_name: '爸爸',
+  id: DEMO_STUDENT_ID,
+  name: '1号',
+  account_name: '1号',
   display_name: '1号',
   role: 'student',
-  email: 'dad@example.com',
-  member_code: 'DAD001',
+  email: 'member@example.com',
+  member_code: 'MEMBER01',
   member_since: 'demo',
 }
 
-const demoCoachId = '00000000-0000-0000-0000-000000000102'
+const membersStateCache = new Map<string, Omit<MembersState, 'loading'>>()
 
 function selectedKey(coachId?: string) {
   return `family-fitness-contract:selected-member:${coachId ?? 'demo'}`
@@ -30,17 +39,50 @@ function demoDisplayNameKey(coachId?: string) {
   return `family-fitness-contract:demo-member-display-name:${coachId ?? 'demo'}`
 }
 
+function isLegacyDemoLabel(value: string) {
+  return ['爸爸', '老爸', 'dad@example.com'].includes(value.toLowerCase())
+}
+
 function demoMember(coachId?: string) {
-  const displayName = cleanMemberLabel(localStorage.getItem(demoDisplayNameKey(coachId))) || demoStudent.display_name
+  const savedDisplayName = cleanMemberLabel(localStorage.getItem(demoDisplayNameKey(coachId)))
+  const displayName = savedDisplayName && !isLegacyDemoLabel(savedDisplayName) ? savedDisplayName : demoStudent.display_name
   return { ...demoStudent, name: displayName, display_name: displayName }
 }
 
-function isLocalhostPreview() {
-  return ['127.0.0.1', 'localhost'].includes(window.location.hostname)
+function shouldUseDemoMembers(coachId?: string) {
+  return !isSupabaseConfigured || !supabase || (coachId === DEMO_COACH_ID && isLocalhostPreview())
 }
 
-function shouldUseDemoMembers(coachId?: string) {
-  return !isSupabaseConfigured || !supabase || (coachId === demoCoachId && isLocalhostPreview())
+function cacheKey(coachId?: string) {
+  return coachId ?? 'pending'
+}
+
+function demoMembersState(coachId?: string): MembersState {
+  const member = demoMember(coachId)
+  return {
+    loading: false,
+    members: [member],
+    message: '',
+    ready: true,
+    selectedMemberId: member.id,
+  }
+}
+
+function initialMembersState(coachId?: string): MembersState {
+  const cached = membersStateCache.get(cacheKey(coachId))
+  if (cached) return { ...cached, loading: false }
+  if (shouldUseDemoMembers(coachId)) return demoMembersState(coachId)
+  return {
+    loading: Boolean(coachId && isSupabaseConfigured && supabase),
+    members: [],
+    message: '',
+    ready: false,
+    selectedMemberId: localStorage.getItem(selectedKey(coachId)) ?? '',
+  }
+}
+
+function rememberMembersState(coachId: string | undefined, state: Omit<MembersState, 'loading'>) {
+  membersStateCache.set(cacheKey(coachId), state)
 }
 
 function toMemberProfile(profile: Profile, binding?: Pick<CoachMemberRow, 'display_name' | 'created_at'>): MemberProfile {
@@ -56,27 +98,25 @@ function toMemberProfile(profile: Profile, binding?: Pick<CoachMemberRow, 'displ
 }
 
 export function useMembers(coachId?: string) {
-  const [members, setMembers] = useState<MemberProfile[]>(() => shouldUseDemoMembers(coachId) ? [demoMember(coachId)] : [])
-  const [selectedMemberId, setSelectedMemberIdState] = useState<string>(() => localStorage.getItem(selectedKey(coachId)) ?? '')
-  const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState('')
+  const [state, setState] = useState<MembersState>(() => initialMembersState(coachId))
 
   const load = useCallback(async () => {
     if (shouldUseDemoMembers(coachId)) {
-      setMembers([demoMember(coachId)])
-      setSelectedMemberIdState((current) => current || demoStudent.id)
+      const next = demoMembersState(coachId)
+      rememberMembersState(coachId, { members: next.members, message: next.message, ready: next.ready, selectedMemberId: next.selectedMemberId })
+      setState(next)
       return
     }
 
     if (!coachId) {
-      setMembers([])
-      setSelectedMemberIdState('')
+      const next = { loading: false, members: [], message: '', ready: false, selectedMemberId: '' }
+      setState(next)
       return
     }
 
     const client = supabase
     if (!client) return
-    setLoading(true)
+    setState((current) => ({ ...current, loading: true }))
     const { data: bindingRows, error: bindingError } = await client
       .from('coach_members')
       .select('student_id, display_name, created_at')
@@ -84,25 +124,32 @@ export function useMembers(coachId?: string) {
       .order('created_at', { ascending: true })
 
     if (bindingError) {
-      setLoading(false)
-      setMessage('成员列表加载失败，请确认 Supabase RLS 和成员绑定表已更新。')
+      setState((current) => ({
+        ...current,
+        loading: false,
+        message: '成员列表加载失败，请确认 Supabase RLS 和成员绑定表已更新。',
+        ready: current.ready || current.members.length > 0,
+      }))
       return
     }
 
     const bindings = (bindingRows ?? []) as CoachMemberRow[]
     if (bindings.length === 0) {
-      setLoading(false)
-      setMessage('')
-      setMembers([])
-      setSelectedMemberIdState('')
+      const next = { loading: false, members: [], message: '', ready: true, selectedMemberId: '' }
+      rememberMembersState(coachId, { members: next.members, message: next.message, ready: next.ready, selectedMemberId: next.selectedMemberId })
+      setState(next)
       return
     }
 
     const { data: profileRows, error } = await client.from('profiles').select('*').in('id', bindings.map((row) => row.student_id))
-    setLoading(false)
 
     if (error) {
-      setMessage('成员列表加载失败，请确认 Supabase RLS 和成员绑定表已更新。')
+      setState((current) => ({
+        ...current,
+        loading: false,
+        message: '成员列表加载失败，请确认 Supabase RLS 和成员绑定表已更新。',
+        ready: current.ready || current.members.length > 0,
+      }))
       return
     }
 
@@ -114,13 +161,22 @@ export function useMembers(coachId?: string) {
       })
       .filter((member): member is MemberProfile => Boolean(member))
 
-    setMessage('')
-    setMembers(nextMembers)
-    setSelectedMemberIdState((current) => {
-      if (current && nextMembers.some((member) => member.id === current)) return current
+    setState((current) => {
+      const selectedMemberId = (() => {
+        if (current.selectedMemberId && nextMembers.some((member) => member.id === current.selectedMemberId)) return current.selectedMemberId
       const saved = localStorage.getItem(selectedKey(coachId))
       if (saved && nextMembers.some((member) => member.id === saved)) return saved
       return nextMembers[0]?.id ?? ''
+      })()
+      const next = {
+        loading: false,
+        members: nextMembers,
+        message: '',
+        ready: true,
+        selectedMemberId,
+      }
+      rememberMembersState(coachId, { members: next.members, message: next.message, ready: next.ready, selectedMemberId: next.selectedMemberId })
+      return next
     })
   }, [coachId])
 
@@ -131,14 +187,18 @@ export function useMembers(coachId?: string) {
   const setSelectedMemberId = useCallback(
     (memberId: string) => {
       localStorage.setItem(selectedKey(coachId), memberId)
-      setSelectedMemberIdState(memberId)
+      setState((current) => {
+        const next = { ...current, selectedMemberId: memberId }
+        rememberMembersState(coachId, { members: next.members, message: next.message, ready: next.ready, selectedMemberId: next.selectedMemberId })
+        return next
+      })
     },
     [coachId],
   )
 
   const selectedMember = useMemo(
-    () => members.find((member) => member.id === selectedMemberId) ?? members[0] ?? null,
-    [members, selectedMemberId],
+    () => state.members.find((member) => member.id === state.selectedMemberId) ?? state.members[0] ?? null,
+    [state.members, state.selectedMemberId],
   )
 
   const addMember = async (identifier: string, displayName: string) => {
@@ -148,7 +208,9 @@ export function useMembers(coachId?: string) {
     if (!trimmed) return '请输入成员邮箱或成员码。'
     if (shouldUseDemoMembers(coachId)) {
       localStorage.setItem(demoDisplayNameKey(coachId), nickname)
-      setMembers([demoMember(coachId)])
+      const next = demoMembersState(coachId)
+      rememberMembersState(coachId, { members: next.members, message: next.message, ready: next.ready, selectedMemberId: next.selectedMemberId })
+      setState(next)
       setSelectedMemberId(demoStudent.id)
       return null
     }
@@ -167,11 +229,18 @@ export function useMembers(coachId?: string) {
 
     if (shouldUseDemoMembers(coachId)) {
       localStorage.setItem(demoDisplayNameKey(coachId), nickname)
-      setMembers((current) =>
-        current.map((member) =>
+      setState((current) => {
+        const next = {
+          ...current,
+          members: current.members.map((member) =>
           member.id === studentId ? { ...member, name: nickname, display_name: nickname } : member,
-        ),
-      )
+          ),
+          ready: true,
+          selectedMemberId: studentId,
+        }
+        rememberMembersState(coachId, { members: next.members, message: next.message, ready: next.ready, selectedMemberId: next.selectedMemberId })
+        return next
+      })
       setSelectedMemberId(studentId)
       return null
     }
@@ -185,29 +254,35 @@ export function useMembers(coachId?: string) {
       .eq('student_id', studentId)
 
     if (error) return error.message || '更新昵称失败，请稍后再试。'
-    setMembers((current) =>
-      current.map((member) =>
+    setState((current) => {
+      const next = {
+        ...current,
+        members: current.members.map((member) =>
         member.id === studentId ? { ...member, name: nickname, display_name: nickname } : member,
-      ),
-    )
+        ),
+      }
+      rememberMembersState(coachId, { members: next.members, message: next.message, ready: next.ready, selectedMemberId: next.selectedMemberId })
+      return next
+    })
     await load()
     return null
   }
 
   const profileById = useCallback(
-    (id: string): Profile | undefined => members.find((member) => member.id === id),
-    [members],
+    (id: string): Profile | undefined => state.members.find((member) => member.id === id),
+    [state.members],
   )
 
   return {
     addMember,
-    loading,
-    members,
-    message,
+    loading: state.loading,
+    members: state.members,
+    message: state.message,
     profileById,
+    ready: state.ready,
     reload: load,
     selectedMember,
-    selectedMemberId: selectedMember?.id ?? selectedMemberId,
+    selectedMemberId: selectedMember?.id ?? state.selectedMemberId,
     setSelectedMemberId,
     updateMemberDisplayName,
   }

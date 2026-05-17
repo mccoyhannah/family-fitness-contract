@@ -1,47 +1,88 @@
 import { useCallback, useEffect, useState } from 'react'
 import { readCache, writeCache } from '../lib/cache'
+import { DEMO_STUDENT_ID, PREVIEW_ROLE_KEY, isLocalhostPreview } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import type { CheckIn, Penalty, Profile } from '../lib/types'
 
+type CoachDataState = {
+  checkIns: CheckIn[]
+  loading: boolean
+  penalties: Penalty[]
+  profiles: Profile[]
+  ready: boolean
+}
+
 const demoStudent: Profile = {
-  id: '00000000-0000-0000-0000-000000000101',
-  name: '爸爸',
+  id: DEMO_STUDENT_ID,
+  name: '1号',
   role: 'student',
 }
 
-const previewRoleKey = 'family-fitness-contract:preview-role'
-
-function isLocalhostPreview() {
-  return ['127.0.0.1', 'localhost'].includes(window.location.hostname)
-}
+let coachDataCache: Omit<CoachDataState, 'loading'> | null = null
 
 function shouldUseDemoCoachData() {
-  return !isSupabaseConfigured || !supabase || (isLocalhostPreview() && localStorage.getItem(previewRoleKey) === 'coach')
+  return !isSupabaseConfigured || !supabase || (isLocalhostPreview() && localStorage.getItem(PREVIEW_ROLE_KEY) === 'coach')
+}
+
+function initialCoachDataState(): CoachDataState {
+  if (coachDataCache) return { ...coachDataCache, loading: false }
+  if (shouldUseDemoCoachData()) {
+    const cache = readCache(demoStudent.id)
+    return {
+      checkIns: cache.checkIns,
+      loading: false,
+      penalties: cache.penalties,
+      profiles: [demoStudent],
+      ready: true,
+    }
+  }
+  return {
+    checkIns: readCache('coach').checkIns,
+    loading: Boolean(isSupabaseConfigured && supabase),
+    penalties: readCache('coach').penalties,
+    profiles: [],
+    ready: false,
+  }
+}
+
+function rememberCoachData(state: Omit<CoachDataState, 'loading'>) {
+  coachDataCache = state
 }
 
 export function useCoachData() {
-  const [profiles, setProfiles] = useState<Profile[]>(() => shouldUseDemoCoachData() ? [demoStudent] : [])
-  const [checkIns, setCheckIns] = useState<CheckIn[]>(() => readCache('coach').checkIns)
-  const [penalties, setPenalties] = useState<Penalty[]>(() => readCache('coach').penalties)
+  const [state, setState] = useState<CoachDataState>(() => initialCoachDataState())
 
   const load = useCallback(async () => {
     if (shouldUseDemoCoachData()) {
       const cache = readCache(demoStudent.id)
-      setProfiles([demoStudent])
-      setCheckIns(cache.checkIns)
-      setPenalties(cache.penalties)
+      const next = {
+        checkIns: cache.checkIns,
+        loading: false,
+        penalties: cache.penalties,
+        profiles: [demoStudent],
+        ready: true,
+      }
+      rememberCoachData({ checkIns: next.checkIns, penalties: next.penalties, profiles: next.profiles, ready: next.ready })
+      setState(next)
       return
     }
     const client = supabase
     if (!client) return
+    setState((current) => ({ ...current, loading: true }))
     const [{ data: profileRows }, { data: checkInRows }, { data: penaltyRows }] = await Promise.all([
       client.from('profiles').select('*').eq('role', 'student').order('created_at', { ascending: true }),
       client.from('check_ins').select('*').order('date', { ascending: false }),
       client.from('penalties').select('*').order('date', { ascending: false }),
     ])
-    setProfiles((profileRows ?? []) as Profile[])
-    setCheckIns(checkInRows ?? [])
-    setPenalties(penaltyRows ?? [])
+    const next = {
+      checkIns: checkInRows ?? [],
+      loading: false,
+      penalties: penaltyRows ?? [],
+      profiles: (profileRows ?? []) as Profile[],
+      ready: true,
+    }
+    setState(next)
+    rememberCoachData({ checkIns: next.checkIns, penalties: next.penalties, profiles: next.profiles, ready: next.ready })
     const cache = readCache('coach')
     writeCache({ ...cache, checkIns: checkInRows ?? [], penalties: penaltyRows ?? [] }, 'coach')
   }, [])
@@ -65,28 +106,49 @@ export function useCoachData() {
   }, [load])
 
   const updateCheckIn = async (id: string, status: CheckIn['status']) => {
-    if (!supabase) {
+    if (shouldUseDemoCoachData()) {
       const cache = readCache(demoStudent.id)
       const next = cache.checkIns.map((item) => (item.id === id ? { ...item, status } : item))
       writeCache({ ...cache, checkIns: next }, demoStudent.id)
-      setCheckIns(next)
+      setState((current) => {
+        const nextState = { ...current, checkIns: next, ready: true }
+        rememberCoachData({ checkIns: nextState.checkIns, penalties: nextState.penalties, profiles: nextState.profiles, ready: nextState.ready })
+        return nextState
+      })
       return
     }
-    await supabase.from('check_ins').update({ status }).eq('id', id)
+    const client = supabase
+    if (!client) return
+    await client.from('check_ins').update({ status }).eq('id', id)
     await load()
   }
 
   const updatePenalty = async (id: string, status: Penalty['status']) => {
-    if (!supabase) {
+    if (shouldUseDemoCoachData()) {
       const cache = readCache(demoStudent.id)
       const next = cache.penalties.map((item) => (item.id === id ? { ...item, status } : item))
       writeCache({ ...cache, penalties: next }, demoStudent.id)
-      setPenalties(next)
+      setState((current) => {
+        const nextState = { ...current, penalties: next, ready: true }
+        rememberCoachData({ checkIns: nextState.checkIns, penalties: nextState.penalties, profiles: nextState.profiles, ready: nextState.ready })
+        return nextState
+      })
       return
     }
-    await supabase.from('penalties').update({ status }).eq('id', id)
+    const client = supabase
+    if (!client) return
+    await client.from('penalties').update({ status }).eq('id', id)
     await load()
   }
 
-  return { profiles, checkIns, penalties, reload: load, updateCheckIn, updatePenalty }
+  return {
+    checkIns: state.checkIns,
+    loading: state.loading,
+    penalties: state.penalties,
+    profiles: state.profiles,
+    ready: state.ready,
+    reload: load,
+    updateCheckIn,
+    updatePenalty,
+  }
 }

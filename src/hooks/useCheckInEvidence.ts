@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { readCache, writeCache } from '../lib/cache'
+import { shouldUsePreviewLocalScope } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import type { CheckInEvidence } from '../lib/types'
 
@@ -15,28 +16,35 @@ function localEvidencePreview(fileName: string) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }
 
+function shouldUseLocalEvidence(scope?: string) {
+  return !isSupabaseConfigured || !supabase || shouldUsePreviewLocalScope(scope)
+}
+
 export function useCheckInEvidence(scope = 'demo') {
   const [evidence, setEvidence] = useState<CheckInEvidence[]>(() => readCache(scope).evidence)
   const [loading, setLoading] = useState(false)
 
   const signRows = useCallback(async (rows: CheckInEvidence[]) => {
-    if (!supabase) return rows
+    if (shouldUseLocalEvidence(scope)) return rows
     const client = supabase
+    if (!client) return rows
     return Promise.all(
       rows.map(async (row) => {
         const { data } = await client.storage.from(bucket).createSignedUrl(row.storage_path, 60 * 20)
         return { ...row, signed_url: data?.signedUrl }
       }),
     )
-  }, [])
+  }, [scope])
 
   const load = useCallback(async () => {
-    if (!isSupabaseConfigured || !supabase) {
+    if (shouldUseLocalEvidence(scope)) {
       setEvidence(readCache(scope).evidence)
       return
     }
     setLoading(true)
-    let query = supabase.from('check_in_evidence').select('*').order('created_at', { ascending: false })
+    const client = supabase
+    if (!client) return
+    let query = client.from('check_in_evidence').select('*').order('created_at', { ascending: false })
     if (scope !== 'demo' && scope !== 'coach') {
       query = query.eq('user_id', scope)
     }
@@ -56,7 +64,7 @@ export function useCheckInEvidence(scope = 'demo') {
     if (files.length === 0) return []
     if (files.length > 3) throw new Error('最多只能上传 3 张图片。')
 
-    if (!supabase) {
+    if (shouldUseLocalEvidence(scope)) {
       const rows = files.map((file, index) => ({
         id: `local-evidence-${checkInId}-${index}`,
         check_in_id: checkInId,
@@ -78,13 +86,15 @@ export function useCheckInEvidence(scope = 'demo') {
     for (const file of files) {
       if (!file.type.startsWith('image/')) throw new Error('只能上传图片文件。')
       const path = `${userId}/${checkInId}/${crypto.randomUUID()}-${safeFileName(file.name)}`
-      const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, {
+      const client = supabase
+      if (!client) throw new Error('Supabase 未配置，无法上传图片。')
+      const { error: uploadError } = await client.storage.from(bucket).upload(path, file, {
         contentType: file.type,
         upsert: false,
       })
       if (uploadError) throw uploadError
 
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('check_in_evidence')
         .insert({
           check_in_id: checkInId,

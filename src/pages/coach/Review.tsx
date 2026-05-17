@@ -12,7 +12,14 @@ import { displayMemberLabel } from '../../lib/memberLabels'
 
 export default function CoachReview() {
   const { profile: coach } = useAuth()
-  const { members, selectedMember, selectedMemberId, setSelectedMemberId } = useMembers(coach?.id)
+  const {
+    loading: membersLoading,
+    members,
+    ready: membersReady,
+    selectedMember,
+    selectedMemberId,
+    setSelectedMemberId,
+  } = useMembers(coach?.id)
   const { checkIns, penalties, updateCheckIn, updatePenalty } = useCoachData()
   const { evidenceFor, reload: reloadEvidence } = useCheckInEvidence('coach')
   const retriedEvidenceKeysRef = useRef(new Set<string>())
@@ -22,9 +29,9 @@ export default function CoachReview() {
   const [retryNonceByEvidenceKey, setRetryNonceByEvidenceKey] = useState<Record<string, number>>({})
   const { plans } = usePlans(selectedMember?.id)
   const memberNameById = new Map(members.map((member) => [member.id, displayMemberLabel(member)]))
-  const pending = checkIns.filter(
-    (item) => item.status === 'pending_review' && (!selectedMember || item.user_id === selectedMember.id),
-  )
+  const pending = membersReady
+    ? checkIns.filter((item) => item.status === 'pending_review' && (!selectedMember || item.user_id === selectedMember.id))
+    : []
   const evidenceCount = pending.reduce((sum, item) => sum + evidenceFor(item.id).length, 0)
 
   const approveLeave = async (id: string, userId: string, date: string) => {
@@ -79,10 +86,10 @@ export default function CoachReview() {
         <h2>异常待确认</h2>
         <p>按成员审核打卡、请假和图片证据。</p>
       </div>
-      <MemberSelect members={members} selectedMemberId={selectedMemberId} onChange={setSelectedMemberId} />
+      <MemberSelect loading={membersLoading} members={members} ready={membersReady} selectedMemberId={selectedMemberId} onChange={setSelectedMemberId} />
       <div className="status-card action-card">
-        <strong>{pending.length} 条待确认</strong>
-        <p>{evidenceCount > 0 ? `包含 ${evidenceCount} 张图片证据。` : '没有图片证据时，重点看备注和异常标记。'}</p>
+        <strong>{membersReady ? `${pending.length} 条待确认` : '正在同步成员'}</strong>
+        <p>{membersReady ? evidenceCount > 0 ? `包含 ${evidenceCount} 张图片证据。` : '没有图片证据时，重点看备注和异常标记。' : '成员列表稳定后再显示待确认记录。'}</p>
       </div>
       <div className="review-list">
         {pending.length === 0 && <p className="muted">当前没有待确认打卡。</p>}

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { isLocalhostPreview } from '../lib/preview'
 import { isSupabaseConfigured } from '../lib/supabase'
 import type { Role } from '../lib/types'
 
@@ -16,7 +17,7 @@ export default function Login() {
   const [error, setError] = useState('')
   const autoPreviewRef = useRef(false)
   const from = typeof location.state?.from === 'string' ? location.state.from : '/'
-  const canPreview = !isSupabaseConfigured || ['127.0.0.1', 'localhost'].includes(window.location.hostname)
+  const canPreview = !isSupabaseConfigured || isLocalhostPreview()
 
   useEffect(() => {
     if (!canPreview || autoPreviewRef.current) return

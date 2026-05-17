@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { clearCache } from '../lib/cache'
+import { DEMO_COACH_ID, DEMO_STUDENT_ID, PREVIEW_ROLE_KEY, isLocalhostPreview, readPreviewRole } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import type { Profile, Role } from '../lib/types'
 
@@ -18,30 +19,19 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 const demoProfiles: Record<Role, Profile> = {
   student: {
-    id: '00000000-0000-0000-0000-000000000101',
-    name: '爸爸',
+    id: DEMO_STUDENT_ID,
+    name: '1号',
     role: 'student',
-    email: 'dad@example.com',
-    member_code: 'DAD001',
+    email: 'member@example.com',
+    member_code: 'MEMBER01',
   },
   coach: {
-    id: '00000000-0000-0000-0000-000000000102',
+    id: DEMO_COACH_ID,
     name: '我',
     role: 'coach',
     email: 'coach@example.com',
     member_code: 'COACH01',
   },
-}
-
-const PREVIEW_ROLE_KEY = 'family-fitness-contract:preview-role'
-
-function isLocalhost() {
-  return ['127.0.0.1', 'localhost'].includes(window.location.hostname)
-}
-
-function readPreviewRole(): Role | null {
-  const role = localStorage.getItem(PREVIEW_ROLE_KEY)
-  return role === 'student' || role === 'coach' ? role : null
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -86,7 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const loadPreview = () => {
-      const previewRole = isLocalhost() ? readPreviewRole() : null
+      const previewRole = isLocalhostPreview() ? readPreviewRole() : null
       if (!previewRole) return false
       setSession(null)
       setProfile(demoProfiles[previewRole])
@@ -155,7 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAuthError(null)
       },
       previewAs: (role) => {
-        if (isSupabaseConfigured && !isLocalhost()) return
+        if (isSupabaseConfigured && !isLocalhostPreview()) return
         localStorage.setItem(PREVIEW_ROLE_KEY, role)
         setProfile(demoProfiles[role])
         setSession(null)

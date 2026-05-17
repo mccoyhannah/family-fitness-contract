@@ -2,12 +2,23 @@ import type { MemberProfile } from '../lib/types'
 import { displayMemberLabel } from '../lib/memberLabels'
 
 type MemberSelectProps = {
+  loading?: boolean
   members: MemberProfile[]
+  ready?: boolean
   selectedMemberId: string
   onChange: (memberId: string) => void
 }
 
-export default function MemberSelect({ members, onChange, selectedMemberId }: MemberSelectProps) {
+export default function MemberSelect({ loading = false, members, onChange, ready = true, selectedMemberId }: MemberSelectProps) {
+  if (!ready) {
+    return (
+      <div className="member-select member-select-loading" aria-busy={loading} aria-label="当前成员">
+        <div className="field-label">当前成员</div>
+        <span className="skeleton-line medium" />
+      </div>
+    )
+  }
+
   if (members.length === 0) {
     return <p className="muted">还没有绑定成员，请先到“成员”页添加。</p>
   }

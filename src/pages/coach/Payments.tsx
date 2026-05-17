@@ -12,15 +12,22 @@ import { displayMemberLabel } from '../../lib/memberLabels'
 
 export default function CoachPayments() {
   const { profile } = useAuth()
-  const { members, selectedMember, selectedMemberId, setSelectedMemberId } = useMembers(profile?.id)
+  const {
+    loading: membersLoading,
+    members,
+    ready: membersReady,
+    selectedMember,
+    selectedMemberId,
+    setSelectedMemberId,
+  } = useMembers(profile?.id)
   const { penalties, updatePenalty } = useCoachData()
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'paid' | 'waived'>('all')
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'amount-desc'>('newest')
   const [updatingPenaltyId, setUpdatingPenaltyId] = useState('')
   const updatingPenaltyIdRef = useRef('')
   const scopedPenalties = useMemo(
-    () => selectedMember ? penalties.filter((penalty) => penalty.user_id === selectedMember.id) : penalties,
-    [penalties, selectedMember],
+    () => membersReady ? selectedMember ? penalties.filter((penalty) => penalty.user_id === selectedMember.id) : penalties : [],
+    [membersReady, penalties, selectedMember],
   )
   const memberNameById = new Map(members.map((member) => [member.id, displayMemberLabel(member)]))
   const scopeLabel = selectedMember ? `${displayMemberLabel(selectedMember)}口径` : '全员口径'
@@ -68,15 +75,15 @@ export default function CoachPayments() {
         <h2>账款列表</h2>
         <p>按当前成员查看欠款，教练可标记已支付或豁免。</p>
       </div>
-      <MemberSelect members={members} selectedMemberId={selectedMemberId} onChange={setSelectedMemberId} />
+      <MemberSelect loading={membersLoading} members={members} ready={membersReady} selectedMemberId={selectedMemberId} onChange={setSelectedMemberId} />
       <div className="metric-row three-col">
         <Metric icon={<ReceiptText />} label="待支付" value={`¥${formatAmount(pendingTotal)}`} />
         <Metric icon={<CheckCircle2 />} label="已支付" value={`¥${formatAmount(paidTotal)}`} />
         <Metric icon={<CircleSlash />} label="已豁免" value={`¥${formatAmount(waivedTotal)}`} />
       </div>
       <div className="status-card action-card">
-        <strong>{visiblePenalties.length} 条当前记录</strong>
-        <p>{scopeLabel}：{pendingCount} 条待支付，{settledCount} 条已处理；筛选只影响下方列表。</p>
+        <strong>{membersReady ? `${visiblePenalties.length} 条当前记录` : '正在同步成员'}</strong>
+        <p>{membersReady ? `${scopeLabel}：${pendingCount} 条待支付，${settledCount} 条已处理；筛选只影响下方列表。` : '成员列表稳定后再显示账款记录。'}</p>
       </div>
       <div className="form-grid">
         <label>

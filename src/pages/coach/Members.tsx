@@ -18,7 +18,17 @@ function todayDraft(userId: string, date: string): PlanDraft {
 
 export default function CoachMembers() {
   const { profile } = useAuth()
-  const { addMember, members, message, selectedMember, selectedMemberId, setSelectedMemberId, updateMemberDisplayName } = useMembers(profile?.id)
+  const {
+    addMember,
+    loading: membersLoading,
+    members,
+    message,
+    ready: membersReady,
+    selectedMember,
+    selectedMemberId,
+    setSelectedMemberId,
+    updateMemberDisplayName,
+  } = useMembers(profile?.id)
   const { plans, savePlan } = usePlans(selectedMember?.id)
   const [displayName, setDisplayName] = useState('')
   const [identifier, setIdentifier] = useState('')
@@ -85,8 +95,8 @@ export default function CoachMembers() {
       </div>
 
       <div className="metric-row">
-        <Metric icon={<Users />} label="已绑定成员" value={`${members.length} 人`} />
-        <Metric icon={<CalendarDays />} label="当前成员" value={selectedMember?.display_name ?? '未选择'} />
+        <Metric icon={<Users />} label="已绑定成员" value={membersReady ? `${members.length} 人` : '同步中'} />
+        <Metric icon={<CalendarDays />} label="当前成员" value={membersReady ? selectedMember?.display_name ?? '未选择' : '同步中'} />
       </div>
 
       <div className="form-card add-member-card">
@@ -113,7 +123,7 @@ export default function CoachMembers() {
               setIdentifier(event.target.value)
               setAddMessage('')
             }}
-            placeholder="dad@example.com 或 DAD001"
+            placeholder="member@example.com 或 MEMBER01"
           />
         </label>
         <button className="admin-button" type="button" onClick={() => void submitAdd()}>
@@ -125,8 +135,13 @@ export default function CoachMembers() {
       </div>
 
       <div className="member-list">
-        {members.length === 0 && <p className="muted">还没有绑定成员。</p>}
-        {members.map((member) => {
+        {!membersReady && (
+          <article className="member-card member-card-loading" aria-busy={membersLoading}>
+            <span className="skeleton-line medium" />
+          </article>
+        )}
+        {membersReady && members.length === 0 && <p className="muted">还没有绑定成员。</p>}
+        {membersReady && members.map((member) => {
           const isEditing = editingMemberId === member.id
           const savingThisMember = savingMemberId === member.id
           return (

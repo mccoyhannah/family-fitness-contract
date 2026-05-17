@@ -15,5 +15,10 @@ const penaltyLabel: Record<PenaltyStatus, string> = {
 
 export default function StatusPill({ status }: { status: CheckInStatus | PenaltyStatus }) {
   const label = status in checkInLabel ? checkInLabel[status as CheckInStatus] : penaltyLabel[status as PenaltyStatus]
-  return <span className={`status-pill ${status}`}>{label}</span>
+  return (
+    <span className={`status-pill ${status}`}>
+      <span className="status-dot" aria-hidden="true" />
+      {label}
+    </span>
+  )
 }

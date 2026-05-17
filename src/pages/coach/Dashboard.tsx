@@ -1,4 +1,5 @@
-import { AlertTriangle, BarChart3, CalendarDays, ReceiptText } from 'lucide-react'
+import { AlertTriangle, BarChart3, CalendarDays, ReceiptText, RefreshCw } from 'lucide-react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import MemberSelect from '../../components/MemberSelect'
 import Metric from '../../components/Metric'
@@ -12,8 +13,9 @@ import { formatDay } from '../../lib/date'
 export default function CoachDashboard() {
   const { profile } = useAuth()
   const { members, selectedMember, selectedMemberId, setSelectedMemberId } = useMembers(profile?.id)
-  const { checkIns, penalties, profiles } = useCoachData()
-  const { plans } = usePlans(selectedMember?.id)
+  const { checkIns, penalties, profiles, reload: reloadCoachData } = useCoachData()
+  const { plans, reload: reloadPlans } = usePlans(selectedMember?.id)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const scopedCheckIns = selectedMember ? checkIns.filter((item) => item.user_id === selectedMember.id) : checkIns
   const scopedPenalties = selectedMember ? penalties.filter((item) => item.user_id === selectedMember.id) : penalties
   const pendingReview = scopedCheckIns.filter((item) => item.status === 'pending_review').length
@@ -35,6 +37,15 @@ export default function CoachDashboard() {
         : selectedMember
           ? '当前成员没有待办，可以继续安排下一次计划。'
           : '先添加成员，再开始监督。'
+  const refresh = async () => {
+    if (isRefreshing) return
+    setIsRefreshing(true)
+    try {
+      await Promise.all([reloadCoachData(), selectedMember ? reloadPlans() : Promise.resolve()])
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   return (
     <section className="screen with-nav">
@@ -55,6 +66,10 @@ export default function CoachDashboard() {
         <strong>{selectedMember ? `${selectedMember.display_name} 的下一步` : '管理端下一步'}</strong>
         <p>{nextStep}</p>
         <div className="row-actions">
+          <button type="button" disabled={isRefreshing} onClick={() => void refresh()}>
+            <RefreshCw className={isRefreshing ? 'spin-icon' : undefined} size={18} />
+            {isRefreshing ? '刷新中' : '刷新'}
+          </button>
           <Link to="/admin/review">去审核</Link>
           <Link to="/admin/payments">看账款</Link>
           <Link to="/admin/members">排计划</Link>

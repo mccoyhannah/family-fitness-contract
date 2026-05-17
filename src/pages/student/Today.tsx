@@ -1,5 +1,6 @@
 import { CalendarCheck, Flame, Umbrella } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import ExerciseCard from '../../components/ExerciseCard'
 import Metric from '../../components/Metric'
 import PlanEditor from '../../components/PlanEditor'
@@ -20,6 +21,7 @@ export default function Today() {
   const { penalties, loading: penaltiesLoading, reload: reloadPenalties, setPenalties, upsertPenalty } = usePenalties(profile?.id)
   const { loading: plansLoading, plans, savePlan } = usePlans(profile?.id)
   const [leaveReason, setLeaveReason] = useState('')
+  const navigate = useNavigate()
   const completedSyncKeyRef = useRef<string | null>(null)
   const syncingKeyRef = useRef<string | null>(null)
   const today = toISODate(new Date())
@@ -34,7 +36,7 @@ export default function Today() {
   const nextStep = todayCheckIn
     ? '今天已记录，剩下就是等管理端确认。'
     : todayPlan
-      ? '先按计划训练，再去提交打卡和图片证据。'
+      ? '训练后去打卡页提交疲劳度、备注和图片证据。'
       : '先自己制定今日计划，或等管理端下发计划。'
   const showLoadingSkeleton =
     (checkInsLoading || penaltiesLoading || plansLoading) &&
@@ -101,14 +103,8 @@ export default function Today() {
     upsertPenalty,
   ])
 
-  const complete = async () => {
-    if (!profile || !todayPlan) return
-    try {
-      await upsertCheckIn(buildCheckIn(profile.id, todayPlan.id, today, 'completed', '完成今日训练'))
-      notifyApp({ tone: 'success', message: '今日训练已记录。' })
-    } catch {
-      notifyApp({ tone: 'warning', message: '记录失败，请检查网络后再试。' })
-    }
+  const startCheckIn = () => {
+    navigate('/checkin')
   }
 
   const askLeave = async () => {
@@ -148,7 +144,7 @@ export default function Today() {
           leaveReason={leaveReason}
           plan={todayPlan}
           onAskLeave={askLeave}
-          onComplete={complete}
+          onStartCheckIn={startCheckIn}
           onLeaveReasonChange={setLeaveReason}
         />
       ) : (
@@ -218,7 +214,7 @@ function TodayTrainingSection({
   exercises,
   leaveReason,
   onAskLeave,
-  onComplete,
+  onStartCheckIn,
   onLeaveReasonChange,
   plan,
 }: {
@@ -226,7 +222,7 @@ function TodayTrainingSection({
   exercises: Exercise[]
   leaveReason: string
   onAskLeave: () => Promise<void>
-  onComplete: () => Promise<void>
+  onStartCheckIn: () => void
   onLeaveReasonChange: (value: string) => void
   plan: Plan
 }) {
@@ -242,14 +238,15 @@ function TodayTrainingSection({
         ))}
       </div>
 
-      <button className="primary-action" disabled={Boolean(checkIn)} type="button" onClick={() => void onComplete()}>
-        完成今日训练
+      <button className="primary-action" disabled={Boolean(checkIn)} type="button" onClick={onStartCheckIn}>
+        去提交打卡
       </button>
 
       <div className="leave-card">
         <label>
           请假理由，可空
           <input
+            maxLength={120}
             value={leaveReason}
             onChange={(event) => onLeaveReasonChange(event.target.value)}
             placeholder="出差 / 身体不适 / 今天休息"
@@ -311,7 +308,7 @@ function buildCheckIn(
   leaveReason: string | null = null,
 ): CheckIn {
   return {
-    id: `local-${date}`,
+    id: `local-${date}-${planId}`,
     user_id: userId,
     plan_id: planId,
     date,

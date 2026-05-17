@@ -1,5 +1,5 @@
-import { CalendarDays, UserPlus, Users } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Check, CalendarDays, Pencil, UserPlus, Users, X } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
 import ExerciseCard from '../../components/ExerciseCard'
 import Metric from '../../components/Metric'
 import PlanEditor from '../../components/PlanEditor'
@@ -7,6 +7,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useMembers } from '../../hooks/useMembers'
 import { usePlans } from '../../hooks/usePlans'
 import { formatDay, toISODate } from '../../lib/date'
+import { accountMemberLabel, contactMemberLabel, displayMemberLabel, shouldShowAccountLabel } from '../../lib/memberLabels'
 import { buildPlan, planFromTemplate, planToExercises } from '../../lib/plan'
 import type { PlanDraft } from '../../lib/types'
 
@@ -17,11 +18,16 @@ function todayDraft(userId: string, date: string): PlanDraft {
 
 export default function CoachMembers() {
   const { profile } = useAuth()
-  const { addMember, members, message, selectedMember, selectedMemberId, setSelectedMemberId } = useMembers(profile?.id)
+  const { addMember, members, message, selectedMember, selectedMemberId, setSelectedMemberId, updateMemberDisplayName } = useMembers(profile?.id)
   const { plans, savePlan } = usePlans(selectedMember?.id)
   const [displayName, setDisplayName] = useState('')
   const [identifier, setIdentifier] = useState('')
   const [addMessage, setAddMessage] = useState('')
+  const [editMessage, setEditMessage] = useState('')
+  const [editingDisplayName, setEditingDisplayName] = useState('')
+  const [editingMemberId, setEditingMemberId] = useState('')
+  const [savingMemberId, setSavingMemberId] = useState('')
+  const savingMemberIdRef = useRef('')
   const [selectedDate, setSelectedDate] = useState(toISODate(new Date()))
   const week = useMemo(() => buildPlan(new Date(`${selectedDate}T12:00:00`)), [selectedDate])
   const selectedPlan = plans.find((plan) => plan.date === selectedDate)
@@ -38,6 +44,36 @@ export default function CoachMembers() {
     if (!result) {
       setDisplayName('')
       setIdentifier('')
+    }
+  }
+
+  const startEditing = (memberId: string) => {
+    const member = members.find((item) => item.id === memberId)
+    setEditingMemberId(memberId)
+    setEditingDisplayName(member ? displayMemberLabel(member) : '')
+    setEditMessage('')
+  }
+
+  const cancelEditing = () => {
+    setEditingMemberId('')
+    setEditingDisplayName('')
+    setEditMessage('')
+  }
+
+  const submitDisplayName = async () => {
+    if (savingMemberIdRef.current) return
+    savingMemberIdRef.current = editingMemberId
+    setSavingMemberId(editingMemberId)
+    try {
+      const result = await updateMemberDisplayName(editingMemberId, editingDisplayName)
+      setEditMessage(result ?? '称呼已更新。')
+      if (!result) {
+        setEditingMemberId('')
+        setEditingDisplayName('')
+      }
+    } finally {
+      savingMemberIdRef.current = ''
+      setSavingMemberId('')
     }
   }
 
@@ -90,19 +126,69 @@ export default function CoachMembers() {
 
       <div className="member-list">
         {members.length === 0 && <p className="muted">还没有绑定成员。</p>}
-        {members.map((member) => (
-          <button
-            className={member.id === selectedMemberId ? 'member-card active' : 'member-card'}
-            key={member.id}
-            type="button"
-            onClick={() => setSelectedMemberId(member.id)}
-          >
-            <strong>{member.display_name}</strong>
-            <span>{member.account_name}</span>
-            <small>{member.email || member.member_code || '成员账号'}</small>
-          </button>
-        ))}
+        {members.map((member) => {
+          const isEditing = editingMemberId === member.id
+          const contactLabel = contactMemberLabel(member)
+          const savingThisMember = savingMemberId === member.id
+          return (
+            <article className={member.id === selectedMemberId ? 'member-card active' : 'member-card'} key={member.id}>
+              <button
+                aria-pressed={member.id === selectedMemberId}
+                className="member-card-main"
+                type="button"
+                onClick={() => setSelectedMemberId(member.id)}
+              >
+                <strong>{displayMemberLabel(member)}</strong>
+                {shouldShowAccountLabel(member) && <span>{accountMemberLabel(member)}</span>}
+                {contactLabel && <small>{contactLabel}</small>}
+              </button>
+              {isEditing ? (
+                <form
+                  className="member-edit-form"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    void submitDisplayName()
+                  }}
+                >
+                  <label>
+                    成员称呼
+                    <input
+                      autoFocus
+                      maxLength={24}
+                      value={editingDisplayName}
+                      onChange={(event) => {
+                        setEditingDisplayName(event.target.value)
+                        setEditMessage('')
+                      }}
+                    />
+                  </label>
+                  <div className="member-edit-actions">
+                    <button type="submit" disabled={savingThisMember}>
+                      <Check size={16} />
+                      {savingThisMember ? '保存中' : '保存'}
+                    </button>
+                    <button type="button" disabled={savingThisMember} onClick={cancelEditing}>
+                      <X size={16} />
+                      取消
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <button
+                  className="member-edit-button"
+                  type="button"
+                  disabled={Boolean(savingMemberId)}
+                  onClick={() => startEditing(member.id)}
+                >
+                  <Pencil size={16} />
+                  改称呼
+                </button>
+              )}
+            </article>
+          )
+        })}
       </div>
+      {editMessage && <p className={editMessage === '称呼已更新。' ? 'form-success' : 'form-error'}>{editMessage}</p>}
 
       {selectedMember && draft && (
         <>

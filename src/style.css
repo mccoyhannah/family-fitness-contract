@@ -27,11 +27,19 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+}
+
 body {
   min-width: 320px;
   margin: 0;
   color: var(--ink);
   background: var(--bg);
+  overflow: hidden;
 }
 
 button,
@@ -79,8 +87,10 @@ textarea:focus-visible {
 .app-shell,
 .center-screen {
   min-height: 100svh;
+  height: 100svh;
   display: grid;
   place-items: center;
+  overflow: hidden;
   padding: 24px 14px;
   background:
     repeating-linear-gradient(90deg, rgba(19, 34, 29, 0.028) 0 1px, transparent 1px 32px),
@@ -88,6 +98,10 @@ textarea:focus-visible {
     linear-gradient(135deg, rgba(255, 111, 77, 0.13), transparent 42%),
     linear-gradient(225deg, rgba(74, 155, 217, 0.1), transparent 40%),
     var(--bg);
+}
+
+.center-screen {
+  overflow: auto;
 }
 
 .app-frame,
@@ -101,8 +115,8 @@ textarea:focus-visible {
 }
 
 .app-frame {
-  min-height: min(920px, calc(100svh - 48px));
-  max-height: 940px;
+  height: min(940px, calc(100svh - 48px));
+  min-height: 0;
   position: relative;
   overflow: hidden;
   display: flex;
@@ -110,8 +124,10 @@ textarea:focus-visible {
 }
 
 .screen {
+  min-height: 0;
   flex: 1;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 16px 16px 24px;
   animation: screen-enter 0.28s var(--motion) both;
 }
@@ -184,7 +200,10 @@ textarea:focus-visible {
 .admin-button,
 .icon-action,
 .week-tabs button,
-.member-card {
+.member-card,
+.member-card-main,
+.member-edit-button,
+.member-edit-actions button {
   min-height: 42px;
   display: inline-flex;
   align-items: center;
@@ -485,7 +504,8 @@ label {
 }
 
 .primary-action:disabled,
-.leave-card button:disabled {
+.leave-card button:disabled,
+.row-actions button:disabled {
   opacity: 0.55;
   cursor: default;
 }
@@ -648,10 +668,31 @@ label {
 .member-card {
   min-height: 72px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  align-content: start;
+  gap: 8px;
+  padding: 10px;
+  cursor: default;
+  text-align: left;
+}
+
+.member-card-main {
+  width: 100%;
+  min-height: 58px;
+  display: grid;
   justify-items: start;
   align-content: center;
   gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   text-align: left;
+}
+
+.member-card-main:hover {
+  box-shadow: none;
 }
 
 .member-card.active {
@@ -669,6 +710,30 @@ label {
 .member-card.active span,
 .member-card.active small {
   color: var(--muted);
+}
+
+.member-edit-button {
+  width: 100%;
+  min-height: 36px;
+  justify-content: center;
+  background: rgba(247, 250, 248, 0.86);
+  box-shadow: none;
+}
+
+.member-edit-form {
+  width: 100%;
+  display: grid;
+  gap: 8px;
+}
+
+.member-edit-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.spin-icon {
+  animation: spin 0.9s linear infinite;
 }
 
 .week-tabs {
@@ -1028,6 +1093,8 @@ code {
   .admin-button:hover,
   .icon-action:hover,
   .week-tabs button:hover,
+  .member-edit-button:hover,
+  .member-edit-actions button:hover,
   .member-card:hover,
   .bottom-nav a:hover {
     transform: translateY(-1px);
@@ -1068,6 +1135,12 @@ button:active,
 @keyframes shimmer {
   to {
     transform: translateX(100%);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -1117,6 +1190,8 @@ button:active,
   .stats-card,
   .metric,
   .member-card,
+  .member-edit-button,
+  .member-edit-actions button,
   .member-choice,
   .fatigue-card,
   .add-member-card,
@@ -1141,6 +1216,8 @@ button:active,
   .admin-button,
   .icon-action,
   .week-tabs button,
+  .member-edit-button,
+  .member-edit-actions button,
   .switch-row,
   .app-notice,
   .app-notice-actions button,
@@ -1209,7 +1286,8 @@ button:active,
   .login-card,
   .config-card {
     width: 100%;
-    min-height: 100svh;
+    height: 100svh;
+    min-height: 0;
     max-height: none;
     border: 0;
     border-radius: 0;

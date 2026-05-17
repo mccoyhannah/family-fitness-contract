@@ -36,7 +36,11 @@ export function useCheckInEvidence(scope = 'demo') {
       return
     }
     setLoading(true)
-    const { data, error } = await supabase.from('check_in_evidence').select('*').order('created_at', { ascending: false })
+    let query = supabase.from('check_in_evidence').select('*').order('created_at', { ascending: false })
+    if (scope !== 'demo' && scope !== 'coach') {
+      query = query.eq('user_id', scope)
+    }
+    const { data, error } = await query
     setLoading(false)
     if (error) throw error
     const signed = await signRows((data ?? []) as CheckInEvidence[])

@@ -5,7 +5,7 @@ type MemberLabelLike = {
 export function cleanMemberLabel(value?: string | null) {
   return (value ?? '')
     .normalize('NFKC')
-    .replace(/[\u200B-\u200D\uFEFF]+/g, '')
+    .replace(/\p{Cf}+/gu, '')
     .replace(/\s+/g, ' ')
     .trim()
 }

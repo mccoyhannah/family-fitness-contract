@@ -1,40 +1,53 @@
+import { lazy, Suspense, type ReactNode } from 'react'
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
+import AppErrorBoundary from './components/AppErrorBoundary'
 import AppShell from './components/AppShell'
 import ConfigMissing from './components/ConfigMissing'
 import { useAuth } from './hooks/useAuth'
-import CoachDashboard from './pages/coach/Dashboard'
-import CoachMembers from './pages/coach/Members'
-import CoachPayments from './pages/coach/Payments'
-import CoachReview from './pages/coach/Review'
-import Login from './pages/Login'
-import CheckIn from './pages/student/CheckIn'
-import Ledger from './pages/student/Ledger'
-import Plan from './pages/student/Plan'
-import Today from './pages/student/Today'
+
+const CoachDashboard = lazy(() => import('./pages/coach/Dashboard'))
+const CoachMembers = lazy(() => import('./pages/coach/Members'))
+const CoachPayments = lazy(() => import('./pages/coach/Payments'))
+const CoachReview = lazy(() => import('./pages/coach/Review'))
+const Login = lazy(() => import('./pages/Login'))
+const CheckIn = lazy(() => import('./pages/student/CheckIn'))
+const Ledger = lazy(() => import('./pages/student/Ledger'))
+const Plan = lazy(() => import('./pages/student/Plan'))
+const Today = lazy(() => import('./pages/student/Today'))
 
 function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route element={<RequireRole role="student" />}>
-        <Route element={<AppShell role="student" />}>
-          <Route path="/" element={<Today />} />
-          <Route path="/plan" element={<Plan />} />
-          <Route path="/checkin" element={<CheckIn />} />
-          <Route path="/ledger" element={<Ledger />} />
+    <AppErrorBoundary>
+      <Routes>
+        <Route path="/login" element={withCenteredLoading(<Login />)} />
+        <Route element={<RequireRole role="student" />}>
+          <Route element={<AppShell role="student" />}>
+            <Route path="/" element={withPageLoading(<Today />)} />
+            <Route path="/plan" element={withPageLoading(<Plan />)} />
+            <Route path="/checkin" element={withPageLoading(<CheckIn />)} />
+            <Route path="/ledger" element={withPageLoading(<Ledger />)} />
+          </Route>
         </Route>
-      </Route>
-      <Route element={<RequireRole role="coach" />}>
-        <Route element={<AppShell role="coach" />}>
-          <Route path="/admin" element={<CoachDashboard />} />
-          <Route path="/admin/members" element={<CoachMembers />} />
-          <Route path="/admin/review" element={<CoachReview />} />
-          <Route path="/admin/payments" element={<CoachPayments />} />
+        <Route element={<RequireRole role="coach" />}>
+          <Route element={<AppShell role="coach" />}>
+            <Route path="/admin" element={withPageLoading(<CoachDashboard />)} />
+            <Route path="/admin/members" element={withPageLoading(<CoachMembers />)} />
+            <Route path="/admin/review" element={withPageLoading(<CoachReview />)} />
+            <Route path="/admin/payments" element={withPageLoading(<CoachPayments />)} />
+          </Route>
         </Route>
-      </Route>
-      <Route path="*" element={<RoleAwareFallback />} />
-    </Routes>
+        <Route path="*" element={<RoleAwareFallback />} />
+      </Routes>
+    </AppErrorBoundary>
   )
+}
+
+function withCenteredLoading(element: ReactNode) {
+  return <Suspense fallback={<LoadingScreen />}>{element}</Suspense>
+}
+
+function withPageLoading(element: ReactNode) {
+  return <Suspense fallback={<PageLoadingScreen />}>{element}</Suspense>
 }
 
 function RequireRole({ role }: { role: 'student' | 'coach' }) {
@@ -79,6 +92,18 @@ function LoadingScreen() {
         </div>
       </section>
     </main>
+  )
+}
+
+function PageLoadingScreen() {
+  return (
+    <section className="screen with-nav" aria-label="页面加载中">
+      <div className="status-card loading-card">
+        <span className="skeleton-line medium" />
+        <span className="skeleton-line title" />
+        <span className="skeleton-line" />
+      </div>
+    </section>
   )
 }
 

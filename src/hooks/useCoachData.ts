@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { readCache, writeCache } from '../lib/cache'
 import { DEMO_STUDENT_ID, PREVIEW_ROLE_KEY, isLocalhostPreview } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import { notifySyncError } from '../lib/syncError'
 import type { CheckIn, Penalty, Profile } from '../lib/types'
 
 type CoachDataState = {
@@ -68,27 +69,34 @@ export function useCoachData() {
     }
     const client = supabase
     if (!client) return
-    setState((current) => ({ ...current, loading: true }))
-    const [{ data: profileRows }, { data: checkInRows }, { data: penaltyRows }] = await Promise.all([
-      client.from('profiles').select('*').eq('role', 'student').order('created_at', { ascending: true }),
-      client.from('check_ins').select('*').order('date', { ascending: false }),
-      client.from('penalties').select('*').order('date', { ascending: false }),
-    ])
-    const next = {
-      checkIns: checkInRows ?? [],
-      loading: false,
-      penalties: penaltyRows ?? [],
-      profiles: (profileRows ?? []) as Profile[],
-      ready: true,
+    try {
+      setState((current) => ({ ...current, loading: true }))
+      const [profilesResult, checkInsResult, penaltiesResult] = await Promise.all([
+        client.from('profiles').select('*').eq('role', 'student').order('created_at', { ascending: true }),
+        client.from('check_ins').select('*').order('date', { ascending: false }),
+        client.from('penalties').select('*').order('date', { ascending: false }),
+      ])
+      if (profilesResult.error) throw profilesResult.error
+      if (checkInsResult.error) throw checkInsResult.error
+      if (penaltiesResult.error) throw penaltiesResult.error
+      const next = {
+        checkIns: checkInsResult.data ?? [],
+        loading: false,
+        penalties: penaltiesResult.data ?? [],
+        profiles: (profilesResult.data ?? []) as Profile[],
+        ready: true,
+      }
+      setState(next)
+      rememberCoachData({ checkIns: next.checkIns, penalties: next.penalties, profiles: next.profiles, ready: next.ready })
+      const cache = readCache('coach')
+      writeCache({ ...cache, checkIns: checkInsResult.data ?? [], penalties: penaltiesResult.data ?? [] }, 'coach')
+    } finally {
+      setState((current) => (current.loading ? { ...current, loading: false } : current))
     }
-    setState(next)
-    rememberCoachData({ checkIns: next.checkIns, penalties: next.penalties, profiles: next.profiles, ready: next.ready })
-    const cache = readCache('coach')
-    writeCache({ ...cache, checkIns: checkInRows ?? [], penalties: penaltyRows ?? [] }, 'coach')
   }, [])
 
   useEffect(() => {
-    void load()
+    void load().catch(() => notifySyncError('coach-data', '管理端数据同步失败，请检查网络后刷新。'))
   }, [load])
 
   useEffect(() => {
@@ -97,8 +105,12 @@ export function useCoachData() {
     if (!client) return
     const channel = client
       .channel('coach-data')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'check_ins' }, () => void load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'penalties' }, () => void load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'check_ins' }, () =>
+        void load().catch(() => notifySyncError('coach-data', '管理端数据同步失败，请检查网络后刷新。')),
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'penalties' }, () =>
+        void load().catch(() => notifySyncError('coach-data', '管理端数据同步失败，请检查网络后刷新。')),
+      )
       .subscribe()
     return () => {
       void client.removeChannel(channel)
@@ -119,7 +131,8 @@ export function useCoachData() {
     }
     const client = supabase
     if (!client) return
-    await client.from('check_ins').update({ status }).eq('id', id)
+    const { error } = await client.from('check_ins').update({ status }).eq('id', id)
+    if (error) throw error
     await load()
   }
 
@@ -137,7 +150,8 @@ export function useCoachData() {
     }
     const client = supabase
     if (!client) return
-    await client.from('penalties').update({ status }).eq('id', id)
+    const { error } = await client.from('penalties').update({ status }).eq('id', id)
+    if (error) throw error
     await load()
   }
 

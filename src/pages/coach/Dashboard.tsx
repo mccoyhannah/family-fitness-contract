@@ -9,6 +9,7 @@ import { useCoachData } from '../../hooks/useCoachData'
 import { useMembers } from '../../hooks/useMembers'
 import { usePlans } from '../../hooks/usePlans'
 import { formatDay } from '../../lib/date'
+import { displayMemberLabel } from '../../lib/memberLabels'
 
 export default function CoachDashboard() {
   const { profile } = useAuth()
@@ -32,6 +33,7 @@ export default function CoachDashboard() {
   const missed = scopedCheckIns.filter((item) => item.status === 'missed').length
   const finishedTotal = completed + missed
   const completionRate = finishedTotal > 0 ? `${Math.round((completed / finishedTotal) * 100)}%` : '0%'
+  const selectedMemberLabel = selectedMember ? displayMemberLabel(selectedMember) : ''
   const recentCheckIns = scopedCheckIns
     .slice()
     .sort((a, b) => b.date.localeCompare(a.date))
@@ -61,7 +63,7 @@ export default function CoachDashboard() {
       <div className="hero-panel">
         <span className="hero-kicker">Coach Console</span>
         <h2>远程监督台</h2>
-        <p>{!membersReady ? '正在同步成员、计划和账款。' : selectedMember ? `当前正在看 ${selectedMember.display_name} 的计划、打卡和账款。` : '先添加成员，再制定计划。'}</p>
+        <p>{!membersReady ? '正在同步成员、计划和账款。' : selectedMember ? `当前正在看 ${selectedMemberLabel} 的计划、打卡和账款。` : '先添加成员，再制定计划。'}</p>
       </div>
       <MemberSelect loading={membersLoading} members={members} ready={membersReady} selectedMemberId={selectedMemberId} onChange={setSelectedMemberId} />
       <div className="metric-row">
@@ -72,7 +74,7 @@ export default function CoachDashboard() {
       </div>
 
       <div className="status-card action-card">
-        <strong>{selectedMember ? `${selectedMember.display_name} 的下一步` : '管理端下一步'}</strong>
+        <strong>{selectedMember ? `${selectedMemberLabel} 的下一步` : '管理端下一步'}</strong>
         <p>{nextStep}</p>
         <div className="row-actions">
           <button type="button" disabled={isRefreshing} onClick={() => void refresh()}>

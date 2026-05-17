@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { readCache, writeCache } from '../lib/cache'
 import { shouldUsePreviewLocalScope } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import { notifySyncError } from '../lib/syncError'
 import type { Penalty } from '../lib/types'
 
 function shouldUseLocalPenalties(scope?: string) {
@@ -26,11 +27,12 @@ export function usePenalties(userId?: string) {
     if (!client) return
     try {
       setLoading(true)
-      const { data } = await client
+      const { data, error } = await client
         .from('penalties')
         .select('*')
         .eq('user_id', userId)
         .order('date', { ascending: false })
+      if (error) throw error
       setPenalties(data ?? [])
       writeCache({ ...readCache(cacheScope), penalties: data ?? [] }, cacheScope)
       setLoadedUserId(userId)
@@ -40,7 +42,7 @@ export function usePenalties(userId?: string) {
   }, [cacheScope, userId])
 
   useEffect(() => {
-    void load()
+    void load().catch(() => notifySyncError('penalties', '账款记录同步失败，请检查网络后刷新。'))
   }, [load])
 
   useEffect(() => {
@@ -52,7 +54,7 @@ export function usePenalties(userId?: string) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'penalties', filter: `user_id=eq.${userId}` },
-        () => void load(),
+        () => void load().catch(() => notifySyncError('penalties', '账款记录同步失败，请检查网络后刷新。')),
       )
       .subscribe()
     return () => {
@@ -77,7 +79,8 @@ export function usePenalties(userId?: string) {
     if (row.id?.startsWith('local-')) delete row.id
     const client = supabase
     if (!client) return
-    await client.from('penalties').upsert(row, { onConflict: 'user_id,date' })
+    const { error } = await client.from('penalties').upsert(row, { onConflict: 'user_id,date' })
+    if (error) throw error
     await load()
   }
 
@@ -92,7 +95,8 @@ export function usePenalties(userId?: string) {
     }
     const client = supabase
     if (!client) return
-    await client.from('penalties').update({ status }).eq('id', id)
+    const { error } = await client.from('penalties').update({ status }).eq('id', id)
+    if (error) throw error
     await load()
   }
 

@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react'
 import MemberSelect from '../../components/MemberSelect'
 import StatusPill from '../../components/StatusPill'
-import { notifyApp } from '../../components/AppNotice'
 import { useAuth } from '../../hooks/useAuth'
 import { useCheckInEvidence } from '../../hooks/useCheckInEvidence'
 import { useCoachData } from '../../hooks/useCoachData'
@@ -9,6 +8,7 @@ import { useMembers } from '../../hooks/useMembers'
 import { usePlans } from '../../hooks/usePlans'
 import { formatDay } from '../../lib/date'
 import { displayMemberLabel } from '../../lib/memberLabels'
+import { notifyApp } from '../../lib/notice'
 
 export default function CoachReview() {
   const { profile: coach } = useAuth()
@@ -24,6 +24,7 @@ export default function CoachReview() {
   const { evidenceFor, reload: reloadEvidence } = useCheckInEvidence('coach')
   const retriedEvidenceKeysRef = useRef(new Set<string>())
   const reviewingCheckInIdRef = useRef('')
+  const retrySequenceRef = useRef(0)
   const [failedEvidenceKeys, setFailedEvidenceKeys] = useState<Set<string>>(() => new Set())
   const [reviewingCheckInId, setReviewingCheckInId] = useState('')
   const [retryNonceByEvidenceKey, setRetryNonceByEvidenceKey] = useState<Record<string, number>>({})
@@ -68,7 +69,8 @@ export default function CoachReview() {
       return
     }
     retriedEvidenceKeysRef.current.add(key)
-    setRetryNonceByEvidenceKey((current) => ({ ...current, [key]: Date.now() }))
+    retrySequenceRef.current += 1
+    setRetryNonceByEvidenceKey((current) => ({ ...current, [key]: retrySequenceRef.current }))
     void reloadEvidence().catch(() => {
       setFailedEvidenceKeys((current) => new Set(current).add(key))
     })
@@ -79,6 +81,8 @@ export default function CoachReview() {
     if (!nonce) return signedUrl
     return `${signedUrl}${signedUrl.includes('?') ? '&' : '?'}retry=${nonce}`
   }
+
+  const coachMemberLabel = (memberId: string) => memberNameById.get(memberId) || '成员'
 
   return (
     <section className="screen with-nav">
@@ -94,7 +98,7 @@ export default function CoachReview() {
       <div className="review-list">
         {pending.length === 0 && <p className="muted">当前没有待确认打卡。</p>}
         {pending.map((item) => {
-          const displayName = memberNameById.get(item.user_id) || '成员'
+          const displayName = coachMemberLabel(item.user_id)
           const plan = plans.find((row) => row.id === item.plan_id || row.date === item.date)
           const itemEvidence = evidenceFor(item.id)
           return (

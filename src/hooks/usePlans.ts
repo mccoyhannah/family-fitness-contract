@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { readCache, writeCache } from '../lib/cache'
 import { shouldUsePreviewLocalScope } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import { notifySyncError } from '../lib/syncError'
 import type { Plan, PlanDraft, PlanItem } from '../lib/types'
 
 type PlanRow = Omit<Plan, 'items'> & {
@@ -19,12 +20,17 @@ function shouldUseLocalPlans(scope?: string) {
   return !isSupabaseConfigured || !supabase || shouldUsePreviewLocalScope(scope)
 }
 
+function isUuid(value?: string) {
+  return Boolean(value?.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i))
+}
+
 export function usePlans(userId?: string) {
   const cacheScope = userId ?? 'demo'
   const [plans, setPlans] = useState<Plan[]>(() => readCache(cacheScope).plans)
   const [loading, setLoading] = useState(false)
   const [loadedUserId, setLoadedUserId] = useState<string | null>(() => shouldUseLocalPlans(userId) ? userId ?? null : null)
   const loadingState = loading || Boolean(userId && !shouldUseLocalPlans(userId) && loadedUserId !== userId)
+  const planIds = plans.map((plan) => plan.id).sort().join(',')
 
   const load = useCallback(async () => {
     if (!userId) return
@@ -36,23 +42,25 @@ export function usePlans(userId?: string) {
     const client = supabase
     if (!client) return
 
-    setLoading(true)
-    const { data, error } = await client
-      .from('plans')
-      .select('*, plan_items(*)')
-      .eq('user_id', userId)
-      .order('date', { ascending: true })
-    setLoading(false)
-
-    if (error) throw error
-    const nextPlans = ((data ?? []) as PlanRow[]).map(normalizePlan)
-    setPlans(nextPlans)
-    writeCache({ ...readCache(cacheScope), plans: nextPlans }, cacheScope)
-    setLoadedUserId(userId)
+    try {
+      setLoading(true)
+      const { data, error } = await client
+        .from('plans')
+        .select('*, plan_items(*)')
+        .eq('user_id', userId)
+        .order('date', { ascending: true })
+      if (error) throw error
+      const nextPlans = ((data ?? []) as PlanRow[]).map(normalizePlan)
+      setPlans(nextPlans)
+      writeCache({ ...readCache(cacheScope), plans: nextPlans }, cacheScope)
+      setLoadedUserId(userId)
+    } finally {
+      setLoading(false)
+    }
   }, [cacheScope, userId])
 
   useEffect(() => {
-    void load()
+    void load().catch(() => notifySyncError('plans', '计划同步失败，请检查网络后刷新。'))
   }, [load])
 
   useEffect(() => {
@@ -61,14 +69,19 @@ export function usePlans(userId?: string) {
     const channel = client
       .channel(`plans-${userId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'plans', filter: `user_id=eq.${userId}` }, () =>
-        void load(),
+        void load().catch(() => notifySyncError('plans', '计划同步失败，请检查网络后刷新。')),
       )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'plan_items' }, () => void load())
+    if (planIds) {
+      channel.on('postgres_changes', { event: '*', schema: 'public', table: 'plan_items', filter: `plan_id=in.(${planIds})` }, () =>
+        void load().catch(() => notifySyncError('plans', '计划同步失败，请检查网络后刷新。')),
+      )
+    }
+    channel
       .subscribe()
     return () => {
       void client.removeChannel(channel)
     }
-  }, [load, userId])
+  }, [load, planIds, userId])
 
   const savePlan = async (draft: PlanDraft) => {
     const localPlan: Plan = {
@@ -112,19 +125,48 @@ export function usePlans(userId?: string) {
       .single()
     if (error) throw error
 
-    await client.from('plan_items').delete().eq('plan_id', data.id)
-    if (draft.items.length > 0) {
-      const { error: itemError } = await client.from('plan_items').insert(
-        draft.items.map((item, index) => ({
-          plan_id: data.id,
-          name: item.name,
-          sets: item.sets,
-          reps: item.reps,
-          note: item.note,
-          sort_order: index,
-        })),
-      )
+    const itemRows = draft.items.map((item, index) => ({
+      id: isUuid(item.id) ? item.id : undefined,
+      plan_id: data.id,
+      name: item.name,
+      sets: item.sets,
+      reps: item.reps,
+      note: item.note,
+      sort_order: index,
+    }))
+    const existingRows = itemRows.filter((item) => item.id)
+    const newRows = itemRows.filter((item) => !item.id).map(({ id: _id, ...item }) => item)
+    const keptItemIds: string[] = []
+
+    if (existingRows.length > 0) {
+      const { data: savedItems, error: itemError } = await client
+        .from('plan_items')
+        .upsert(existingRows, { onConflict: 'id' })
+        .select('id')
       if (itemError) throw itemError
+      keptItemIds.push(...((savedItems ?? []) as Pick<PlanItem, 'id'>[]).map((item) => item.id))
+    }
+    if (newRows.length > 0) {
+      const { data: insertedItems, error: itemError } = await client
+        .from('plan_items')
+        .insert(newRows)
+        .select('id')
+      if (itemError) throw itemError
+      keptItemIds.push(...((insertedItems ?? []) as Pick<PlanItem, 'id'>[]).map((item) => item.id))
+    }
+    if (keptItemIds.length === 0) {
+      const { error: deleteError } = await client.from('plan_items').delete().eq('plan_id', data.id)
+      if (deleteError) throw deleteError
+    } else {
+      const { data: currentItems, error: listError } = await client.from('plan_items').select('id').eq('plan_id', data.id)
+      if (listError) throw listError
+      const staleItemIds = ((currentItems ?? []) as Pick<PlanItem, 'id'>[])
+        .map((item) => item.id)
+        .filter((id) => !keptItemIds.includes(id))
+      if (staleItemIds.length > 0) {
+        const { error: deleteError } = await client.from('plan_items').delete().in('id', staleItemIds)
+        if (deleteError) throw deleteError
+      }
     }
 
     await load()

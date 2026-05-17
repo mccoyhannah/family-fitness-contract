@@ -3,8 +3,9 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { registerSW } from 'virtual:pwa-register'
 import App from './App'
-import AppNotice, { notifyApp } from './components/AppNotice'
+import AppNotice from './components/AppNotice'
 import { AuthProvider } from './hooks/useAuth'
+import { notifyApp } from './lib/notice'
 import './style.css'
 
 const updateSW = registerSW({

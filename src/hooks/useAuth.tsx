@@ -139,6 +139,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signOut: async () => {
         if (supabase) await supabase.auth.signOut()
         if (profile?.id) clearCache(profile.id)
+        clearCache('coach')
+        clearCache('demo')
         localStorage.removeItem(PREVIEW_ROLE_KEY)
         setSession(null)
         setProfile(null)

@@ -96,7 +96,7 @@ export default function CoachMembers() {
 
       <div className="metric-row">
         <Metric icon={<Users />} label="已绑定成员" value={membersReady ? `${members.length} 人` : '同步中'} />
-        <Metric icon={<CalendarDays />} label="当前成员" value={membersReady ? selectedMember?.display_name ?? '未选择' : '同步中'} />
+        <Metric icon={<CalendarDays />} label="当前成员" value={membersReady ? selectedMember ? displayMemberLabel(selectedMember) : '未选择' : '同步中'} />
       </div>
 
       <div className="form-card add-member-card">
@@ -205,7 +205,7 @@ export default function CoachMembers() {
       {selectedMember && draft && (
         <>
           <div className="section-heading">
-            <h3>给 {selectedMember.display_name} 制定计划</h3>
+            <h3>给 {displayMemberLabel(selectedMember)} 制定计划</h3>
             <span>{formatDay(selectedDate)}</span>
           </div>
           <div className="week-tabs">

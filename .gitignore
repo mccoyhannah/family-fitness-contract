@@ -13,6 +13,7 @@ dist-ssr
 *.local
 .npm-cache
 .wrangler-xdg
+.deepseek
 supabase/.temp/
 
 # Editor directories and files

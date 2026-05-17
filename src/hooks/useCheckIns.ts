@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { readCache, writeCache } from '../lib/cache'
 import { shouldUsePreviewLocalScope } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import { notifySyncError } from '../lib/syncError'
 import type { CheckIn } from '../lib/types'
 
 function shouldUseLocalCheckIns(scope?: string) {
@@ -26,11 +27,12 @@ export function useCheckIns(userId?: string) {
     if (!client) return
     try {
       setLoading(true)
-      const { data } = await client
+      const { data, error } = await client
         .from('check_ins')
         .select('*')
         .eq('user_id', userId)
         .order('date', { ascending: false })
+      if (error) throw error
       setCheckIns(data ?? [])
       writeCache({ ...readCache(cacheScope), checkIns: data ?? [] }, cacheScope)
       setLoadedUserId(userId)
@@ -40,7 +42,7 @@ export function useCheckIns(userId?: string) {
   }, [cacheScope, userId])
 
   useEffect(() => {
-    void load()
+    void load().catch(() => notifySyncError('check-ins', '打卡记录同步失败，请检查网络后刷新。'))
   }, [load])
 
   useEffect(() => {
@@ -52,7 +54,7 @@ export function useCheckIns(userId?: string) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'check_ins', filter: `user_id=eq.${userId}` },
-        () => void load(),
+        () => void load().catch(() => notifySyncError('check-ins', '打卡记录同步失败，请检查网络后刷新。')),
       )
       .subscribe()
     return () => {

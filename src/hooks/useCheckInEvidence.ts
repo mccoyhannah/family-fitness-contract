@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { readCache, writeCache } from '../lib/cache'
 import { shouldUsePreviewLocalScope } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import { notifySyncError } from '../lib/syncError'
 import type { CheckInEvidence } from '../lib/types'
 
 const bucket = 'checkin-evidence'
@@ -23,6 +24,7 @@ function shouldUseLocalEvidence(scope?: string) {
 export function useCheckInEvidence(scope = 'demo') {
   const [evidence, setEvidence] = useState<CheckInEvidence[]>(() => readCache(scope).evidence)
   const [loading, setLoading] = useState(false)
+  const loadSequenceRef = useRef(0)
 
   const signRows = useCallback(async (rows: CheckInEvidence[]) => {
     if (shouldUseLocalEvidence(scope)) return rows
@@ -30,35 +32,62 @@ export function useCheckInEvidence(scope = 'demo') {
     if (!client) return rows
     return Promise.all(
       rows.map(async (row) => {
-        const { data } = await client.storage.from(bucket).createSignedUrl(row.storage_path, 60 * 20)
+        const { data, error } = await client.storage.from(bucket).createSignedUrl(row.storage_path, 60 * 20)
+        if (error) return { ...row, signed_url: undefined }
         return { ...row, signed_url: data?.signedUrl }
       }),
     )
   }, [scope])
 
   const load = useCallback(async () => {
+    const loadSequence = loadSequenceRef.current + 1
+    loadSequenceRef.current = loadSequence
+    const isLatestLoad = () => loadSequence === loadSequenceRef.current
     if (shouldUseLocalEvidence(scope)) {
       setEvidence(readCache(scope).evidence)
       return
     }
-    setLoading(true)
     const client = supabase
     if (!client) return
-    let query = client.from('check_in_evidence').select('*').order('created_at', { ascending: false })
-    if (scope !== 'demo' && scope !== 'coach') {
-      query = query.eq('user_id', scope)
+    try {
+      setLoading(true)
+      let query = client.from('check_in_evidence').select('*').order('created_at', { ascending: false })
+      if (scope !== 'demo' && scope !== 'coach') {
+        query = query.eq('user_id', scope)
+      }
+      const { data, error } = await query
+      if (!isLatestLoad()) return
+      if (error) throw error
+      const signed = await signRows((data ?? []) as CheckInEvidence[])
+      if (!isLatestLoad()) return
+      setEvidence(signed)
+      writeCache({ ...readCache(scope), evidence: signed }, scope)
+    } finally {
+      if (isLatestLoad()) setLoading(false)
     }
-    const { data, error } = await query
-    setLoading(false)
-    if (error) throw error
-    const signed = await signRows((data ?? []) as CheckInEvidence[])
-    setEvidence(signed)
-    writeCache({ ...readCache(scope), evidence: signed }, scope)
   }, [scope, signRows])
 
   useEffect(() => {
-    void load()
+    void load().catch(() => notifySyncError('evidence', '图片证据同步失败，请检查网络后刷新。'))
   }, [load])
+
+  useEffect(() => {
+    if (shouldUseLocalEvidence(scope) || !supabase) return
+    const client = supabase
+    const eventFilter = scope !== 'demo' && scope !== 'coach' ? `user_id=eq.${scope}` : undefined
+    const channel = client.channel(`check-in-evidence-${scope}`)
+    channel.on(
+      'postgres_changes',
+      eventFilter
+        ? { event: '*', schema: 'public', table: 'check_in_evidence', filter: eventFilter }
+        : { event: '*', schema: 'public', table: 'check_in_evidence' },
+      () => void load().catch(() => notifySyncError('evidence', '图片证据同步失败，请检查网络后刷新。')),
+    )
+    channel.subscribe()
+    return () => {
+      void client.removeChannel(channel)
+    }
+  }, [load, scope])
 
   const uploadEvidence = async (checkInId: string, userId: string, files: File[]) => {
     if (files.length === 0) return []

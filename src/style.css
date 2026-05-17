@@ -282,7 +282,6 @@ textarea:focus-visible {
 .form-card,
 .day-card,
 .review-card,
-.stats-card,
 .metric,
 .member-card,
 .login-card,
@@ -472,8 +471,7 @@ textarea:focus-visible {
 .leave-card,
 .form-card,
 .day-card,
-.review-card,
-.stats-card {
+.review-card {
   margin-top: 14px;
   padding: 16px;
 }
@@ -552,8 +550,7 @@ textarea:focus-visible {
 .exercise-list,
 .week-list,
 .penalty-list,
-.review-list,
-.stats-list {
+.review-list {
   display: grid;
   gap: 11px;
 }
@@ -1068,12 +1065,22 @@ label {
   padding: 15px;
 }
 
+.penalty-card > div,
+.review-card > div {
+  min-width: 0;
+}
+
 .penalty-card strong {
   display: block;
   color: var(--brand);
   font-size: 28px;
   font-weight: 840;
   line-height: 1;
+}
+
+.penalty-card span,
+.review-card span {
+  overflow-wrap: anywhere;
 }
 
 .row-actions {
@@ -1441,7 +1448,6 @@ button:active,
   .day-card,
   .penalty-card,
   .review-card,
-  .stats-card,
   .metric,
   .member-card,
   .member-edit-button,
@@ -1652,5 +1658,18 @@ button:active,
 
   .bottom-nav a span {
     font-size: 11px;
+  }
+}
+
+@media (max-width: 430px) {
+  .penalty-card,
+  .review-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .penalty-card .row-actions,
+  .review-card .row-actions {
+    justify-content: flex-start;
   }
 }

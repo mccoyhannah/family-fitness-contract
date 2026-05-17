@@ -1,18 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-
-type Notice = {
-  id: number
-  tone: 'info' | 'success' | 'warning'
-  message: string
-  actionLabel?: string
-  action?: () => void
-}
-
-type AppNoticeEvent = CustomEvent<Omit<Notice, 'id'>>
-
-export function notifyApp(detail: Omit<Notice, 'id'>) {
-  window.dispatchEvent(new CustomEvent('family-fitness-contract:notice', { detail }))
-}
+import type { AppNoticeEvent, Notice } from '../lib/notice'
 
 export default function AppNotice() {
   const [notice, setNotice] = useState<Notice | null>(null)

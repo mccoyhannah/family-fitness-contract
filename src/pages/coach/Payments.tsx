@@ -3,12 +3,12 @@ import { useMemo, useRef, useState } from 'react'
 import MemberSelect from '../../components/MemberSelect'
 import Metric from '../../components/Metric'
 import StatusPill from '../../components/StatusPill'
-import { notifyApp } from '../../components/AppNotice'
 import { useAuth } from '../../hooks/useAuth'
 import { useCoachData } from '../../hooks/useCoachData'
 import { useMembers } from '../../hooks/useMembers'
 import { formatDay } from '../../lib/date'
 import { displayMemberLabel } from '../../lib/memberLabels'
+import { notifyApp } from '../../lib/notice'
 
 export default function CoachPayments() {
   const { profile } = useAuth()
@@ -31,6 +31,25 @@ export default function CoachPayments() {
   )
   const memberNameById = new Map(members.map((member) => [member.id, displayMemberLabel(member)]))
   const scopeLabel = selectedMember ? `${displayMemberLabel(selectedMember)}口径` : '全员口径'
+  const penaltySummary = useMemo(
+    () =>
+      scopedPenalties.reduce(
+        (summary, penalty) => {
+          const amount = Number.isFinite(penalty.amount) ? penalty.amount : 0
+          if (penalty.status === 'pending') {
+            summary.pendingTotal += amount
+            summary.pendingCount += 1
+          } else {
+            summary.settledCount += 1
+            if (penalty.status === 'paid') summary.paidTotal += amount
+            if (penalty.status === 'waived') summary.waivedTotal += amount
+          }
+          return summary
+        },
+        { paidTotal: 0, pendingCount: 0, pendingTotal: 0, settledCount: 0, waivedTotal: 0 },
+      ),
+    [scopedPenalties],
+  )
   const visiblePenalties = useMemo(() => {
     const filtered = statusFilter === 'all' ? scopedPenalties : scopedPenalties.filter((penalty) => penalty.status === statusFilter)
     return filtered.slice().sort((a, b) => {
@@ -39,17 +58,6 @@ export default function CoachPayments() {
       return b.date.localeCompare(a.date)
     })
   }, [scopedPenalties, sortOrder, statusFilter])
-  const pendingTotal = scopedPenalties
-    .filter((penalty) => penalty.status === 'pending')
-    .reduce((sum, penalty) => sum + penalty.amount, 0)
-  const paidTotal = scopedPenalties
-    .filter((penalty) => penalty.status === 'paid')
-    .reduce((sum, penalty) => sum + penalty.amount, 0)
-  const waivedTotal = scopedPenalties
-    .filter((penalty) => penalty.status === 'waived')
-    .reduce((sum, penalty) => sum + penalty.amount, 0)
-  const pendingCount = scopedPenalties.filter((penalty) => penalty.status === 'pending').length
-  const settledCount = scopedPenalties.filter((penalty) => penalty.status !== 'pending').length
   const formatAmount = (amount: number) => (Number.isInteger(amount) ? `${amount}` : amount.toFixed(2))
 
   const setPenaltyStatus = async (penaltyId: string, status: 'paid' | 'waived', displayName: string, date: string) => {
@@ -77,13 +85,13 @@ export default function CoachPayments() {
       </div>
       <MemberSelect loading={membersLoading} members={members} ready={membersReady} selectedMemberId={selectedMemberId} onChange={setSelectedMemberId} />
       <div className="metric-row three-col">
-        <Metric icon={<ReceiptText />} label="待支付" value={`¥${formatAmount(pendingTotal)}`} />
-        <Metric icon={<CheckCircle2 />} label="已支付" value={`¥${formatAmount(paidTotal)}`} />
-        <Metric icon={<CircleSlash />} label="已豁免" value={`¥${formatAmount(waivedTotal)}`} />
+        <Metric icon={<ReceiptText />} label="待支付" value={`¥${formatAmount(penaltySummary.pendingTotal)}`} />
+        <Metric icon={<CheckCircle2 />} label="已支付" value={`¥${formatAmount(penaltySummary.paidTotal)}`} />
+        <Metric icon={<CircleSlash />} label="已豁免" value={`¥${formatAmount(penaltySummary.waivedTotal)}`} />
       </div>
       <div className="status-card action-card">
         <strong>{membersReady ? `${visiblePenalties.length} 条当前记录` : '正在同步成员'}</strong>
-        <p>{membersReady ? `${scopeLabel}：${pendingCount} 条待支付，${settledCount} 条已处理；筛选只影响下方列表。` : '成员列表稳定后再显示账款记录。'}</p>
+        <p>{membersReady ? `${scopeLabel}：${penaltySummary.pendingCount} 条待支付，${penaltySummary.settledCount} 条已处理；筛选只影响下方列表。` : '成员列表稳定后再显示账款记录。'}</p>
       </div>
       <div className="form-grid">
         <label>
@@ -111,7 +119,7 @@ export default function CoachPayments() {
           return (
             <article className="penalty-card" key={penalty.id}>
               <div>
-                <strong>¥{penalty.amount}</strong>
+                <strong>¥{formatAmount(penalty.amount)}</strong>
                 <span>{displayName} · {formatDay(penalty.date)} · 连续第 {penalty.consecutive_count} 天</span>
               </div>
               <StatusPill status={penalty.status} />

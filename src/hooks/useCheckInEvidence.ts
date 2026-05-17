@@ -9,6 +9,12 @@ function safeFileName(name: string) {
   return name.replace(/[^a-zA-Z0-9._-]/g, '-').slice(-80) || 'image.jpg'
 }
 
+function localEvidencePreview(fileName: string) {
+  const safeName = safeFileName(fileName)
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160"><rect width="160" height="160" rx="18" fill="#f7faf8"/><path d="M34 108c18-33 43-49 76-49 13 0 24 3 32 10" fill="none" stroke="#ff6f4d" stroke-width="12" stroke-linecap="round"/><circle cx="58" cy="59" r="15" fill="#f3c94e"/><path d="M42 122h76" stroke="#13221d" stroke-width="10" stroke-linecap="round"/><text x="80" y="145" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#5f6d67">${safeName}</text></svg>`
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+}
+
 export function useCheckInEvidence(scope = 'demo') {
   const [evidence, setEvidence] = useState<CheckInEvidence[]>(() => readCache(scope).evidence)
   const [loading, setLoading] = useState(false)
@@ -51,11 +57,11 @@ export function useCheckInEvidence(scope = 'demo') {
         id: `local-evidence-${checkInId}-${index}`,
         check_in_id: checkInId,
         user_id: userId,
-        storage_path: URL.createObjectURL(file),
+        storage_path: `local://${checkInId}/${safeFileName(file.name)}`,
         file_name: file.name,
         mime_type: file.type,
         size_bytes: file.size,
-        signed_url: URL.createObjectURL(file),
+        signed_url: localEvidencePreview(file.name),
       }))
       const cache = readCache(scope)
       const nextEvidence = [...cache.evidence, ...rows]

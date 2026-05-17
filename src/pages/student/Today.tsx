@@ -4,6 +4,7 @@ import ExerciseCard from '../../components/ExerciseCard'
 import Metric from '../../components/Metric'
 import PlanEditor from '../../components/PlanEditor'
 import StatusPill from '../../components/StatusPill'
+import { notifyApp } from '../../components/AppNotice'
 import { useAuth } from '../../hooks/useAuth'
 import { useCheckIns } from '../../hooks/useCheckIns'
 import { usePenalties } from '../../hooks/usePenalties'
@@ -21,13 +22,19 @@ export default function Today() {
   const [leaveReason, setLeaveReason] = useState('')
   const syncedKeyRef = useRef<string | null>(null)
   const today = toISODate(new Date())
-  const templatePlan = useMemo(() => buildPlan(new Date()), [])
+  const templatePlan = useMemo(() => buildPlan(new Date()), [today])
   const todayTemplate = templatePlan.find((day) => day.date === today) ?? templatePlan[0]
   const todayPlan = plans.find((plan) => plan.date === today)
+  const todayExercises = todayPlan ? planToExercises(todayPlan) : []
   const todayCheckIn = checkIns.find((checkIn) => checkIn.date === today)
   const pendingTotal = penalties
     .filter((penalty) => penalty.status === 'pending')
     .reduce((sum, penalty) => sum + penalty.amount, 0)
+  const nextStep = todayCheckIn
+    ? '今天已记录，剩下就是等管理端确认。'
+    : todayPlan
+      ? '先按计划训练，再去提交打卡和图片证据。'
+      : '先自己制定今日计划，或等管理端下发计划。'
 
   useEffect(() => {
     if (!profile) return
@@ -76,13 +83,23 @@ export default function Today() {
 
   const complete = async () => {
     if (!profile || !todayPlan) return
-    await upsertCheckIn(buildCheckIn(profile.id, todayPlan.id, today, 'completed', '完成今日训练'))
+    try {
+      await upsertCheckIn(buildCheckIn(profile.id, todayPlan.id, today, 'completed', '完成今日训练'))
+      notifyApp({ tone: 'success', message: '今日训练已记录。' })
+    } catch {
+      notifyApp({ tone: 'warning', message: '记录失败，请检查网络后再试。' })
+    }
   }
 
   const askLeave = async () => {
     if (!profile || !todayPlan) return
-    await upsertCheckIn(buildCheckIn(profile.id, todayPlan.id, today, 'pending_review', '请假申请，等待教练确认', leaveReason))
-    setLeaveReason('')
+    try {
+      await upsertCheckIn(buildCheckIn(profile.id, todayPlan.id, today, 'pending_review', '请假申请，等待教练确认', leaveReason))
+      setLeaveReason('')
+      notifyApp({ tone: 'success', message: '请假申请已提交，等待管理端确认。' })
+    } catch {
+      notifyApp({ tone: 'warning', message: '请假申请提交失败，请稍后重试。' })
+    }
   }
 
   const selfPlanDraft = useMemo<PlanDraft | null>(() => {
@@ -102,7 +119,13 @@ export default function Today() {
         <div className="metric-row">
           <Metric icon={<CalendarCheck />} label="今日状态" value={todayCheckIn ? '已记录' : '待完成'} />
           <Metric icon={<Flame />} label="待付罚款" value={`¥${pendingTotal}`} />
+          <Metric icon={<CalendarCheck />} label="今日动作" value={todayPlan ? (todayPlan.is_training ? `${todayExercises.length} 个` : '恢复日') : '未制定'} />
         </div>
+      </div>
+
+      <div className="status-card action-card">
+        <strong>下一步</strong>
+        <p>{nextStep}</p>
       </div>
 
       {profile?.member_code && (
@@ -126,7 +149,7 @@ export default function Today() {
             <span>{todayPlan.is_training ? `${todayPlan.items.length} 个动作` : '恢复日'}</span>
           </div>
           <div className="exercise-list">
-            {planToExercises(todayPlan).map((exercise) => (
+            {todayExercises.map((exercise) => (
               <ExerciseCard exercise={exercise} key={exercise.id} />
             ))}
           </div>

@@ -7,26 +7,26 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'app-icon.svg'],
+      includeAssets: ['favicon.svg', 'app-icon.svg', 'app-icon-192.png', 'app-icon-512.png'],
       manifest: {
         name: '家庭健身契约',
         short_name: '健身契约',
         description: '家庭内训练计划、请假、云同步打卡和罚款账本。',
-        theme_color: '#ff6a2a',
-        background_color: '#120f0d',
+        theme_color: '#f3f5f1',
+        background_color: '#f3f5f1',
         display: 'standalone',
         start_url: '/',
         icons: [
           {
-            src: '/app-icon.svg',
+            src: '/app-icon-192.png',
             sizes: '192x192',
-            type: 'image/svg+xml',
+            type: 'image/png',
             purpose: 'any',
           },
           {
-            src: '/app-icon.svg',
+            src: '/app-icon-512.png',
             sizes: '512x512',
-            type: 'image/svg+xml',
+            type: 'image/png',
             purpose: 'maskable',
           },
         ],

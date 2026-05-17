@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FatigueCards from '../../components/FatigueCards'
 import { useAuth } from '../../hooks/useAuth'
@@ -7,6 +7,11 @@ import { useCheckInEvidence } from '../../hooks/useCheckInEvidence'
 import { usePlans } from '../../hooks/usePlans'
 import { toISODate } from '../../lib/date'
 import { planToExercises } from '../../lib/plan'
+
+type FilePreview = {
+  file: File
+  url: string
+}
 
 export default function CheckIn() {
   const { profile } = useAuth()
@@ -17,11 +22,23 @@ export default function CheckIn() {
   const [note, setNote] = useState('')
   const [issues, setIssues] = useState<string[]>([])
   const [files, setFiles] = useState<File[]>([])
+  const [filePreviews, setFilePreviews] = useState<FilePreview[]>([])
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const navigate = useNavigate()
   const today = toISODate(new Date())
   const todayPlan = plans.find((plan) => plan.date === today)
+
+  useEffect(() => {
+    const nextPreviews = files.map((file) => ({
+      file,
+      url: URL.createObjectURL(file),
+    }))
+    setFilePreviews(nextPreviews)
+    return () => {
+      nextPreviews.forEach((preview) => URL.revokeObjectURL(preview.url))
+    }
+  }, [files])
 
   const submit = async () => {
     if (!profile || !todayPlan) return
@@ -109,8 +126,11 @@ export default function CheckIn() {
         </label>
         {files.length > 0 && (
           <div className="evidence-grid">
-            {files.map((file) => (
-              <span className="mini-chip" key={`${file.name}-${file.size}`}>{file.name}</span>
+            {filePreviews.map((preview) => (
+              <figure className="evidence-preview" key={`${preview.file.name}-${preview.file.size}`}>
+                <img alt={preview.file.name} src={preview.url} />
+                <figcaption>{preview.file.name}</figcaption>
+              </figure>
             ))}
           </div>
         )}

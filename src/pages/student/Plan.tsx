@@ -8,12 +8,17 @@ export default function Plan() {
   const { profile } = useAuth()
   const { plans } = usePlans(profile?.id)
   const week = buildPlan(new Date())
+  const trainingDays = plans.filter((plan) => plan.is_training).length
 
   return (
     <section className="screen with-nav">
       <div className="page-title">
         <h2>本周计划</h2>
         <p>优先显示教练制定计划；没有教练计划时，可以在今日页自己制定当天计划。</p>
+      </div>
+      <div className="status-card action-card">
+        <strong>已安排 {plans.length} 天</strong>
+        <p>{trainingDays} 天训练，{Math.max(0, plans.length - trainingDays)} 天恢复或复盘。</p>
       </div>
       <div className="week-list">
         {week.map((day) => {

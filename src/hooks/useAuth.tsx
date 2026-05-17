@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js'
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { clearCache } from '../lib/cache'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import type { Profile, Role } from '../lib/types'
@@ -50,6 +50,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
 
+  const loadProfile = useCallback(async (userId: string, email?: string | null) => {
+    if (!supabase) return
+    setLoading(true)
+    setAuthError(null)
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
+    if (error || !data) {
+      setProfile(null)
+      setAuthError('无法加载账号档案。请确认 Supabase profiles 已创建，或稍后重试。')
+    } else {
+      const nextProfile = data as Profile
+      if (email && nextProfile.email !== email) {
+        const { data: updated } = await supabase
+          .from('profiles')
+          .update({ email: email.toLowerCase() })
+          .eq('id', userId)
+          .select('*')
+          .single()
+        setProfile((updated as Profile | null) ?? { ...nextProfile, email: email.toLowerCase() })
+      } else {
+        setProfile(nextProfile)
+      }
+    }
+    setLoading(false)
+  }, [])
+
   useEffect(() => {
     const loadPreview = () => {
       const previewRole = isLocalhost() ? readPreviewRole() : null
@@ -97,32 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
 
     return () => data.subscription.unsubscribe()
-  }, [])
-
-  const loadProfile = async (userId: string, email?: string | null) => {
-    if (!supabase) return
-    setLoading(true)
-    setAuthError(null)
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
-    if (error || !data) {
-      setProfile(null)
-      setAuthError('无法加载账号档案。请确认 Supabase profiles 已创建，或稍后重试。')
-    } else {
-      const nextProfile = data as Profile
-      if (email && nextProfile.email !== email) {
-        const { data: updated } = await supabase
-          .from('profiles')
-          .update({ email: email.toLowerCase() })
-          .eq('id', userId)
-          .select('*')
-          .single()
-        setProfile((updated as Profile | null) ?? { ...nextProfile, email: email.toLowerCase() })
-      } else {
-        setProfile(nextProfile)
-      }
-    }
-    setLoading(false)
-  }
+  }, [loadProfile])
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -135,7 +135,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAuthError(null)
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (!error) return null
-        console.warn('Supabase sign-in failed:', error.message)
         return '邮箱或密码错误，或账号还没有开通。'
       },
       signOut: async () => {

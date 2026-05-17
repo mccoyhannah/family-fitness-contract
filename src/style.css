@@ -11,6 +11,9 @@
   --green: #2e9e73;
   --cyan: #4a9bd9;
   --radius: 8px;
+  --motion: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --shadow-soft: 0 8px 18px rgba(35, 48, 42, 0.06);
+  --shadow-lift: 0 16px 34px rgba(35, 48, 42, 0.13);
   font-family: 'Aptos', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
   color: var(--ink);
   background: var(--bg);
@@ -40,6 +43,37 @@ textarea {
 
 button {
   border: 0;
+}
+
+button,
+a,
+.hero-panel,
+.status-card,
+.exercise-card,
+.leave-card,
+.form-card,
+.day-card,
+.penalty-card,
+.review-card,
+.metric,
+.member-card,
+.fatigue-card,
+.bottom-nav a {
+  transition:
+    transform 0.18s var(--motion),
+    box-shadow 0.18s var(--motion),
+    border-color 0.18s var(--motion),
+    background 0.18s var(--motion),
+    filter 0.18s var(--motion);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(255, 111, 77, 0.2);
 }
 
 .app-shell,
@@ -79,10 +113,11 @@ button {
   flex: 1;
   overflow: auto;
   padding: 16px 16px 24px;
+  animation: screen-enter 0.28s var(--motion) both;
 }
 
 .with-nav {
-  padding-bottom: 96px;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 
 .topbar {
@@ -90,7 +125,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 16px;
   border-bottom: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.94);
 }
@@ -163,7 +198,7 @@ button {
   cursor: pointer;
   font-weight: 900;
   text-decoration: none;
-  box-shadow: 0 8px 18px rgba(35, 48, 42, 0.06);
+  box-shadow: var(--shadow-soft);
 }
 
 .config-banner,
@@ -708,7 +743,7 @@ label {
 .bottom-nav {
   position: absolute;
   right: 10px;
-  bottom: 10px;
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   left: 10px;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -916,6 +951,252 @@ code {
   font-size: 12px;
   line-height: 1.25;
   overflow-wrap: anywhere;
+}
+
+.loading-card {
+  min-height: 260px;
+  align-content: center;
+}
+
+.skeleton-card {
+  overflow: hidden;
+}
+
+.skeleton-line,
+.skeleton-row,
+.skeleton-tile {
+  position: relative;
+  overflow: hidden;
+  display: block;
+  border-radius: var(--radius);
+  background: rgba(19, 34, 29, 0.09);
+}
+
+.skeleton-line {
+  width: 100%;
+  height: 14px;
+  margin-top: 12px;
+}
+
+.skeleton-line.short {
+  width: 36%;
+}
+
+.skeleton-line.medium {
+  width: 62%;
+}
+
+.skeleton-line.title {
+  width: 76%;
+  height: 30px;
+}
+
+.skeleton-row {
+  height: 82px;
+  margin-top: 12px;
+}
+
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.skeleton-tile {
+  min-height: 84px;
+}
+
+.skeleton-line::after,
+.skeleton-row::after,
+.skeleton-tile::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 1.35s infinite;
+}
+
+@media (hover: hover) {
+  .primary-action:hover:not(:disabled),
+  .ghost-button:hover,
+  .leave-card button:hover:not(:disabled),
+  .row-actions button:hover,
+  .row-actions a:hover,
+  .preview-actions button:hover,
+  .admin-button:hover,
+  .icon-action:hover,
+  .week-tabs button:hover,
+  .member-card:hover,
+  .bottom-nav a:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-lift);
+    filter: brightness(1.02);
+  }
+
+  .exercise-card:hover,
+  .day-card:hover,
+  .penalty-card:hover,
+  .review-card:hover,
+  .metric:hover,
+  .status-card:hover,
+  .fatigue-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lift);
+  }
+}
+
+button:active,
+.bottom-nav a:active,
+.row-actions a:active {
+  transform: translateY(0) scale(0.99);
+}
+
+@keyframes screen-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121813;
+    --panel: #1b261f;
+    --panel-2: #223029;
+    --ink: #eef7f1;
+    --muted: #a9b8af;
+    --line: rgba(238, 247, 241, 0.14);
+    --orange: #ff815f;
+    --yellow: #f4d76a;
+    --red: #ff6b6b;
+    --green: #4fd28f;
+    --cyan: #6cb7f0;
+    --shadow-soft: 0 8px 18px rgba(0, 0, 0, 0.22);
+    --shadow-lift: 0 16px 34px rgba(0, 0, 0, 0.32);
+  }
+
+  .app-shell,
+  .center-screen {
+    background:
+      repeating-linear-gradient(90deg, rgba(238, 247, 241, 0.026) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(0deg, rgba(238, 247, 241, 0.022) 0 1px, transparent 1px 32px),
+      linear-gradient(135deg, rgba(255, 129, 95, 0.13), transparent 42%),
+      linear-gradient(225deg, rgba(108, 183, 240, 0.11), transparent 40%),
+      var(--bg);
+  }
+
+  .app-frame,
+  .login-card,
+  .config-card,
+  .topbar,
+  .bottom-nav {
+    background: rgba(27, 38, 31, 0.94);
+  }
+
+  .hero-panel,
+  .status-card,
+  .exercise-card,
+  .leave-card,
+  .form-card,
+  .day-card,
+  .penalty-card,
+  .review-card,
+  .stats-card,
+  .metric,
+  .member-card,
+  .member-choice,
+  .fatigue-card,
+  .add-member-card,
+  .action-card {
+    background: rgba(34, 48, 41, 0.78);
+  }
+
+  .hero-panel {
+    background:
+      linear-gradient(135deg, rgba(255, 129, 95, 0.16), rgba(108, 183, 240, 0.1)),
+      var(--panel);
+  }
+
+  input,
+  select,
+  textarea,
+  .ghost-button,
+  .leave-card button,
+  .row-actions button,
+  .row-actions a,
+  .preview-actions button,
+  .admin-button,
+  .icon-action,
+  .week-tabs button,
+  .switch-row,
+  .app-notice,
+  .app-notice-actions button,
+  .evidence-preview button {
+    color: var(--ink);
+    background: rgba(27, 38, 31, 0.92);
+  }
+
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    background: rgba(34, 48, 41, 0.96);
+  }
+
+  .plan-item-editor {
+    background: rgba(34, 48, 41, 0.78);
+  }
+
+  .config-banner,
+  .config-warning {
+    color: #f4d76a;
+    background: rgba(244, 215, 106, 0.13);
+    border-color: rgba(244, 215, 106, 0.2);
+  }
+
+  .hero-kicker {
+    color: #f4d76a;
+  }
+
+  .bottom-nav a.active,
+  .week-tabs button.active {
+    color: #17110e;
+  }
+
+  .skeleton-line,
+  .skeleton-row,
+  .skeleton-tile {
+    background: rgba(238, 247, 241, 0.1);
+  }
+
+  .skeleton-line::after,
+  .skeleton-row::after,
+  .skeleton-tile::after {
+    background: linear-gradient(90deg, transparent, rgba(238, 247, 241, 0.18), transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @media (max-width: 520px) {

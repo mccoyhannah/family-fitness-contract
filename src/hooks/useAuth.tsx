@@ -57,11 +57,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setLoading(true)
     setAuthError(null)
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
-    if (error || !data) {
-      setProfile(null)
-      setAuthError('无法加载账号档案。请确认 Supabase profiles 已创建，或稍后重试。')
-    } else {
+    try {
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
+      if (error || !data) {
+        setProfile(null)
+        setAuthError('无法加载账号档案。请确认 Supabase profiles 已创建，或稍后重试。')
+        return
+      }
       const nextProfile = data as Profile
       if (email && nextProfile.email !== email) {
         const { data: updated } = await supabase
@@ -74,8 +76,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setProfile(nextProfile)
       }
+    } catch {
+      setProfile(null)
+      setAuthError('无法连接 Supabase，请检查网络后重试。')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   useEffect(() => {

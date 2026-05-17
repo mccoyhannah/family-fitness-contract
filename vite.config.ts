@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'app-icon-192.png', 'app-icon-512.png'],
       manifest: {
         name: '家庭健身契约',
@@ -27,7 +27,7 @@ export default defineConfig({
             src: '/app-icon-512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'maskable',
+            purpose: 'any maskable',
           },
         ],
       },

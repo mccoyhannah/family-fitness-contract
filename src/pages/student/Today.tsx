@@ -12,7 +12,7 @@ import { usePlans } from '../../hooks/usePlans'
 import { toISODate } from '../../lib/date'
 import { buildPlan, planFromTemplate, planToExercises } from '../../lib/plan'
 import { buildMissedSync } from '../../lib/sync'
-import type { CheckIn, PlanDraft } from '../../lib/types'
+import type { CheckIn, Exercise, Plan, PlanDraft } from '../../lib/types'
 
 export default function Today() {
   const { profile } = useAuth()
@@ -20,7 +20,8 @@ export default function Today() {
   const { penalties, loading: penaltiesLoading, reload: reloadPenalties, setPenalties, upsertPenalty } = usePenalties(profile?.id)
   const { loading: plansLoading, plans, savePlan } = usePlans(profile?.id)
   const [leaveReason, setLeaveReason] = useState('')
-  const syncedKeyRef = useRef<string | null>(null)
+  const completedSyncKeyRef = useRef<string | null>(null)
+  const syncingKeyRef = useRef<string | null>(null)
   const today = toISODate(new Date())
   const templatePlan = useMemo(() => buildPlan(new Date()), [today])
   const todayTemplate = templatePlan.find((day) => day.date === today) ?? templatePlan[0]
@@ -35,13 +36,17 @@ export default function Today() {
     : todayPlan
       ? '先按计划训练，再去提交打卡和图片证据。'
       : '先自己制定今日计划，或等管理端下发计划。'
+  const showLoadingSkeleton =
+    (checkInsLoading || penaltiesLoading || plansLoading) &&
+    plans.length === 0 &&
+    checkIns.length === 0 &&
+    penalties.length === 0
 
   useEffect(() => {
     if (!profile) return
     if (checkInsLoading || penaltiesLoading || plansLoading) return
     const syncKey = `${profile.id}:${today}:${plans.map((plan) => plan.id).join(',')}`
-    if (syncedKeyRef.current === syncKey) return
-    syncedKeyRef.current = syncKey
+    if (completedSyncKeyRef.current === syncKey || syncingKeyRef.current === syncKey) return
 
     const synced = buildMissedSync(profile.id, plans, checkIns, penalties)
     const userCheckIns = synced.checkIns.filter((checkIn) => checkIn.user_id === profile.id)
@@ -53,17 +58,32 @@ export default function Today() {
       (penalty) => !penalties.some((existing) => existing.user_id === penalty.user_id && existing.date === penalty.date),
     )
 
-    const persist = async () => {
-      await Promise.all([
-        ...newCheckIns.map((checkIn) => upsertCheckIn(checkIn)),
-        ...newPenalties.map((penalty) => upsertPenalty(penalty)),
-      ])
-      await Promise.all([reloadCheckIns(), reloadPenalties()])
+    if (newCheckIns.length === 0 && newPenalties.length === 0) {
+      completedSyncKeyRef.current = syncKey
+      return
     }
 
+    syncingKeyRef.current = syncKey
     if (newCheckIns.length > 0) setCheckIns(userCheckIns)
     if (newPenalties.length > 0) setPenalties(userPenalties)
-    if (newCheckIns.length > 0 || newPenalties.length > 0) void persist()
+
+    const persist = async () => {
+      try {
+        await Promise.all([
+          ...newCheckIns.map((checkIn) => upsertCheckIn(checkIn)),
+          ...newPenalties.map((penalty) => upsertPenalty(penalty)),
+        ])
+        await Promise.all([reloadCheckIns(), reloadPenalties()])
+        completedSyncKeyRef.current = syncKey
+      } catch {
+        notifyApp({ tone: 'warning', message: '缺卡和罚款同步失败，请检查网络后刷新。' })
+        await Promise.all([reloadCheckIns(), reloadPenalties()])
+      } finally {
+        if (syncingKeyRef.current === syncKey) syncingKeyRef.current = null
+      }
+    }
+
+    void persist()
   }, [
     checkIns,
     checkInsLoading,
@@ -107,87 +127,177 @@ export default function Today() {
     return planFromTemplate(profile.id, todayTemplate, 'student')
   }, [profile, todayTemplate])
 
+  if (showLoadingSkeleton) return <TodayLoadingSkeleton />
+
   return (
     <section className="screen with-nav">
-      <div className="hero-panel">
-        <span className="hero-kicker">
-          <Flame size={18} />
-          云同步 v2
-        </span>
-        <h2>{todayPlan?.title ?? '今天还没有计划'}</h2>
-        <p>{todayPlan ? `${todayPlan.focus} · 截止 ${todayPlan.deadline}` : '可以等教练制定，也可以自己先定今天的训练。'}</p>
-        <div className="metric-row three-col">
-          <Metric icon={<CalendarCheck />} label="今日状态" value={todayCheckIn ? '已记录' : '待完成'} />
-          <Metric icon={<Flame />} label="待付罚款" value={`¥${pendingTotal}`} />
-          <Metric icon={<CalendarCheck />} label="今日动作" value={todayPlan ? (todayPlan.is_training ? `${todayExercises.length} 个` : '恢复日') : '未制定'} />
-        </div>
-      </div>
-
-      <div className="status-card action-card">
-        <strong>下一步</strong>
-        <p>{nextStep}</p>
-      </div>
-
-      {profile?.member_code && (
-        <div className="status-card">
-          <strong>我的成员码：{profile.member_code}</strong>
-          <p>把这个码发给管理者，就能把你的账号绑定进家庭成员列表。</p>
-        </div>
-      )}
-
-      {todayCheckIn && (
-        <div className="status-card">
-          <StatusPill status={todayCheckIn.status} />
-          <p>{todayCheckIn.leave_reason || todayCheckIn.note || '记录已同步。'}</p>
-        </div>
-      )}
+      <TodayHeroSection
+        checkIn={todayCheckIn}
+        pendingTotal={pendingTotal}
+        plan={todayPlan}
+        todayExercises={todayExercises}
+      />
+      <TodayActionCard nextStep={nextStep} />
+      {profile?.member_code && <MemberCodeCard memberCode={profile.member_code} />}
+      {todayCheckIn && <TodayCheckInSummary checkIn={todayCheckIn} />}
 
       {todayPlan ? (
-        <>
-          <div className="section-heading">
-            <h3>今日训练</h3>
-            <span>{todayPlan.is_training ? `${todayPlan.items.length} 个动作` : '恢复日'}</span>
-          </div>
-          <div className="exercise-list">
-            {todayExercises.map((exercise) => (
-              <ExerciseCard exercise={exercise} key={exercise.id} />
-            ))}
-          </div>
-
-          <button className="primary-action" disabled={Boolean(todayCheckIn)} type="button" onClick={complete}>
-            完成今日训练
-          </button>
-
-          <div className="leave-card">
-            <label>
-              请假理由，可空
-              <input
-                value={leaveReason}
-                onChange={(event) => setLeaveReason(event.target.value)}
-                placeholder="出差 / 身体不适 / 今天休息"
-              />
-            </label>
-            <button disabled={Boolean(todayCheckIn)} type="button" onClick={askLeave}>
-              <Umbrella size={20} />
-              申请请假，待教练确认
-            </button>
-          </div>
-        </>
+        <TodayTrainingSection
+          checkIn={todayCheckIn}
+          exercises={todayExercises}
+          leaveReason={leaveReason}
+          plan={todayPlan}
+          onAskLeave={askLeave}
+          onComplete={complete}
+          onLeaveReasonChange={setLeaveReason}
+        />
       ) : (
-        selfPlanDraft && (
-          <>
-            <div className="section-heading">
-              <h3>自己制定今日计划</h3>
-              <span>不等于罚款</span>
-            </div>
-            <PlanEditor
-              initial={selfPlanDraft}
-              submitLabel="保存今日自定计划"
-              onSubmit={async (draft) => void (await savePlan(draft))}
-            />
-          </>
-        )
+        selfPlanDraft && <TodaySelfPlanSection draft={selfPlanDraft} onSave={savePlan} />
       )}
+    </section>
+  )
+}
+
+function TodayHeroSection({
+  checkIn,
+  pendingTotal,
+  plan,
+  todayExercises,
+}: {
+  checkIn?: CheckIn
+  pendingTotal: number
+  plan?: Plan
+  todayExercises: Exercise[]
+}) {
+  return (
+    <div className="hero-panel">
+      <span className="hero-kicker">
+        <Flame size={18} />
+        云同步 v2
+      </span>
+      <h2>{plan?.title ?? '今天还没有计划'}</h2>
+      <p>{plan ? `${plan.focus} · 截止 ${plan.deadline}` : '可以等教练制定，也可以自己先定今天的训练。'}</p>
+      <div className="metric-row three-col">
+        <Metric icon={<CalendarCheck />} label="今日状态" value={checkIn ? '已记录' : '待完成'} />
+        <Metric icon={<Flame />} label="待付罚款" value={`¥${pendingTotal}`} />
+        <Metric icon={<CalendarCheck />} label="今日动作" value={plan ? (plan.is_training ? `${todayExercises.length} 个` : '恢复日') : '未制定'} />
+      </div>
+    </div>
+  )
+}
+
+function TodayActionCard({ nextStep }: { nextStep: string }) {
+  return (
+    <div className="status-card action-card">
+      <strong>下一步</strong>
+      <p>{nextStep}</p>
+    </div>
+  )
+}
+
+function MemberCodeCard({ memberCode }: { memberCode: string }) {
+  return (
+    <div className="status-card">
+      <strong>我的成员码：{memberCode}</strong>
+      <p>把这个码发给管理者，就能把你的账号绑定进家庭成员列表。</p>
+    </div>
+  )
+}
+
+function TodayCheckInSummary({ checkIn }: { checkIn: CheckIn }) {
+  return (
+    <div className="status-card">
+      <StatusPill status={checkIn.status} />
+      <p>{checkIn.leave_reason || checkIn.note || '记录已同步。'}</p>
+    </div>
+  )
+}
+
+function TodayTrainingSection({
+  checkIn,
+  exercises,
+  leaveReason,
+  onAskLeave,
+  onComplete,
+  onLeaveReasonChange,
+  plan,
+}: {
+  checkIn?: CheckIn
+  exercises: Exercise[]
+  leaveReason: string
+  onAskLeave: () => Promise<void>
+  onComplete: () => Promise<void>
+  onLeaveReasonChange: (value: string) => void
+  plan: Plan
+}) {
+  return (
+    <>
+      <div className="section-heading">
+        <h3>今日训练</h3>
+        <span>{plan.is_training ? `${plan.items.length} 个动作` : '恢复日'}</span>
+      </div>
+      <div className="exercise-list">
+        {exercises.map((exercise) => (
+          <ExerciseCard exercise={exercise} key={exercise.id} />
+        ))}
+      </div>
+
+      <button className="primary-action" disabled={Boolean(checkIn)} type="button" onClick={() => void onComplete()}>
+        完成今日训练
+      </button>
+
+      <div className="leave-card">
+        <label>
+          请假理由，可空
+          <input
+            value={leaveReason}
+            onChange={(event) => onLeaveReasonChange(event.target.value)}
+            placeholder="出差 / 身体不适 / 今天休息"
+          />
+        </label>
+        <button disabled={Boolean(checkIn)} type="button" onClick={() => void onAskLeave()}>
+          <Umbrella size={20} />
+          申请请假，待教练确认
+        </button>
+      </div>
+    </>
+  )
+}
+
+function TodaySelfPlanSection({ draft, onSave }: { draft: PlanDraft; onSave: (draft: PlanDraft) => Promise<Plan> }) {
+  return (
+    <>
+      <div className="section-heading">
+        <h3>自己制定今日计划</h3>
+        <span>不等于罚款</span>
+      </div>
+      <PlanEditor initial={draft} submitLabel="保存今日自定计划" onSubmit={async (nextDraft) => void (await onSave(nextDraft))} />
+    </>
+  )
+}
+
+function TodayLoadingSkeleton() {
+  return (
+    <section className="screen with-nav" aria-busy="true">
+      <div className="hero-panel skeleton-card" aria-label="正在加载今日计划">
+        <span className="skeleton-line short" />
+        <span className="skeleton-line title" />
+        <span className="skeleton-line" />
+        <div className="metric-row three-col">
+          <span className="skeleton-tile" />
+          <span className="skeleton-tile" />
+          <span className="skeleton-tile" />
+        </div>
+      </div>
+      <div className="status-card skeleton-card">
+        <span className="skeleton-line medium" />
+        <span className="skeleton-line" />
+      </div>
+      <div className="exercise-list">
+        <span className="skeleton-row" />
+        <span className="skeleton-row" />
+        <span className="skeleton-row" />
+      </div>
     </section>
   )
 }

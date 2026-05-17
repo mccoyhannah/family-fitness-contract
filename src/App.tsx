@@ -69,9 +69,14 @@ function RoleAwareFallback() {
 function LoadingScreen() {
   return (
     <main className="center-screen">
-      <section className="config-card">
-        <h1>正在检查登录状态</h1>
-        <p>正在读取 Supabase session 和 profile。</p>
+      <section className="config-card loading-card" aria-label="正在检查登录状态">
+        <span className="skeleton-line medium" />
+        <span className="skeleton-line title" />
+        <span className="skeleton-line" />
+        <div className="skeleton-grid">
+          <span className="skeleton-tile" />
+          <span className="skeleton-tile" />
+        </div>
       </section>
     </main>
   )

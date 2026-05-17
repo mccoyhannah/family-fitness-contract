@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FatigueCards from '../../components/FatigueCards'
 import { useAuth } from '../../hooks/useAuth'
@@ -8,7 +8,8 @@ import { usePlans } from '../../hooks/usePlans'
 import { toISODate } from '../../lib/date'
 import { planToExercises } from '../../lib/plan'
 
-type FilePreview = {
+type EvidenceFile = {
+  id: string
   file: File
   url: string
 }
@@ -21,8 +22,8 @@ export default function CheckIn() {
   const [fatigue, setFatigue] = useState(3)
   const [note, setNote] = useState('')
   const [issues, setIssues] = useState<string[]>([])
-  const [files, setFiles] = useState<File[]>([])
-  const [filePreviews, setFilePreviews] = useState<FilePreview[]>([])
+  const [evidenceFiles, setEvidenceFiles] = useState<EvidenceFile[]>([])
+  const evidenceFilesRef = useRef<EvidenceFile[]>([])
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const navigate = useNavigate()
@@ -30,18 +31,19 @@ export default function CheckIn() {
   const todayPlan = plans.find((plan) => plan.date === today)
 
   useEffect(() => {
-    const nextPreviews = files.map((file) => ({
-      file,
-      url: URL.createObjectURL(file),
-    }))
-    setFilePreviews(nextPreviews)
     return () => {
-      nextPreviews.forEach((preview) => URL.revokeObjectURL(preview.url))
+      evidenceFilesRef.current.forEach((entry) => URL.revokeObjectURL(entry.url))
+      evidenceFilesRef.current = []
     }
-  }, [files])
+  }, [])
+
+  const makeEvidenceId = () =>
+    typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 
   const submit = async () => {
-    if (!profile || !todayPlan) return
+    if (submitting || !profile || !todayPlan) return
     setSubmitting(true)
     setError('')
     try {
@@ -55,6 +57,7 @@ export default function CheckIn() {
         note: note || '已提交，等待教练确认。',
         leave_reason: null,
       })
+      const files = evidenceFiles.map((entry) => entry.file)
       if (files.length > 0 && checkIn) await uploadEvidence(checkIn.id, profile.id, files)
       navigate('/')
     } catch (err) {
@@ -65,12 +68,25 @@ export default function CheckIn() {
   }
 
   const chooseFiles = (nextFiles: FileList | null) => {
-    const images = Array.from(nextFiles ?? []).filter((file) => file.type.startsWith('image/')).slice(0, 3)
-    setFiles(images)
+    evidenceFilesRef.current.forEach((entry) => URL.revokeObjectURL(entry.url))
+    const next = Array.from(nextFiles ?? [])
+      .filter((file) => file.type.startsWith('image/'))
+      .slice(0, 3)
+      .map((file) => ({
+        id: makeEvidenceId(),
+        file,
+        url: URL.createObjectURL(file),
+      }))
+    evidenceFilesRef.current = next
+    setEvidenceFiles(next)
   }
 
-  const removeFile = (index: number) => {
-    setFiles((current) => current.filter((_, currentIndex) => currentIndex !== index))
+  const removeFile = (id: string) => {
+    const removed = evidenceFiles.find((entry) => entry.id === id)
+    if (removed) URL.revokeObjectURL(removed.url)
+    const next = evidenceFiles.filter((entry) => entry.id !== id)
+    evidenceFilesRef.current = next
+    setEvidenceFiles(next)
   }
 
   const toggleIssue = (issue: string) => {
@@ -115,24 +131,38 @@ export default function CheckIn() {
         <div className="check-grid">
           {['疼痛', '头晕', '胸闷', '不舒服'].map((issue) => (
             <label className="switch-row" key={issue}>
-              <input type="checkbox" checked={issues.includes(issue)} onChange={() => toggleIssue(issue)} />
+              <input
+                checked={issues.includes(issue)}
+                disabled={submitting}
+                type="checkbox"
+                onChange={() => toggleIssue(issue)}
+              />
               {issue}
             </label>
           ))}
         </div>
         <label>
           备注
-          <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={4} />
+          <textarea disabled={submitting} value={note} onChange={(event) => setNote(event.target.value)} rows={4} />
         </label>
         <label>
           图片证据，最多 3 张
-          <input accept="image/*" multiple type="file" onChange={(event) => chooseFiles(event.target.files)} />
+          <input
+            accept="image/*"
+            disabled={submitting}
+            multiple
+            type="file"
+            onChange={(event) => {
+              chooseFiles(event.target.files)
+              event.currentTarget.value = ''
+            }}
+          />
         </label>
-        {files.length > 0 && (
+        {evidenceFiles.length > 0 && (
           <div className="evidence-grid">
-            {filePreviews.map((preview, index) => (
-              <figure className="evidence-preview" key={`${preview.file.name}-${preview.file.size}-${index}`}>
-                <button aria-label={`移除 ${preview.file.name}`} type="button" onClick={() => removeFile(index)}>
+            {evidenceFiles.map((preview) => (
+              <figure className="evidence-preview" key={preview.id}>
+                <button aria-label={`移除 ${preview.file.name}`} type="button" onClick={() => removeFile(preview.id)}>
                   ×
                 </button>
                 <img alt={preview.file.name} src={preview.url} />

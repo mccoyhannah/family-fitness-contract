@@ -7,14 +7,34 @@ import { isLocalhostPreview } from '../lib/preview'
 import { isSupabaseConfigured } from '../lib/supabase'
 import type { Role } from '../lib/types'
 
+const REMEMBERED_EMAIL_KEY = 'family-fitness-contract:remembered-email'
+
+function readRememberedEmail() {
+  try {
+    return localStorage.getItem(REMEMBERED_EMAIL_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function writeRememberedEmail(email: string) {
+  try {
+    if (email) localStorage.setItem(REMEMBERED_EMAIL_KEY, email)
+    else localStorage.removeItem(REMEMBERED_EMAIL_KEY)
+  } catch {
+    // Ignore storage failures so login still works in restrictive browsers.
+  }
+}
+
 export default function Login() {
   const { authError, previewAs, signIn } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(readRememberedEmail)
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [rememberEmail, setRememberEmail] = useState(Boolean(email))
   const autoPreviewRef = useRef(false)
   const from = typeof location.state?.from === 'string' ? location.state.from : '/'
   const canPreview = !isSupabaseConfigured || isLocalhostPreview()
@@ -32,9 +52,18 @@ export default function Login() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    const message = await signIn(email, password)
+    const nextEmail = email.trim()
+    const message = await signIn(nextEmail, password)
     if (message) setError(message)
-    else navigate(from, { replace: true })
+    else {
+      writeRememberedEmail(rememberEmail ? nextEmail : '')
+      navigate(from, { replace: true })
+    }
+  }
+
+  const toggleRememberEmail = (checked: boolean) => {
+    setRememberEmail(checked)
+    if (!checked) writeRememberedEmail('')
   }
 
   const preview = (role: Role) => {
@@ -63,7 +92,13 @@ export default function Login() {
         <form onSubmit={submit}>
           <label>
             邮箱
-            <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+              autoComplete="username"
+            />
           </label>
           <label>
             密码
@@ -72,7 +107,16 @@ export default function Login() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="Supabase Auth 密码"
+              autoComplete="current-password"
             />
+          </label>
+          <label className="switch-row">
+            <input
+              type="checkbox"
+              checked={rememberEmail}
+              onChange={(event) => toggleRememberEmail(event.target.checked)}
+            />
+            <span>记住邮箱，下次自动填入；密码交给浏览器保存。</span>
           </label>
           {(error || authError) && <strong className="form-error">{error || authError}</strong>}
           <button className="primary-action" disabled={!isSupabaseConfigured} type="submit">

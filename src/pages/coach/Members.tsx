@@ -39,8 +39,19 @@ export default function CoachMembers() {
   const [savingMemberId, setSavingMemberId] = useState('')
   const savingMemberIdRef = useRef('')
   const [selectedDate, setSelectedDate] = useState(toISODate(new Date()))
+  const today = toISODate(new Date())
   const week = useMemo(() => buildPlan(new Date(`${selectedDate}T12:00:00`)), [selectedDate])
   const selectedPlan = plans.find((plan) => plan.date === selectedDate)
+  const orderedPlans = useMemo(
+    () =>
+      plans.slice().sort((a, b) => {
+        const aUpcoming = a.date >= today
+        const bUpcoming = b.date >= today
+        if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1
+        return aUpcoming ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)
+      }),
+    [plans, today],
+  )
 
   const draft = useMemo<PlanDraft | null>(() => {
     if (!selectedMember) return null
@@ -110,15 +121,10 @@ export default function CoachMembers() {
           const isEditing = editingMemberId === member.id
           const savingThisMember = savingMemberId === member.id
           return (
-            <article className={member.id === selectedMemberId ? 'member-card active' : 'member-card'} key={member.id}>
-              <button
-                aria-pressed={member.id === selectedMemberId}
-                className="member-card-main"
-                type="button"
-                onClick={() => setSelectedMemberId(member.id)}
-              >
-                <strong>{displayMemberLabel(member)}</strong>
-              </button>
+            <article
+              className={`${member.id === selectedMemberId ? 'member-card active' : 'member-card'}${isEditing ? ' editing' : ''}`}
+              key={member.id}
+            >
               {isEditing ? (
                 <form
                   className="member-edit-form"
@@ -151,15 +157,26 @@ export default function CoachMembers() {
                   </div>
                 </form>
               ) : (
-                <button
-                  className="member-edit-button"
-                  type="button"
-                  disabled={Boolean(savingMemberId)}
-                  onClick={() => startEditing(member.id)}
-                >
-                  <Pencil size={16} />
-                  改昵称
-                </button>
+                <>
+                  <button
+                    aria-pressed={member.id === selectedMemberId}
+                    className="member-card-main"
+                    type="button"
+                    onClick={() => setSelectedMemberId(member.id)}
+                  >
+                    <strong>{displayMemberLabel(member)}</strong>
+                  </button>
+                  <button
+                    aria-label={`修改 ${displayMemberLabel(member)} 的昵称`}
+                    className="member-edit-button"
+                    type="button"
+                    disabled={Boolean(savingMemberId)}
+                    onClick={() => startEditing(member.id)}
+                  >
+                    <Pencil size={16} />
+                    <span>改昵称</span>
+                  </button>
+                </>
               )}
             </article>
           )
@@ -169,6 +186,45 @@ export default function CoachMembers() {
 
       {selectedMember && draft && (
         <>
+          <section className="planned-list-section" aria-label={`${displayMemberLabel(selectedMember)} 已安排的计划`}>
+            <div className="section-heading compact-heading">
+              <h3>已安排计划</h3>
+              <span>{plans.length} 天</span>
+            </div>
+            {plans.length === 0 ? (
+              <div className="status-card action-card planned-empty-card">
+                <strong>还没有安排计划</strong>
+                <p>可在下方制定，保存后会出现在这里。</p>
+              </div>
+            ) : (
+              <div className="week-list planned-week-list">
+                {orderedPlans.map((plan) => (
+                  <article
+                    className={plan.date === selectedDate ? 'day-card planned-plan-card active' : 'day-card planned-plan-card'}
+                    key={plan.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedDate(plan.date)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        setSelectedDate(plan.date)
+                      }
+                    }}
+                  >
+                    <div className="day-head">
+                      <strong>{formatDay(plan.date)} · {plan.title}</strong>
+                      <span>{plan.source === 'coach' ? '教练制定' : '成员自定'}</span>
+                    </div>
+                    {planToExercises(plan).map((exercise) => (
+                      <ExerciseCard exercise={exercise} key={exercise.id} />
+                    ))}
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+
           <section className="plan-workspace" aria-label={`给 ${displayMemberLabel(selectedMember)} 制定计划`}>
             <div className="section-heading">
               <h3>给 {displayMemberLabel(selectedMember)} 制定计划</h3>
@@ -187,33 +243,6 @@ export default function CoachMembers() {
               ))}
             </div>
             <PlanEditor initial={draft} submitLabel="保存教练计划" onSubmit={async (nextDraft) => void (await savePlan(nextDraft))} />
-          </section>
-
-          <section className="planned-list-section" aria-label={`${displayMemberLabel(selectedMember)} 已安排的计划`}>
-            <div className="section-heading compact-heading">
-              <h3>已安排计划</h3>
-              <span>{plans.length} 天</span>
-            </div>
-            {plans.length === 0 ? (
-              <div className="status-card action-card">
-                <strong>还没有保存过计划</strong>
-                <p>上方保存后，这里会按日期列出已安排内容。</p>
-              </div>
-            ) : (
-              <div className="week-list planned-week-list">
-                {plans.map((plan) => (
-                  <article className="day-card" key={plan.id}>
-                    <div className="day-head">
-                      <strong>{formatDay(plan.date)} · {plan.title}</strong>
-                      <span>{plan.source === 'coach' ? '教练制定' : '成员自定'}</span>
-                    </div>
-                    {planToExercises(plan).map((exercise) => (
-                      <ExerciseCard exercise={exercise} key={exercise.id} />
-                    ))}
-                  </article>
-                ))}
-              </div>
-            )}
           </section>
         </>
       )}

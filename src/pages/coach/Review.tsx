@@ -10,6 +10,16 @@ import { formatDay } from '../../lib/date'
 import { displayMemberLabel } from '../../lib/memberLabels'
 import { notifyApp } from '../../lib/notice'
 
+const WAIVER_PREFIX = '[免罚申请]'
+
+function isWaiverRequest(reason?: string | null) {
+  return Boolean(reason?.includes(WAIVER_PREFIX))
+}
+
+function cleanWaiverReason(reason?: string | null) {
+  return reason?.replace(WAIVER_PREFIX, '').trim() || '未填写理由'
+}
+
 export default function CoachReview() {
   const { profile: coach } = useAuth()
   const {
@@ -37,6 +47,12 @@ export default function CoachReview() {
 
   const approveLeave = async (id: string, userId: string, date: string) => {
     await updateCheckIn(id, 'excused')
+    const penalty = penalties.find((item) => item.user_id === userId && item.date === date)
+    if (penalty) await updatePenalty(penalty.id, 'waived')
+  }
+
+  const approveCheckIn = async (id: string, userId: string, date: string) => {
+    await updateCheckIn(id, 'completed')
     const penalty = penalties.find((item) => item.user_id === userId && item.date === date)
     if (penalty) await updatePenalty(penalty.id, 'waived')
   }
@@ -101,12 +117,22 @@ export default function CoachReview() {
           const displayName = coachMemberLabel(item.user_id)
           const plan = plans.find((row) => row.id === item.plan_id || row.date === item.date)
           const itemEvidence = evidenceFor(item.id)
+          const hasWaiverRequest = isWaiverRequest(item.leave_reason)
+          const waiverReason = cleanWaiverReason(item.leave_reason)
           return (
-            <article className="review-card" key={item.id}>
+            <article className={`review-card${hasWaiverRequest ? ' waiver-review-card' : ''}`} key={item.id}>
               <div>
                 <strong>{displayName} · {formatDay(item.date)}</strong>
                 <span>{plan ? `${plan.title} · ${plan.source === 'coach' ? '教练制定' : '成员自定'}` : '旧打卡或计划未同步'}</span>
-                <span>{item.note || '等待确认'}</span>
+                {hasWaiverRequest && <span className="waiver-review-badge">补卡免罚申请</span>}
+                {hasWaiverRequest ? (
+                  <>
+                    <span className="waiver-review-reason">申请理由：{waiverReason}</span>
+                    {item.note && <span>记录备注：{item.note}</span>}
+                  </>
+                ) : (
+                  <span>{item.leave_reason ? `理由：${item.leave_reason}` : item.note || '等待确认'}</span>
+                )}
                 {item.issues.length > 0 && <span>异常：{item.issues.join('、')}</span>}
                 {itemEvidence.length > 0 && (
                   <div className="evidence-grid">
@@ -138,14 +164,16 @@ export default function CoachReview() {
                   onClick={() =>
                     void runReviewAction(
                       item.id,
-                      () => updateCheckIn(item.id, 'completed'),
-                      '已通过这条打卡。',
-                      `确认通过 ${displayName} 在 ${formatDay(item.date)} 的打卡？`,
+                      () => approveCheckIn(item.id, item.user_id, item.date),
+                      hasWaiverRequest ? '已通过补卡，并处理当天罚款。' : '已通过这条打卡，并处理当天罚款。',
+                      hasWaiverRequest
+                        ? `确认通过 ${displayName} 在 ${formatDay(item.date)} 的补卡申请，并免除当天罚款？`
+                        : `确认通过 ${displayName} 在 ${formatDay(item.date)} 的打卡？`,
                     )
                   }
                   disabled={Boolean(reviewingCheckInId)}
                 >
-                  {reviewingCheckInId === item.id ? '处理中' : '通过'}
+                  {reviewingCheckInId === item.id ? '处理中' : hasWaiverRequest ? '通过补卡' : '通过'}
                 </button>
                 {item.leave_reason && (
                   <button

@@ -12,6 +12,13 @@ import { notifyApp } from '../../lib/notice'
 
 const WAIVER_PREFIX = '[免罚申请]'
 
+type ReviewConfirmRequest = {
+  action: () => Promise<void>
+  checkInId: string
+  message: string
+  successMessage: string
+}
+
 function isWaiverRequest(reason?: string | null) {
   return Boolean(reason?.includes(WAIVER_PREFIX))
 }
@@ -36,6 +43,7 @@ export default function CoachReview() {
   const reviewingCheckInIdRef = useRef('')
   const retrySequenceRef = useRef(0)
   const [failedEvidenceKeys, setFailedEvidenceKeys] = useState<Set<string>>(() => new Set())
+  const [confirmRequest, setConfirmRequest] = useState<ReviewConfirmRequest | null>(null)
   const [reviewingCheckInId, setReviewingCheckInId] = useState('')
   const [retryNonceByEvidenceKey, setRetryNonceByEvidenceKey] = useState<Record<string, number>>({})
   const { plans } = usePlans(selectedMember?.id)
@@ -57,17 +65,25 @@ export default function CoachReview() {
     if (penalty) await updatePenalty(penalty.id, 'waived')
   }
 
-  const runReviewAction = async (checkInId: string, action: () => Promise<void>, successMessage: string, confirmMessage: string) => {
+  const requestReviewAction = (checkInId: string, action: () => Promise<void>, successMessage: string, message: string) => {
+    if (reviewingCheckInIdRef.current || confirmRequest) return
+    setConfirmRequest({ action, checkInId, message, successMessage })
+  }
+
+  const cancelReviewAction = () => {
     if (reviewingCheckInIdRef.current) return
+    setConfirmRequest(null)
+  }
+
+  const confirmReviewAction = async () => {
+    if (!confirmRequest || reviewingCheckInIdRef.current) return
+    const { action, checkInId, successMessage } = confirmRequest
     reviewingCheckInIdRef.current = checkInId
-    if (!window.confirm(confirmMessage)) {
-      reviewingCheckInIdRef.current = ''
-      return
-    }
     setReviewingCheckInId(checkInId)
     try {
       await action()
       notifyApp({ tone: 'success', message: successMessage })
+      setConfirmRequest(null)
     } catch {
       notifyApp({ tone: 'warning', message: '审核操作失败，请检查网络后再试。' })
     } finally {
@@ -162,7 +178,7 @@ export default function CoachReview() {
                 <button
                   type="button"
                   onClick={() =>
-                    void runReviewAction(
+                    requestReviewAction(
                       item.id,
                       () => approveCheckIn(item.id, item.user_id, item.date),
                       hasWaiverRequest ? '已通过补卡，并处理当天罚款。' : '已通过这条打卡，并处理当天罚款。',
@@ -171,7 +187,7 @@ export default function CoachReview() {
                         : `确认通过 ${displayName} 在 ${formatDay(item.date)} 的打卡？`,
                     )
                   }
-                  disabled={Boolean(reviewingCheckInId)}
+                  disabled={Boolean(reviewingCheckInId || confirmRequest)}
                 >
                   {reviewingCheckInId === item.id ? '处理中' : hasWaiverRequest ? '通过补卡' : '通过'}
                 </button>
@@ -179,14 +195,14 @@ export default function CoachReview() {
                   <button
                     type="button"
                     onClick={() =>
-                      void runReviewAction(
+                      requestReviewAction(
                         item.id,
                         () => approveLeave(item.id, item.user_id, item.date),
                         '已准假，并处理当天罚款。',
                         `确认准假 ${displayName} 在 ${formatDay(item.date)} 的记录？`,
                       )
                     }
-                    disabled={Boolean(reviewingCheckInId)}
+                    disabled={Boolean(reviewingCheckInId || confirmRequest)}
                   >
                     准假
                   </button>
@@ -194,14 +210,14 @@ export default function CoachReview() {
                 <button
                   type="button"
                   onClick={() =>
-                    void runReviewAction(
+                    requestReviewAction(
                       item.id,
                       () => updateCheckIn(item.id, 'missed'),
                       '已记录为缺卡。',
                       `确认把 ${displayName} 在 ${formatDay(item.date)} 的记录改为缺卡？`,
                     )
                   }
-                  disabled={Boolean(reviewingCheckInId)}
+                  disabled={Boolean(reviewingCheckInId || confirmRequest)}
                 >
                   记缺卡
                 </button>
@@ -210,6 +226,25 @@ export default function CoachReview() {
           )
         })}
       </div>
+      {confirmRequest && (
+        <div className="waiver-modal-backdrop" role="presentation">
+          <section className="waiver-modal review-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="review-confirm-title">
+            <div>
+              <span className="hero-kicker">审核确认</span>
+              <h3 id="review-confirm-title">确认这次操作？</h3>
+              <p>{confirmRequest.message}</p>
+            </div>
+            <div className="waiver-modal-actions">
+              <button type="button" onClick={cancelReviewAction} disabled={Boolean(reviewingCheckInId)}>
+                取消
+              </button>
+              <button type="button" onClick={() => void confirmReviewAction()} disabled={Boolean(reviewingCheckInId)}>
+                {reviewingCheckInId ? '处理中' : '确认操作'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   )
 }

@@ -12,8 +12,8 @@ export default defineConfig({
         name: '家庭健身契约',
         short_name: '健身契约',
         description: '家庭内训练计划、请假、云同步打卡和罚款账本。',
-        theme_color: '#f3f5f1',
-        background_color: '#f3f5f1',
+        theme_color: '#f4f7fb',
+        background_color: '#f4f7fb',
         display: 'standalone',
         start_url: '/',
         icons: [

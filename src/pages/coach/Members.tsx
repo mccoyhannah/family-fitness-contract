@@ -44,7 +44,7 @@ export default function CoachMembers() {
 
   const draft = useMemo<PlanDraft | null>(() => {
     if (!selectedMember) return null
-    if (selectedPlan) return { ...selectedPlan, source: 'coach', items: selectedPlan.items }
+    if (selectedPlan) return { ...selectedPlan, source: 'coach', items: selectedPlan.items.map((item) => ({ ...item })) }
     return todayDraft(selectedMember.id, selectedDate)
   }, [selectedDate, selectedMember, selectedPlan])
 

@@ -30,9 +30,17 @@ export function readCache(scope = 'demo'): OfflineCache {
 }
 
 export function writeCache(cache: OfflineCache, scope = 'demo') {
-  localStorage.setItem(cacheKey(scope), JSON.stringify(cache))
+  try {
+    localStorage.setItem(cacheKey(scope), JSON.stringify(cache))
+  } catch {
+    // Local storage may be full or blocked in private browsing; keep the app usable.
+  }
 }
 
 export function clearCache(scope = 'demo') {
-  localStorage.removeItem(cacheKey(scope))
+  try {
+    localStorage.removeItem(cacheKey(scope))
+  } catch {
+    // Ignore storage cleanup failures for the same reason as writeCache.
+  }
 }

@@ -55,6 +55,13 @@ export default function Ledger() {
     }
 
     const existingCheckIn = checkInByDate.get(waiverTarget.date)
+    if (existingCheckIn && existingCheckIn.status !== 'missed') {
+      notifyApp({ tone: 'warning', message: '这天的记录状态已变化，请刷新账本后再申请。' })
+      setWaiverTarget(null)
+      setWaiverReason('')
+      return
+    }
+
     setSubmittingWaiver(true)
     try {
       await upsertCheckIn({

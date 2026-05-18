@@ -26,6 +26,7 @@ export default function CheckIn() {
   const evidenceFilesRef = useRef<EvidenceFile[]>([])
   const mountedRef = useRef(true)
   const [error, setError] = useState('')
+  const [pendingEvidenceCheckInId, setPendingEvidenceCheckInId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const navigate = useNavigate()
   const today = toISODate(new Date())
@@ -48,22 +49,26 @@ export default function CheckIn() {
     if (submitting || !profile || !todayPlan) return
     setSubmitting(true)
     setError('')
-    let savedCheckInId: string | null = null
+    let savedCheckInId = pendingEvidenceCheckInId
     try {
-      const checkIn = await upsertCheckIn({
-        user_id: profile.id,
-        plan_id: todayPlan.id,
-        date: today,
-        status: 'pending_review',
-        fatigue,
-        issues,
-        note: note || '已提交，等待教练确认。',
-        leave_reason: null,
-      })
-      if (!checkIn) throw new Error('打卡保存失败，请稍后重试。')
-      savedCheckInId = checkIn.id
+      if (!savedCheckInId) {
+        const checkIn = await upsertCheckIn({
+          user_id: profile.id,
+          plan_id: todayPlan.id,
+          date: today,
+          status: 'pending_review',
+          fatigue,
+          issues,
+          note: note || '已提交，等待教练确认。',
+          leave_reason: null,
+        })
+        if (!checkIn) throw new Error('打卡保存失败，请稍后重试。')
+        savedCheckInId = checkIn.id
+        if (mountedRef.current) setPendingEvidenceCheckInId(checkIn.id)
+      }
       const files = evidenceFiles.map((entry) => entry.file)
-      if (files.length > 0) await uploadEvidence(checkIn.id, profile.id, files)
+      if (files.length > 0) await uploadEvidence(savedCheckInId, profile.id, files)
+      if (mountedRef.current) setPendingEvidenceCheckInId(null)
       navigate('/')
     } catch (err) {
       if (mountedRef.current) {
@@ -119,7 +124,11 @@ export default function CheckIn() {
     <section className="screen with-nav">
       <div className="page-title">
         <h2>提交打卡</h2>
-        <p>打卡会关联今日计划，并把图片证据上传到 Supabase Storage。</p>
+        <p>
+          {pendingEvidenceCheckInId
+            ? '打卡记录已保存。现在只需要重新上传图片证据，或直接返回今日页等待审核。'
+            : '打卡会关联今日计划，并把图片证据上传到 Supabase Storage。'}
+        </p>
       </div>
       {!todayPlan && (
         <div className="status-card">
@@ -188,7 +197,7 @@ export default function CheckIn() {
         )}
         {error && <strong className="form-error">{error}</strong>}
         <button className="primary-action" disabled={!todayPlan || submitting} type="button" onClick={submit}>
-          {submitting ? '提交中...' : '提交打卡，等待审核'}
+          {submitting ? '提交中...' : pendingEvidenceCheckInId ? '重新上传图片证据' : '提交打卡，等待审核'}
         </button>
       </div>
     </section>

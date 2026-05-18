@@ -164,9 +164,9 @@ export function useMembers(coachId?: string) {
     setState((current) => {
       const selectedMemberId = (() => {
         if (current.selectedMemberId && nextMembers.some((member) => member.id === current.selectedMemberId)) return current.selectedMemberId
-      const saved = localStorage.getItem(selectedKey(coachId))
-      if (saved && nextMembers.some((member) => member.id === saved)) return saved
-      return nextMembers[0]?.id ?? ''
+        const saved = localStorage.getItem(selectedKey(coachId))
+        if (saved && nextMembers.some((member) => member.id === saved)) return saved
+        return nextMembers[0]?.id ?? ''
       })()
       const next = {
         loading: false,
@@ -233,7 +233,7 @@ export function useMembers(coachId?: string) {
         const next = {
           ...current,
           members: current.members.map((member) =>
-          member.id === studentId ? { ...member, name: nickname, display_name: nickname } : member,
+            member.id === studentId ? { ...member, name: nickname, display_name: nickname } : member,
           ),
           ready: true,
           selectedMemberId: studentId,
@@ -258,7 +258,7 @@ export function useMembers(coachId?: string) {
       const next = {
         ...current,
         members: current.members.map((member) =>
-        member.id === studentId ? { ...member, name: nickname, display_name: nickname } : member,
+          member.id === studentId ? { ...member, name: nickname, display_name: nickname } : member,
         ),
       }
       rememberMembersState(coachId, { members: next.members, message: next.message, ready: next.ready, selectedMemberId: next.selectedMemberId })

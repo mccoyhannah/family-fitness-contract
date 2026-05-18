@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import ExerciseCard from '../../components/ExerciseCard'
 import { useAuth } from '../../hooks/useAuth'
 import { usePlans } from '../../hooks/usePlans'
@@ -7,7 +8,7 @@ import { buildPlan, planToExercises } from '../../lib/plan'
 export default function Plan() {
   const { profile } = useAuth()
   const { plans } = usePlans(profile?.id)
-  const week = buildPlan(new Date())
+  const week = useMemo(() => buildPlan(new Date()), [])
   const trainingDays = plans.filter((plan) => plan.is_training).length
 
   return (

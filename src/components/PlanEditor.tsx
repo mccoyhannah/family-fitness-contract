@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { PlanDraft } from '../lib/types'
 
@@ -10,6 +10,10 @@ type PlanEditorProps = {
 }
 
 export default function PlanEditor({ initial, onSubmit, submitLabel }: PlanEditorProps) {
+  const initialKey = useMemo(
+    () => `${initial.id ?? 'new'}:${initial.user_id}:${initial.date}:${initial.source}`,
+    [initial.date, initial.id, initial.source, initial.user_id],
+  )
   const [draft, setDraft] = useState(initial)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -17,7 +21,7 @@ export default function PlanEditor({ initial, onSubmit, submitLabel }: PlanEdito
   useEffect(() => {
     setDraft(initial)
     setError('')
-  }, [initial])
+  }, [initialKey])
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()

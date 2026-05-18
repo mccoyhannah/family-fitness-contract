@@ -27,7 +27,7 @@ function writeRememberedEmail(email: string) {
 }
 
 export default function Login() {
-  const { authError, previewAs, signIn } = useAuth()
+  const { authError, loading, previewAs, profile, signIn } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -50,6 +50,11 @@ export default function Login() {
     }, 0)
   }, [canPreview, navigate, previewAs, searchParams])
 
+  useEffect(() => {
+    if (loading || !profile) return
+    navigate(profile.role === 'coach' ? '/admin' : '/', { replace: true })
+  }, [loading, navigate, profile])
+
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     const nextEmail = email.trim()
@@ -71,6 +76,18 @@ export default function Login() {
     window.setTimeout(() => {
       navigate(role === 'coach' ? '/admin' : '/', { replace: true })
     }, 0)
+  }
+
+  if (loading || profile) {
+    return (
+      <main className="center-screen">
+        <section className="login-card loading-card" aria-label="正在进入应用">
+          <span className="skeleton-line medium" />
+          <span className="skeleton-line title" />
+          <span className="skeleton-line" />
+        </section>
+      </main>
+    )
   }
 
   return (

@@ -23,7 +23,7 @@ export default function AppShell({ role }: { role: Role }) {
           </div>
           <button className="ghost-button" type="button" onClick={() => void signOut()}>
             <LogOut size={18} />
-            退出
+            退出登录
           </button>
         </header>
         {!isSupabaseConfigured && (

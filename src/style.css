@@ -518,6 +518,50 @@ textarea:focus-visible {
     var(--panel);
 }
 
+.members-screen {
+  padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+}
+
+.plan-workspace {
+  margin-top: 24px;
+}
+
+.plan-workspace .section-heading {
+  margin-top: 0;
+}
+
+.planned-list-section,
+.low-frequency-section {
+  margin-top: 34px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(255, 255, 255, 0.38);
+}
+
+.planned-list-section .section-heading,
+.low-frequency-section .section-heading {
+  margin-top: 0;
+}
+
+.planned-week-list {
+  gap: 15px;
+  margin-top: 12px;
+}
+
+.planned-week-list .day-card {
+  margin-top: 0;
+}
+
+.low-frequency-section {
+  padding-bottom: 18px;
+}
+
+.low-frequency-section .add-member-card {
+  border-color: rgba(255, 255, 255, 0.48);
+  background:
+    radial-gradient(circle at 94% 0%, rgba(37, 99, 235, 0.08), transparent 34%),
+    var(--panel);
+}
+
 .form-card-head {
   display: grid;
   gap: 5px;
@@ -1857,6 +1901,20 @@ button:active,
 
   .screen {
     padding: 18px 14px 24px;
+  }
+
+  .members-screen {
+    padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .plan-workspace {
+    margin-top: 20px;
+  }
+
+  .planned-list-section,
+  .low-frequency-section {
+    margin-top: 30px;
+    padding-top: 20px;
   }
 
   .topbar {

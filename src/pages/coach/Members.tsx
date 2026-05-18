@@ -88,50 +88,15 @@ export default function CoachMembers() {
   }
 
   return (
-    <section className="screen with-nav">
+    <section className="screen with-nav members-screen">
       <div className="page-title">
-        <h2>成员管理</h2>
-        <p>先让成员拥有 Supabase 账号，再用邮箱或成员码绑定到你的管理端。</p>
+        <h2>成员计划</h2>
+        <p>先选成员，再给他安排今天或本周的训练。添加新成员是低频管理项，放在页面后面。</p>
       </div>
 
       <div className="metric-row">
         <Metric icon={<Users />} label="已绑定成员" value={membersReady ? `${members.length} 人` : '同步中'} />
         <Metric icon={<CalendarDays />} label="当前成员" value={membersReady ? selectedMember ? displayMemberLabel(selectedMember) : '未选择' : '同步中'} />
-      </div>
-
-      <div className="form-card add-member-card">
-        <div className="form-card-head">
-          <strong>添加成员</strong>
-          <span>成员先登录或创建账号，你在这里给他起管理端昵称并绑定。</span>
-        </div>
-        <label>
-          成员昵称
-          <input
-            value={displayName}
-            onChange={(event) => {
-              setDisplayName(event.target.value)
-              setAddMessage('')
-            }}
-            placeholder="例如：1号、妈妈、叔叔"
-          />
-        </label>
-        <label>
-          成员邮箱或成员码
-          <input
-            value={identifier}
-            onChange={(event) => {
-              setIdentifier(event.target.value)
-              setAddMessage('')
-            }}
-            placeholder="member@example.com 或 MEMBER01"
-          />
-        </label>
-        <button className="admin-button" type="button" onClick={() => void submitAdd()}>
-          <UserPlus size={18} />
-          绑定成员
-        </button>
-        {addMessage && <p className={addMessage === '成员已绑定。' ? 'form-success' : 'form-error'}>{addMessage}</p>}
-        {!addMessage && message && <p className="form-error">{message}</p>}
       </div>
 
       <div className="member-list">
@@ -204,38 +169,95 @@ export default function CoachMembers() {
 
       {selectedMember && draft && (
         <>
-          <div className="section-heading">
-            <h3>给 {displayMemberLabel(selectedMember)} 制定计划</h3>
-            <span>{formatDay(selectedDate)}</span>
-          </div>
-          <div className="week-tabs">
-            {week.map((day) => (
-              <button
-                className={day.date === selectedDate ? 'active' : ''}
-                key={day.date}
-                type="button"
-                onClick={() => setSelectedDate(day.date)}
-              >
-                {formatDay(day.date)}
-              </button>
-            ))}
-          </div>
-          <PlanEditor initial={draft} submitLabel="保存教练计划" onSubmit={async (nextDraft) => void (await savePlan(nextDraft))} />
-          <div className="week-list">
-            {plans.map((plan) => (
-              <article className="day-card" key={plan.id}>
-                <div className="day-head">
-                  <strong>{formatDay(plan.date)} · {plan.title}</strong>
-                  <span>{plan.source === 'coach' ? '教练制定' : '成员自定'}</span>
-                </div>
-                {planToExercises(plan).map((exercise) => (
-                  <ExerciseCard exercise={exercise} key={exercise.id} />
+          <section className="plan-workspace" aria-label={`给 ${displayMemberLabel(selectedMember)} 制定计划`}>
+            <div className="section-heading">
+              <h3>给 {displayMemberLabel(selectedMember)} 制定计划</h3>
+              <span>{formatDay(selectedDate)}</span>
+            </div>
+            <div className="week-tabs">
+              {week.map((day) => (
+                <button
+                  className={day.date === selectedDate ? 'active' : ''}
+                  key={day.date}
+                  type="button"
+                  onClick={() => setSelectedDate(day.date)}
+                >
+                  {formatDay(day.date)}
+                </button>
+              ))}
+            </div>
+            <PlanEditor initial={draft} submitLabel="保存教练计划" onSubmit={async (nextDraft) => void (await savePlan(nextDraft))} />
+          </section>
+
+          <section className="planned-list-section" aria-label={`${displayMemberLabel(selectedMember)} 已安排的计划`}>
+            <div className="section-heading compact-heading">
+              <h3>已安排计划</h3>
+              <span>{plans.length} 天</span>
+            </div>
+            {plans.length === 0 ? (
+              <div className="status-card action-card">
+                <strong>还没有保存过计划</strong>
+                <p>上方保存后，这里会按日期列出已安排内容。</p>
+              </div>
+            ) : (
+              <div className="week-list planned-week-list">
+                {plans.map((plan) => (
+                  <article className="day-card" key={plan.id}>
+                    <div className="day-head">
+                      <strong>{formatDay(plan.date)} · {plan.title}</strong>
+                      <span>{plan.source === 'coach' ? '教练制定' : '成员自定'}</span>
+                    </div>
+                    {planToExercises(plan).map((exercise) => (
+                      <ExerciseCard exercise={exercise} key={exercise.id} />
+                    ))}
+                  </article>
                 ))}
-              </article>
-            ))}
-          </div>
+              </div>
+            )}
+          </section>
         </>
       )}
+
+      <section className="low-frequency-section" aria-label="低频成员管理">
+        <div className="section-heading compact-heading">
+          <h3>添加成员</h3>
+          <span>低频管理</span>
+        </div>
+        <div className="form-card add-member-card">
+          <div className="form-card-head">
+            <strong>绑定新成员</strong>
+            <span>成员先登录或创建账号，你再用邮箱或成员码把他加入管理端。</span>
+          </div>
+          <label>
+            成员昵称
+            <input
+              value={displayName}
+              onChange={(event) => {
+                setDisplayName(event.target.value)
+                setAddMessage('')
+              }}
+              placeholder="例如：1号、妈妈、叔叔"
+            />
+          </label>
+          <label>
+            成员邮箱或成员码
+            <input
+              value={identifier}
+              onChange={(event) => {
+                setIdentifier(event.target.value)
+                setAddMessage('')
+              }}
+              placeholder="member@example.com 或 MEMBER01"
+            />
+          </label>
+          <button className="admin-button" type="button" onClick={() => void submitAdd()}>
+            <UserPlus size={18} />
+            绑定成员
+          </button>
+          {addMessage && <p className={addMessage === '成员已绑定。' ? 'form-success' : 'form-error'}>{addMessage}</p>}
+          {!addMessage && message && <p className="form-error">{message}</p>}
+        </div>
+      </section>
     </section>
   )
 }

@@ -8,8 +8,16 @@ import { useAuth } from '../../hooks/useAuth'
 import { useCoachData } from '../../hooks/useCoachData'
 import { useMembers } from '../../hooks/useMembers'
 import { usePlans } from '../../hooks/usePlans'
-import { formatDay } from '../../lib/date'
+import { formatDay, isPastDeadline } from '../../lib/date'
 import { displayMemberLabel } from '../../lib/memberLabels'
+import type { CheckInStatus } from '../../lib/types'
+
+type RecentRecord = {
+  id: string
+  date: string
+  detail: string
+  status: CheckInStatus
+}
 
 export default function CoachDashboard() {
   const { profile } = useAuth()
@@ -34,8 +42,23 @@ export default function CoachDashboard() {
   const finishedTotal = completed + missed
   const completionRate = finishedTotal > 0 ? `${Math.round((completed / finishedTotal) * 100)}%` : '0%'
   const selectedMemberLabel = selectedMember ? displayMemberLabel(selectedMember) : ''
-  const recentCheckIns = scopedCheckIns
-    .slice()
+  const checkInDateSet = new Set(scopedCheckIns.map((item) => item.date))
+  const recentRecords: RecentRecord[] = [
+    ...scopedCheckIns.map((item) => ({
+      id: item.id,
+      date: item.date,
+      detail: item.note || item.leave_reason || '训练记录',
+      status: item.status,
+    })),
+    ...plans
+      .filter((plan) => plan.is_training && isPastDeadline(plan.date, plan.deadline) && !checkInDateSet.has(plan.date))
+      .map((plan) => ({
+        id: `missed-plan-${plan.id}`,
+        date: plan.date,
+        detail: `${plan.title} · 过了截止时间未打卡`,
+        status: 'missed' as CheckInStatus,
+      })),
+  ]
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 3)
   const nextStep =
@@ -91,15 +114,15 @@ export default function CoachDashboard() {
         <>
           <div className="section-heading">
             <h3>最近记录</h3>
-            <span>{plans.length} 天计划</span>
+            <span>{recentRecords.length} 条记录</span>
           </div>
           <div className="review-list">
-            {recentCheckIns.length === 0 && <p className="muted">这个成员还没有打卡记录。</p>}
-            {recentCheckIns.map((item) => (
+            {recentRecords.length === 0 && <p className="muted">这个成员还没有已完成或已过截止时间的计划记录。</p>}
+            {recentRecords.map((item) => (
               <article className="review-card dashboard-row" key={item.id}>
                 <div>
                   <strong>{formatDay(item.date)}</strong>
-                  <span>{item.note || item.leave_reason || '训练记录'}</span>
+                  <span>{item.detail}</span>
                 </div>
                 <StatusPill status={item.status} />
               </article>

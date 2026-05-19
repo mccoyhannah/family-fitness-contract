@@ -80,8 +80,8 @@ export default function Login() {
 
   if (loading || profile) {
     return (
-      <main className="center-screen">
-        <section className="login-card loading-card" aria-label="正在进入应用">
+      <main className="center-screen login-contract-screen">
+        <section className="login-card loading-card contract-paper" aria-label="正在进入应用">
           <span className="skeleton-line medium" />
           <span className="skeleton-line title" />
           <span className="skeleton-line" />
@@ -91,13 +91,15 @@ export default function Login() {
   }
 
   return (
-    <main className="center-screen">
-      <section className="login-card">
-        <div className="login-mark">
-          <Dumbbell size={30} />
+    <main className="center-screen login-contract-screen">
+      <section className="login-card contract-paper login-contract-card">
+        <div className="login-contract-header">
+          <div className="login-mark">
+            <Dumbbell size={30} />
+          </div>
+          <h1>家庭健身契约</h1>
+          <p>邮箱密码登录后，系统会按 Supabase profile.role 自动进入学员端或管理端。</p>
         </div>
-        <h1>家庭健身契约</h1>
-        <p>邮箱密码登录后，系统会按 Supabase profile.role 自动进入学员端或管理端。</p>
 
         {!isSupabaseConfigured && (
           <div className="config-warning">
@@ -106,7 +108,7 @@ export default function Login() {
           </div>
         )}
 
-        <form onSubmit={submit}>
+        <form className="contract-form login-form" onSubmit={submit}>
           <label>
             邮箱
             <input
@@ -142,7 +144,7 @@ export default function Login() {
         </form>
 
         {canPreview && (
-          <div className="preview-actions">
+          <div className="preview-actions participant-preview-actions">
             <button type="button" onClick={() => preview('student')}>
               预览学员端
             </button>

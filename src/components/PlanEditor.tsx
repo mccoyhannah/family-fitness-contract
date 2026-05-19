@@ -71,7 +71,7 @@ export default function PlanEditor({ initial, onSubmit, submitLabel }: PlanEdito
   }
 
   return (
-    <form className="form-card plan-editor" onSubmit={submit}>
+    <form className="form-card plan-editor contract-clause-editor" onSubmit={submit}>
       <label>
         计划标题
         <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
@@ -99,16 +99,16 @@ export default function PlanEditor({ initial, onSubmit, submitLabel }: PlanEdito
         </label>
       </div>
 
-      <div className="section-heading compact-heading">
+      <div className="section-heading compact-heading contract-section-heading">
         <h3>动作</h3>
         <button className="icon-action" type="button" onClick={addItem} aria-label="添加动作">
           <Plus size={18} />
         </button>
       </div>
 
-      <div className="plan-item-list">
+      <div className="plan-item-list contract-term-list">
         {draft.items.map((item, index) => (
-          <article className="plan-item-editor" key={item.id ?? index}>
+          <article className="plan-item-editor contract-term-editor" key={item.id ?? index}>
             <div className="form-grid">
               <label>
                 动作名

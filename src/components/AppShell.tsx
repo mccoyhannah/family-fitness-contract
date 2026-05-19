@@ -9,10 +9,10 @@ export default function AppShell({ role }: { role: Role }) {
   const { profile, signOut } = useAuth()
 
   return (
-    <main className="app-shell">
-      <section className="app-frame">
-        <header className="topbar">
-          <div className="brand-block">
+    <main className="app-shell contract-app-shell">
+      <section className="app-frame contract-paper">
+        <header className="topbar contract-paper-header">
+          <div className="brand-block contract-party-block">
             <span className="brand-mark">
               <Dumbbell size={18} />
             </span>
@@ -31,7 +31,9 @@ export default function AppShell({ role }: { role: Role }) {
             Supabase 未配置：当前是本地预览，填写 .env.local 后切到云同步。
           </div>
         )}
-        <Outlet />
+        <div className="app-content contract-paper-body">
+          <Outlet />
+        </div>
         <BottomNav role={role} />
       </section>
     </main>

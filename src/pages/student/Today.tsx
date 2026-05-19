@@ -127,8 +127,8 @@ export default function Today() {
 
   if (!todayTemplate) {
     return (
-      <section className="screen with-nav">
-        <div className="status-card action-card">
+      <section className="screen with-nav contract-home-screen">
+        <div className="status-card action-card contract-clause-card">
           <strong>今天还没有默认训练模板</strong>
           <p>可以先等管理端下发计划，或稍后刷新页面。</p>
         </div>
@@ -137,7 +137,7 @@ export default function Today() {
   }
 
   return (
-    <section className="screen with-nav">
+    <section className="screen with-nav contract-home-screen">
       <TodayHeroSection
         checkIn={todayCheckIn}
         pendingTotal={pendingTotal}
@@ -177,7 +177,7 @@ function TodayHeroSection({
   todayExercises: Exercise[]
 }) {
   return (
-    <div className="hero-panel">
+    <div className="hero-panel contract-cover-panel">
       <span className="hero-kicker">
         <Flame size={18} />
         云同步 v2
@@ -195,7 +195,7 @@ function TodayHeroSection({
 
 function TodayActionCard({ nextStep }: { nextStep: string }) {
   return (
-    <div className="status-card action-card">
+    <div className="status-card action-card contract-clause-card">
       <strong>下一步</strong>
       <p>{nextStep}</p>
     </div>
@@ -204,7 +204,7 @@ function TodayActionCard({ nextStep }: { nextStep: string }) {
 
 function MemberCodeCard({ memberCode }: { memberCode: string }) {
   return (
-    <div className="status-card">
+    <div className="status-card participant-code-card contract-clause-card">
       <strong>我的成员码：{memberCode}</strong>
       <p>把这个码发给管理者，就能把你的账号绑定进家庭成员列表。</p>
     </div>
@@ -213,7 +213,7 @@ function MemberCodeCard({ memberCode }: { memberCode: string }) {
 
 function TodayCheckInSummary({ checkIn }: { checkIn: CheckIn }) {
   return (
-    <div className="status-card">
+    <div className="status-card checkin-clause-card contract-clause-card">
       <StatusPill status={checkIn.status} />
       <p>{checkIn.leave_reason || checkIn.note || '记录已同步。'}</p>
     </div>
@@ -238,8 +238,8 @@ function TodayTrainingSection({
   plan: Plan
 }) {
   return (
-    <>
-      <div className="section-heading">
+    <section className="contract-section training-clause-section">
+      <div className="section-heading contract-section-heading">
         <h3>今日训练</h3>
         <span>{plan.is_training ? `${plan.items.length} 个动作` : '恢复日'}</span>
       </div>
@@ -253,7 +253,7 @@ function TodayTrainingSection({
         去提交打卡
       </button>
 
-      <div className="leave-card">
+      <div className="leave-card contract-clause-card">
         <label>
           请假理由，可空
           <input
@@ -268,26 +268,26 @@ function TodayTrainingSection({
           申请请假，待教练确认
         </button>
       </div>
-    </>
+    </section>
   )
 }
 
 function TodaySelfPlanSection({ draft, onSave }: { draft: PlanDraft; onSave: (draft: PlanDraft) => Promise<Plan> }) {
   return (
-    <>
-      <div className="section-heading">
+    <section className="contract-section self-plan-clause-section">
+      <div className="section-heading contract-section-heading">
         <h3>自己制定今日计划</h3>
         <span>不等于罚款</span>
       </div>
       <PlanEditor initial={draft} submitLabel="保存今日自定计划" onSubmit={async (nextDraft) => void (await onSave(nextDraft))} />
-    </>
+    </section>
   )
 }
 
 function TodayLoadingSkeleton() {
   return (
-    <section className="screen with-nav" aria-busy="true">
-      <div className="hero-panel skeleton-card" aria-label="正在加载今日计划">
+    <section className="screen with-nav contract-home-screen" aria-busy="true">
+      <div className="hero-panel skeleton-card contract-cover-panel" aria-label="正在加载今日计划">
         <span className="skeleton-line short" />
         <span className="skeleton-line title" />
         <span className="skeleton-line" />
@@ -297,7 +297,7 @@ function TodayLoadingSkeleton() {
           <span className="skeleton-tile" />
         </div>
       </div>
-      <div className="status-card skeleton-card">
+      <div className="status-card skeleton-card contract-clause-card">
         <span className="skeleton-line medium" />
         <span className="skeleton-line" />
       </div>

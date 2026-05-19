@@ -12,25 +12,27 @@ type MemberSelectProps = {
 export default function MemberSelect({ loading = false, members, onChange, ready = true, selectedMemberId }: MemberSelectProps) {
   if (!ready) {
     return (
-      <div className="member-select member-select-loading" aria-busy={loading} aria-label="当前成员">
-        <div className="field-label">当前成员</div>
+      <div className="member-select member-select-loading participant-select" aria-busy={loading} aria-label="当前成员">
+        <div className="field-label participant-label">当前成员</div>
         <span className="skeleton-line medium" />
       </div>
     )
   }
 
   if (members.length === 0) {
-    return <p className="muted">还没有绑定成员，请先到“成员”页添加。</p>
+    return <p className="muted participant-empty">还没有绑定成员，请先到“成员”页添加。</p>
   }
 
   return (
-    <div className="member-select" aria-label="当前成员">
-      <div className="field-label">当前成员</div>
-      <div className="member-choice-list">
+    <div className="member-select participant-select" aria-label="当前成员">
+      <div className="field-label participant-label">当前成员</div>
+      <div className="member-choice-list participant-choice-list">
         {members.map((member) => (
           <button
             aria-pressed={member.id === selectedMemberId}
-            className={member.id === selectedMemberId ? 'member-choice active' : 'member-choice'}
+            className={
+              member.id === selectedMemberId ? 'member-choice participant-choice active' : 'member-choice participant-choice'
+            }
             key={member.id}
             type="button"
             onClick={() => onChange(member.id)}

@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useRef, useState } from 'react'
 import MemberSelect from '../../components/MemberSelect'
 import StatusPill from '../../components/StatusPill'
@@ -9,6 +10,7 @@ import { usePlans } from '../../hooks/usePlans'
 import { formatDay } from '../../lib/date'
 import { displayMemberLabel } from '../../lib/memberLabels'
 import { notifyApp } from '../../lib/notice'
+import type { CheckIn, CheckInEvidence, Plan } from '../../lib/types'
 
 const WAIVER_PREFIX = '[免罚申请]'
 
@@ -25,6 +27,15 @@ function isWaiverRequest(reason?: string | null) {
 
 function cleanWaiverReason(reason?: string | null) {
   return reason?.replace(WAIVER_PREFIX, '').trim() || '未填写理由'
+}
+
+function fatigueLabel(fatigue: number | null) {
+  if (!fatigue) return '未填写'
+  if (fatigue <= 1) return '1/5 · 轻松'
+  if (fatigue === 2) return '2/5 · 正常'
+  if (fatigue === 3) return '3/5 · 有点累'
+  if (fatigue === 4) return '4/5 · 很累'
+  return '5/5 · 不舒服'
 }
 
 export default function CoachReview() {
@@ -44,6 +55,7 @@ export default function CoachReview() {
   const retrySequenceRef = useRef(0)
   const [failedEvidenceKeys, setFailedEvidenceKeys] = useState<Set<string>>(() => new Set())
   const [confirmRequest, setConfirmRequest] = useState<ReviewConfirmRequest | null>(null)
+  const [expandedCheckInIds, setExpandedCheckInIds] = useState<Set<string>>(() => new Set())
   const [reviewingCheckInId, setReviewingCheckInId] = useState('')
   const [retryNonceByEvidenceKey, setRetryNonceByEvidenceKey] = useState<Record<string, number>>({})
   const { plans } = usePlans(selectedMember?.id)
@@ -115,6 +127,14 @@ export default function CoachReview() {
   }
 
   const coachMemberLabel = (memberId: string) => memberNameById.get(memberId) || '成员'
+  const toggleExpanded = (checkInId: string) => {
+    setExpandedCheckInIds((current) => {
+      const next = new Set(current)
+      if (next.has(checkInId)) next.delete(checkInId)
+      else next.add(checkInId)
+      return next
+    })
+  }
 
   return (
     <section className="screen with-nav">
@@ -135,45 +155,50 @@ export default function CoachReview() {
           const itemEvidence = evidenceFor(item.id)
           const hasWaiverRequest = isWaiverRequest(item.leave_reason)
           const waiverReason = cleanWaiverReason(item.leave_reason)
+          const isExpanded = expandedCheckInIds.has(item.id)
           return (
-            <article className={`review-card${hasWaiverRequest ? ' waiver-review-card' : ''}`} key={item.id}>
-              <div>
-                <strong>{displayName} · {formatDay(item.date)}</strong>
-                <span>{plan ? `${plan.title} · ${plan.source === 'coach' ? '教练制定' : '成员自定'}` : '旧打卡或计划未同步'}</span>
-                {hasWaiverRequest && <span className="waiver-review-badge">补卡免罚申请</span>}
-                {hasWaiverRequest ? (
-                  <>
-                    <span className="waiver-review-reason">申请理由：{waiverReason}</span>
-                    {item.note && <span>记录备注：{item.note}</span>}
-                  </>
-                ) : (
-                  <span>{item.leave_reason ? `理由：${item.leave_reason}` : item.note || '等待确认'}</span>
-                )}
-                {item.issues.length > 0 && <span>异常：{item.issues.join('、')}</span>}
-                {itemEvidence.length > 0 && (
-                  <div className="evidence-grid">
-                    {itemEvidence.map((row) => (
-                      row.signed_url ? (
-                        failedEvidenceKeys.has(evidenceKey(row.id, row.signed_url)) ? (
-                          <span className="mini-chip" key={row.id}>{row.file_name} 无法加载</span>
-                        ) : (
-                          <img
-                            alt={row.file_name}
-                            decoding="async"
-                            key={row.id}
-                            loading="lazy"
-                            src={evidenceSrc(row.signed_url, row.id)}
-                            onError={() => handleEvidenceError(row.id, row.signed_url!)}
-                          />
-                        )
-                      ) : (
-                        <span className="mini-chip" key={row.id}>{row.file_name}</span>
-                      )
-                    ))}
-                  </div>
-                )}
+            <article className={`review-card review-detail-card${hasWaiverRequest ? ' waiver-review-card' : ''}`} key={item.id}>
+              <div className="review-card-summary">
+                <div className="review-card-copy">
+                  <strong>{displayName} · {formatDay(item.date)}</strong>
+                  <span>{plan ? `${plan.title} · ${plan.source === 'coach' ? '教练制定' : '成员自定'}` : '旧打卡或计划未同步'}</span>
+                  {hasWaiverRequest && <span className="waiver-review-badge">补卡免罚申请</span>}
+                  {hasWaiverRequest ? (
+                    <>
+                      <span className="waiver-review-reason">申请理由：{waiverReason}</span>
+                      {item.note && <span>记录备注：{item.note}</span>}
+                    </>
+                  ) : (
+                    <span>{item.leave_reason ? `理由：${item.leave_reason}` : item.note || '等待确认'}</span>
+                  )}
+                  {item.issues.length > 0 && <span>异常：{item.issues.join('、')}</span>}
+                </div>
+                <div className="review-status-column">
+                  <StatusPill status={item.status} />
+                  <button
+                    aria-expanded={isExpanded}
+                    className="review-expand-button"
+                    type="button"
+                    onClick={() => toggleExpanded(item.id)}
+                  >
+                    {isExpanded ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
+                    {isExpanded ? '收起详情' : '查看详情'}
+                  </button>
+                </div>
               </div>
-              <StatusPill status={item.status} />
+              {isExpanded && (
+                <ReviewExpandedDetails
+                  checkIn={item}
+                  evidence={itemEvidence}
+                  failedEvidenceKeys={failedEvidenceKeys}
+                  hasWaiverRequest={hasWaiverRequest}
+                  onEvidenceError={handleEvidenceError}
+                  plan={plan}
+                  signedEvidenceKey={evidenceKey}
+                  signedEvidenceSrc={evidenceSrc}
+                  waiverReason={waiverReason}
+                />
+              )}
               <div className="row-actions">
                 <button
                   type="button"
@@ -246,5 +271,111 @@ export default function CoachReview() {
         </div>
       )}
     </section>
+  )
+}
+
+function ReviewExpandedDetails({
+  checkIn,
+  evidence,
+  failedEvidenceKeys,
+  hasWaiverRequest,
+  onEvidenceError,
+  plan,
+  signedEvidenceKey,
+  signedEvidenceSrc,
+  waiverReason,
+}: {
+  checkIn: CheckIn
+  evidence: CheckInEvidence[]
+  failedEvidenceKeys: Set<string>
+  hasWaiverRequest: boolean
+  onEvidenceError: (evidenceId: string, signedUrl: string) => void
+  plan?: Plan
+  signedEvidenceKey: (evidenceId: string, signedUrl: string) => string
+  signedEvidenceSrc: (signedUrl: string, evidenceId: string) => string
+  waiverReason: string
+}) {
+  const note = checkIn.note || (checkIn.leave_reason && !hasWaiverRequest ? checkIn.leave_reason : '')
+
+  return (
+    <div className="review-detail-panel">
+      <section className="review-detail-section">
+        <div className="review-detail-head">
+          <strong>打卡凭证</strong>
+          <span>{evidence.length > 0 ? `${evidence.length} 张` : '无图片'}</span>
+        </div>
+        {evidence.length > 0 ? (
+          <div className="evidence-grid review-evidence-grid">
+            {evidence.map((row) => (
+              row.signed_url ? (
+                failedEvidenceKeys.has(signedEvidenceKey(row.id, row.signed_url)) ? (
+                  <span className="mini-chip" key={row.id}>{row.file_name} 无法加载</span>
+                ) : (
+                  <figure className="review-evidence-thumb" key={row.id}>
+                    <img
+                      alt={row.file_name}
+                      decoding="async"
+                      loading="lazy"
+                      src={signedEvidenceSrc(row.signed_url, row.id)}
+                      onError={() => onEvidenceError(row.id, row.signed_url!)}
+                    />
+                    <figcaption>{row.file_name}</figcaption>
+                  </figure>
+                )
+              ) : (
+                <span className="mini-chip" key={row.id}>{row.file_name}</span>
+              )
+            ))}
+          </div>
+        ) : (
+          <p className="review-empty-detail">成员没有上传图片，重点看备注、异常和计划完成情况。</p>
+        )}
+      </section>
+
+      <section className="review-detail-section">
+        <div className="review-detail-head">
+          <strong>打卡备注</strong>
+          <span>疲劳度 {fatigueLabel(checkIn.fatigue)}</span>
+        </div>
+        {hasWaiverRequest && <p className="review-note-box">免罚申请：{waiverReason}</p>}
+        {note ? <p className="review-note-box">{note}</p> : <p className="review-empty-detail">成员没有填写额外备注。</p>}
+        {checkIn.issues.length > 0 ? (
+          <div className="review-chip-row">
+            {checkIn.issues.map((issue) => (
+              <span className="mini-chip" key={issue}>{issue}</span>
+            ))}
+          </div>
+        ) : (
+          <p className="review-empty-detail">没有勾选异常标记。</p>
+        )}
+      </section>
+
+      <section className="review-detail-section">
+        <div className="review-detail-head">
+          <strong>计划内容</strong>
+          <span>{plan ? `${plan.source === 'coach' ? '教练制定' : '成员自定'} · 截止 ${plan.deadline}` : '未同步'}</span>
+        </div>
+        {plan ? (
+          <>
+            <p className="review-plan-summary">{plan.title} · {plan.focus}</p>
+            {plan.items.length > 0 ? (
+              <div className="review-plan-list">
+                {plan.items.map((item) => (
+                  <article className="review-plan-item" key={item.id}>
+                    <strong>{item.name}</strong>
+                    <span>{item.sets} · {item.reps}</span>
+                    {item.note && <p>{item.note}</p>}
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="review-empty-detail">{plan.is_training ? '这份计划还没有动作明细。' : '这是恢复日，没有训练动作。'}</p>
+            )}
+          </>
+        ) : (
+          <p className="review-empty-detail">没有找到关联计划，可能是旧记录，或当前成员计划还未同步完成。</p>
+        )}
+      </section>
+    </div>
   )
 }

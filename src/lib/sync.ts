@@ -12,7 +12,9 @@ export function buildMissedSync(
   const nextCheckIns = [...checkIns]
   const nextPenalties = [...penalties]
 
-  plan
+  const sortedPlan = plan.slice().sort((a, b) => a.date.localeCompare(b.date))
+
+  sortedPlan
     .filter((day) => day.is_training && isPastDeadline(day.date, day.deadline, now))
     .forEach((day) => {
       const existingCheckIn = nextCheckIns.find(
@@ -26,7 +28,7 @@ export function buildMissedSync(
 
       const consecutive = computeConsecutiveMisses(
         day.date,
-        plan,
+        sortedPlan,
         nextCheckIns.filter((checkIn) => checkIn.user_id === userId),
         nextPenalties.filter((penalty) => penalty.user_id === userId),
       )

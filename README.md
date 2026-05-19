@@ -12,6 +12,7 @@ v1.1 家庭成员版：`Vite + React + TypeScript + Supabase + React Router + PW
 - 已加图片打卡：成员可上传 1-3 张图片，管理端审核页可查看证据。
 - 已加请假按钮：当天写入 `check_ins.status='excused'`，如有当天罚款则置为 `waived`。
 - 已加递增罚款：第 1 天 `¥10`，第 2 天 `¥20`，第 3 天 `¥30`，第 4 天 `¥40`，第 5 天起封顶 `¥50`。
+- 已加付款确认闭环：成员只能上报“已付款”，管理端确认后才会变成“已支付”。
 - 已使用 `vite-plugin-pwa` 生成 precache，避免旧手写 SW 离线白屏。
 
 没有 `.env.local` 时，应用会显示 Supabase 配置提示，并提供本地预览入口；不会注入演示欠款。

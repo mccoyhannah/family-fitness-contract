@@ -22,14 +22,15 @@ export default function Ledger() {
   const [waiverReason, setWaiverReason] = useState('')
   const [submittingWaiver, setSubmittingWaiver] = useState(false)
   const total = penalties.filter((item) => item.status === 'pending').reduce((sum, item) => sum + item.amount, 0)
-  const settled = penalties.filter((item) => item.status !== 'pending').length
+  const reported = penalties.filter((item) => item.status === 'payment_reported').length
+  const settled = penalties.filter((item) => item.status === 'paid' || item.status === 'waived').length
   const formatAmount = (amount: number) => (Number.isInteger(amount) ? `${amount}` : amount.toFixed(2))
   const checkInByDate = useMemo(() => new Map(checkIns.map((item) => [item.date, item])), [checkIns])
 
   const markPaid = async (penaltyId: string) => {
     try {
-      await updatePenalty(penaltyId, 'paid')
-      notifyApp({ tone: 'success', message: '已提交付款确认，管理端会看到状态。' })
+      await updatePenalty(penaltyId, 'payment_reported')
+      notifyApp({ tone: 'success', message: '已提交付款确认，等管理端核对后才会变成已支付。' })
     } catch {
       notifyApp({ tone: 'warning', message: '付款确认失败，请检查网络后再试。' })
     }
@@ -94,7 +95,7 @@ export default function Ledger() {
       </div>
       <div className="status-card action-card">
         <strong>{penalties.length} 条账款记录</strong>
-        <p>{settled} 条已处理；如已线下付款，可先点“我已付款”等管理端确认。</p>
+        <p>{reported} 笔付款待管理端确认，{settled} 条已处理；如已线下付款，可先点“我已付款”。</p>
       </div>
       <div className="penalty-list">
         {penalties.length === 0 && <p className="muted">暂无罚款记录。请假不会生成待支付罚款。</p>}
@@ -108,6 +109,7 @@ export default function Ledger() {
                 <strong>¥{formatAmount(penalty.amount)}</strong>
                 <span>{formatDay(penalty.date)} · 连续第 {penalty.consecutive_count} 天</span>
                 {isWaiverPending && <span className="waiver-inline-note">免罚申请已提交，先等管理端审核。</span>}
+                {penalty.status === 'payment_reported' && <span className="waiver-inline-note">付款已上报，等待管理端确认。</span>}
               </div>
               <StatusPill status={penalty.status} />
               {penalty.status === 'pending' && (

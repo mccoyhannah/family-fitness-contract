@@ -35,6 +35,7 @@ export default function CoachDashboard() {
   const scopedCheckIns = selectedMember ? checkIns.filter((item) => item.user_id === selectedMember.id) : checkIns
   const scopedPenalties = selectedMember ? penalties.filter((item) => item.user_id === selectedMember.id) : penalties
   const pendingReview = scopedCheckIns.filter((item) => item.status === 'pending_review').length
+  const paymentReported = scopedPenalties.filter((item) => item.status === 'payment_reported').length
   const pendingPenalty = scopedPenalties.filter((item) => item.status === 'pending')
   const pendingTotal = pendingPenalty.reduce((sum, item) => sum + item.amount, 0)
   const completed = scopedCheckIns.filter((item) => item.status === 'completed').length
@@ -66,6 +67,8 @@ export default function CoachDashboard() {
       ? '正在同步成员列表。'
       : pendingReview > 0
       ? `有 ${pendingReview} 条记录需要审核。`
+      : paymentReported > 0
+        ? `有 ${paymentReported} 笔付款需要确认。`
       : pendingTotal > 0
         ? `还有 ¥${pendingTotal} 待确认账款。`
         : selectedMember
@@ -91,7 +94,7 @@ export default function CoachDashboard() {
       <MemberSelect loading={membersLoading} members={members} ready={membersReady} selectedMemberId={selectedMemberId} onChange={setSelectedMemberId} />
       <div className="metric-row">
         <Metric icon={<BarChart3 />} label="学员" value={coachDataReady ? `${profiles.length} 人` : '同步中'} />
-        <Metric icon={<AlertTriangle />} label="待确认" value={coachDataReady ? `${pendingReview} 条` : '同步中'} />
+        <Metric icon={<AlertTriangle />} label="待确认" value={coachDataReady ? `${pendingReview + paymentReported} 条` : '同步中'} />
         <Metric icon={<ReceiptText />} label="待支付" value={coachDataReady ? `¥${pendingTotal}` : '同步中'} />
         <Metric icon={<CalendarDays />} label="完成率" value={completionRate} />
       </div>

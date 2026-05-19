@@ -19,6 +19,8 @@ const demoStudent: Profile = {
   role: 'student',
 }
 
+const COACH_RECORD_LIMIT = 500
+
 let coachDataCache: Omit<CoachDataState, 'loading'> | null = null
 
 function shouldUseDemoCoachData() {
@@ -75,25 +77,51 @@ export function useCoachData() {
     if (!client) return
     try {
       setState((current) => ({ ...current, loading: true }))
-      const [profilesResult, checkInsResult, penaltiesResult] = await Promise.all([
+      const [profilesResult, checkInsResult, penaltiesResult] = await Promise.allSettled([
         client.from('profiles').select('*').eq('role', 'student').order('created_at', { ascending: true }),
-        client.from('check_ins').select('*').order('date', { ascending: false }),
-        client.from('penalties').select('*').order('date', { ascending: false }),
+        client.from('check_ins').select('*').order('date', { ascending: false }).limit(COACH_RECORD_LIMIT),
+        client.from('penalties').select('*').order('date', { ascending: false }).limit(COACH_RECORD_LIMIT),
       ])
-      if (profilesResult.error) throw profilesResult.error
-      if (checkInsResult.error) throw checkInsResult.error
-      if (penaltiesResult.error) throw penaltiesResult.error
-      const next = {
-        checkIns: checkInsResult.data ?? [],
-        loading: false,
-        penalties: penaltiesResult.data ?? [],
-        profiles: (profilesResult.data ?? []) as Profile[],
-        ready: true,
+      const profilesData =
+        profilesResult.status === 'fulfilled' && !profilesResult.value.error
+          ? ((profilesResult.value.data ?? []) as Profile[])
+          : null
+      const checkInsData =
+        checkInsResult.status === 'fulfilled' && !checkInsResult.value.error
+          ? ((checkInsResult.value.data ?? []) as CheckIn[])
+          : null
+      const penaltiesData =
+        penaltiesResult.status === 'fulfilled' && !penaltiesResult.value.error
+          ? ((penaltiesResult.value.data ?? []) as Penalty[])
+          : null
+      if (profilesData === null && checkInsData === null && penaltiesData === null) {
+        throw new Error('管理端数据同步失败')
       }
-      setState(next)
-      rememberCoachData({ checkIns: next.checkIns, penalties: next.penalties, profiles: next.profiles, ready: next.ready })
-      const cache = readCache('coach')
-      writeCache({ ...cache, checkIns: checkInsResult.data ?? [], penalties: penaltiesResult.data ?? [] }, 'coach')
+
+      const failedQueries = [
+        profilesData === null ? '成员档案' : '',
+        checkInsData === null ? '打卡记录' : '',
+        penaltiesData === null ? '账款记录' : '',
+      ].filter(Boolean)
+
+      setState((current) => {
+        const fullySynced = profilesData !== null && checkInsData !== null && penaltiesData !== null
+        const next = {
+          checkIns: checkInsData ?? current.checkIns,
+          loading: false,
+          penalties: penaltiesData ?? current.penalties,
+          profiles: profilesData ?? current.profiles,
+          ready: fullySynced || current.ready,
+        }
+        rememberCoachData({ checkIns: next.checkIns, penalties: next.penalties, profiles: next.profiles, ready: next.ready })
+        const cache = readCache('coach')
+        writeCache({ ...cache, checkIns: next.checkIns, penalties: next.penalties }, 'coach')
+        return next
+      })
+
+      if (failedQueries.length > 0) {
+        notifySyncError('coach-data-partial', `${failedQueries.join('、')}同步失败，已保留可用数据。`)
+      }
     } finally {
       setState((current) => (current.loading ? { ...current, loading: false } : current))
     }

@@ -90,11 +90,15 @@ create table if not exists public.penalties (
   date date not null,
   amount int not null,
   consecutive_count int not null,
-  status text not null check (status in ('pending', 'paid', 'waived')),
+  status text not null check (status in ('pending', 'payment_reported', 'paid', 'waived')),
   reason text default '训练日未打卡',
   created_at timestamptz default now(),
   unique(user_id, date)
 );
+
+alter table public.penalties drop constraint if exists penalties_status_check;
+alter table public.penalties add constraint penalties_status_check
+check (status in ('pending', 'payment_reported', 'paid', 'waived'));
 
 create table if not exists public.check_in_evidence (
   id uuid primary key default gen_random_uuid(),
@@ -462,13 +466,14 @@ with check (
 
 drop policy if exists "students_update_own_penalties" on public.penalties;
 drop policy if exists "students_mark_own_penalties_paid" on public.penalties;
-create policy "students_mark_own_penalties_paid"
+drop policy if exists "students_report_own_penalties_paid" on public.penalties;
+create policy "students_report_own_penalties_paid"
 on public.penalties for update
 to authenticated
 using (user_id = auth.uid())
 with check (
   user_id = auth.uid()
-  and status = 'paid'
+  and status = 'payment_reported'
 );
 
 drop policy if exists "coach_update_all_penalties" on public.penalties;
@@ -519,7 +524,7 @@ using (
   and (
     (storage.foldername(name))[1] = auth.uid()::text
     or (
-      (storage.foldername(name))[1] ~* '^[0-9a-f-]{36}$'
+      (storage.foldername(name))[1] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
       and public.is_member_coach(((storage.foldername(name))[1])::uuid)
     )
   )
@@ -558,7 +563,8 @@ using (
 
 grant select on public.profiles to authenticated;
 revoke update on public.profiles from authenticated;
-grant update (name, email, member_code) on public.profiles to authenticated;
+-- member_code is used for coach-member binding and should not be rotated by browser clients.
+grant update (name, email) on public.profiles to authenticated;
 
 grant select, delete on public.coach_members to authenticated;
 revoke insert on public.coach_members from authenticated;

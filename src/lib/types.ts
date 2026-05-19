@@ -1,6 +1,6 @@
 export type Role = 'student' | 'coach'
 export type CheckInStatus = 'completed' | 'excused' | 'missed' | 'pending_review'
-export type PenaltyStatus = 'pending' | 'paid' | 'waived'
+export type PenaltyStatus = 'pending' | 'payment_reported' | 'paid' | 'waived'
 export type PlanSource = 'coach' | 'student'
 
 export type Profile = {

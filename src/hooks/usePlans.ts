@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { readCache, writeCache } from '../lib/cache'
 import { shouldUsePreviewLocalScope } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
@@ -30,7 +30,7 @@ export function usePlans(userId?: string) {
   const [loading, setLoading] = useState(false)
   const [loadedUserId, setLoadedUserId] = useState<string | null>(() => shouldUseLocalPlans(userId) ? userId ?? null : null)
   const loadingState = loading || Boolean(userId && !shouldUseLocalPlans(userId) && loadedUserId !== userId)
-  const planIds = plans.map((plan) => plan.id).sort().join(',')
+  const planIds = useMemo(() => plans.map((plan) => plan.id).sort().join(','), [plans])
 
   const load = useCallback(async () => {
     if (!userId) return

@@ -1139,6 +1139,12 @@ label {
   border-color: rgba(245, 158, 11, 0.22);
 }
 
+.status-pill.payment_reported {
+  color: #1d4ed8;
+  background: rgba(59, 130, 246, 0.13);
+  border-color: rgba(59, 130, 246, 0.18);
+}
+
 .status-pill.missed {
   color: #b91c1c;
   background: rgba(239, 68, 68, 0.13);
@@ -1864,6 +1870,10 @@ button:active,
   .status-pill.pending_review,
   .status-pill.pending {
     color: #fbbf24;
+  }
+
+  .status-pill.payment_reported {
+    color: #93c5fd;
   }
 
   .status-pill.missed {

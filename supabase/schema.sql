@@ -374,6 +374,35 @@ create trigger ensure_penalty_for_missed_check_in
 after insert or update on public.check_ins
 for each row execute function public.ensure_penalty_for_missed_check_in();
 
+-- Backfill historical missed check-ins that predate the automatic penalty trigger.
+-- This is idempotent: existing same-day penalties are preserved.
+insert into public.penalties (
+  user_id,
+  date,
+  amount,
+  consecutive_count,
+  status,
+  reason,
+  source_type,
+  source_id
+)
+select
+  c.user_id,
+  c.date,
+  public.compute_penalty_amount(public.compute_consecutive_misses(c.user_id, c.date)),
+  public.compute_consecutive_misses(c.user_id, c.date),
+  'pending',
+  '训练日未打卡',
+  'missed_checkin',
+  c.id::text
+from public.check_ins c
+left join public.penalties p
+  on p.user_id = c.user_id
+ and p.date = c.date
+where c.status = 'missed'
+  and p.id is null
+on conflict (user_id, date) do nothing;
+
 drop function if exists public.coach_add_member(text);
 create or replace function public.coach_add_member(identifier text, display_name text)
 returns uuid

@@ -216,6 +216,12 @@ function TodayCheckInSummary({ checkIn }: { checkIn: CheckIn }) {
     <div className="status-card checkin-clause-card contract-clause-card">
       <StatusPill status={checkIn.status} />
       <p>{checkIn.leave_reason || checkIn.note || '记录已同步。'}</p>
+      {checkIn.review_comment && (
+        <div className="coach-comment-box">
+          <strong>教练评语</strong>
+          <p>{checkIn.review_comment}</p>
+        </div>
+      )}
     </div>
   )
 }

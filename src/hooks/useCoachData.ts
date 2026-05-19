@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { readCache, writeCache } from '../lib/cache'
 import { DEMO_STUDENT_ID, PREVIEW_ROLE_KEY, isLocalhostPreview } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import { buildMissedPenalty } from '../lib/sync'
 import { notifySyncError } from '../lib/syncError'
-import type { CheckIn, Penalty, Profile } from '../lib/types'
+import type { CheckIn, Penalty, Plan, Profile } from '../lib/types'
 
 type CoachDataState = {
   checkIns: CheckIn[]
@@ -22,6 +23,8 @@ const demoStudent: Profile = {
 const COACH_RECORD_LIMIT = 500
 
 let coachDataCache: Omit<CoachDataState, 'loading'> | null = null
+
+type CheckInReviewUpdate = Partial<Pick<CheckIn, 'review_comment' | 'reviewed_at' | 'reviewer_id'>>
 
 function shouldUseDemoCoachData() {
   return !isSupabaseConfigured || !supabase || (isLocalhostPreview() && localStorage.getItem(PREVIEW_ROLE_KEY) === 'coach')
@@ -149,10 +152,10 @@ export function useCoachData() {
     }
   }, [load])
 
-  const updateCheckIn = async (id: string, status: CheckIn['status']) => {
+  const updateCheckIn = async (id: string, status: CheckIn['status'], review?: CheckInReviewUpdate) => {
     if (shouldUseDemoCoachData()) {
       const cache = readCache(demoStudent.id)
-      const next = cache.checkIns.map((item) => (item.id === id ? { ...item, status } : item))
+      const next = cache.checkIns.map((item) => (item.id === id ? { ...item, status, ...review } : item))
       writeCache({ ...cache, checkIns: next }, demoStudent.id)
       setState((current) => {
         const nextState = { ...current, checkIns: next, ready: true }
@@ -163,8 +166,63 @@ export function useCoachData() {
     }
     const client = supabase
     if (!client) return
-    const { error } = await client.from('check_ins').update({ status }).eq('id', id)
+    const { error } = await client.from('check_ins').update({ status, ...review }).eq('id', id)
     if (error) throw error
+    await load()
+  }
+
+  const markCheckInMissedWithPenalty = async (checkIn: CheckIn, plans: Array<Pick<Plan, 'date' | 'is_training'>>, review?: CheckInReviewUpdate) => {
+    const nextCheckIn = { ...checkIn, status: 'missed' as const, ...review }
+    const userCheckIns = state.checkIns
+      .map((item) => (item.id === checkIn.id ? nextCheckIn : item))
+      .filter((item) => item.user_id === checkIn.user_id)
+    const userPenalties = state.penalties.filter((item) => item.user_id === checkIn.user_id)
+
+    if (shouldUseDemoCoachData()) {
+      const cache = readCache(demoStudent.id)
+      const nextCheckIns = cache.checkIns.map((item) => (item.id === checkIn.id ? nextCheckIn : item))
+      const hasPenalty = cache.penalties.some((item) => item.user_id === checkIn.user_id && item.date === checkIn.date)
+      const nextPenalties = hasPenalty
+        ? cache.penalties
+        : [...cache.penalties, buildMissedPenalty(checkIn.user_id, checkIn.date, plans, userCheckIns, userPenalties, checkIn.id)]
+      writeCache({ ...cache, checkIns: nextCheckIns, penalties: nextPenalties }, demoStudent.id)
+      setState((current) => {
+        const nextState = { ...current, checkIns: nextCheckIns, penalties: nextPenalties, ready: true }
+        rememberCoachData({ checkIns: nextState.checkIns, penalties: nextState.penalties, profiles: nextState.profiles, ready: nextState.ready })
+        return nextState
+      })
+      return
+    }
+
+    const client = supabase
+    if (!client) return
+
+    const { error: checkInError } = await client.from('check_ins').update({ status: 'missed', ...review }).eq('id', checkIn.id)
+    if (checkInError) throw checkInError
+
+    const { data: existingPenalty, error: existingPenaltyError } = await client
+      .from('penalties')
+      .select('id')
+      .eq('user_id', checkIn.user_id)
+      .eq('date', checkIn.date)
+      .maybeSingle()
+    if (existingPenaltyError) throw existingPenaltyError
+
+    if (!existingPenalty) {
+      let penaltyPlan = plans
+      if (penaltyPlan.length === 0) {
+        const { data: remotePlans, error: plansError } = await client
+          .from('plans')
+          .select('date,is_training')
+          .eq('user_id', checkIn.user_id)
+        if (!plansError) penaltyPlan = (remotePlans ?? []) as Array<Pick<Plan, 'date' | 'is_training'>>
+      }
+      const penalty = buildMissedPenalty(checkIn.user_id, checkIn.date, penaltyPlan, userCheckIns, userPenalties, checkIn.id)
+      const { id: _id, ...row } = penalty
+      const { error: penaltyError } = await client.from('penalties').insert(row)
+      if (penaltyError && penaltyError.code !== '23505') throw penaltyError
+    }
+
     await load()
   }
 
@@ -194,6 +252,7 @@ export function useCoachData() {
     profiles: state.profiles,
     ready: state.ready,
     reload: load,
+    markCheckInMissedWithPenalty,
     updateCheckIn,
     updatePenalty,
   }

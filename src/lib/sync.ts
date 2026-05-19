@@ -2,6 +2,35 @@ import { isPastDeadline } from './date'
 import { computeConsecutiveMisses, computePenaltyAmount } from './penalty'
 import type { CheckIn, Penalty, Plan } from './types'
 
+export function buildMissedPenalty(
+  userId: string,
+  date: string,
+  plan: Array<Pick<Plan, 'date' | 'is_training'>>,
+  checkIns: CheckIn[],
+  penalties: Penalty[],
+  sourceId?: string | null,
+): Penalty {
+  const sortedPlan = plan.slice().sort((a, b) => a.date.localeCompare(b.date))
+  const consecutive = computeConsecutiveMisses(
+    date,
+    sortedPlan,
+    checkIns.filter((checkIn) => checkIn.user_id === userId),
+    penalties.filter((penalty) => penalty.user_id === userId),
+  )
+
+  return {
+    id: `local-penalty-${date}`,
+    user_id: userId,
+    date,
+    amount: computePenaltyAmount(consecutive),
+    consecutive_count: consecutive,
+    status: 'pending',
+    reason: '训练日未打卡',
+    source_type: 'missed_checkin',
+    source_id: sourceId ?? null,
+  }
+}
+
 export function buildMissedSync(
   userId: string,
   plan: Array<Pick<Plan, 'id' | 'date' | 'deadline' | 'is_training'>>,
@@ -26,15 +55,10 @@ export function buildMissedSync(
       if (existingCheckIn?.status === 'completed' || existingCheckIn?.status === 'excused') return
       if (existingPenalty) return
 
-      const consecutive = computeConsecutiveMisses(
-        day.date,
-        sortedPlan,
-        nextCheckIns.filter((checkIn) => checkIn.user_id === userId),
-        nextPenalties.filter((penalty) => penalty.user_id === userId),
-      )
+      const missedCheckInId = `local-missed-${day.date}`
 
       nextCheckIns.push({
-        id: `local-missed-${day.date}`,
+        id: missedCheckInId,
         user_id: userId,
         plan_id: day.id,
         date: day.date,
@@ -44,15 +68,7 @@ export function buildMissedSync(
         note: '过了截止时间自动判定缺卡',
         leave_reason: null,
       })
-      nextPenalties.push({
-        id: `local-penalty-${day.date}`,
-        user_id: userId,
-        date: day.date,
-        amount: computePenaltyAmount(consecutive),
-        consecutive_count: consecutive,
-        status: 'pending',
-        reason: '训练日未打卡',
-      })
+      nextPenalties.push(buildMissedPenalty(userId, day.date, sortedPlan, nextCheckIns, nextPenalties, null))
     })
 
   return { checkIns: nextCheckIns, penalties: nextPenalties }

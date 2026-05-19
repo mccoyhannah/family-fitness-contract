@@ -79,7 +79,7 @@ export function usePenalties(userId?: string) {
     if (row.id?.startsWith('local-')) delete row.id
     const client = supabase
     if (!client) return
-    const { error } = await client.from('penalties').upsert(row, { onConflict: 'user_id,date' })
+    const { error } = await client.from('penalties').upsert(row, { onConflict: 'user_id,date', ignoreDuplicates: true })
     if (error) throw error
     await load()
   }

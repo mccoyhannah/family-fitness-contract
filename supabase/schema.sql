@@ -83,6 +83,9 @@ create table if not exists public.check_ins (
 );
 
 alter table public.check_ins add column if not exists plan_id uuid references public.plans(id) on delete set null;
+alter table public.check_ins add column if not exists review_comment text;
+alter table public.check_ins add column if not exists reviewed_at timestamptz;
+alter table public.check_ins add column if not exists reviewer_id uuid references public.profiles(id) on delete set null;
 
 create table if not exists public.penalties (
   id uuid primary key default gen_random_uuid(),
@@ -96,9 +99,18 @@ create table if not exists public.penalties (
   unique(user_id, date)
 );
 
+alter table public.penalties add column if not exists source_type text;
+alter table public.penalties add column if not exists source_id text;
 alter table public.penalties drop constraint if exists penalties_status_check;
 alter table public.penalties add constraint penalties_status_check
 check (status in ('pending', 'payment_reported', 'paid', 'waived'));
+alter table public.penalties drop constraint if exists penalties_source_type_check;
+alter table public.penalties add constraint penalties_source_type_check
+check (source_type is null or source_type in ('missed_checkin'));
+
+create unique index if not exists penalties_source_unique_idx
+on public.penalties (source_type, source_id)
+where source_type is not null and source_id is not null;
 
 create table if not exists public.check_in_evidence (
   id uuid primary key default gen_random_uuid(),
@@ -206,6 +218,161 @@ drop trigger if exists prevent_profile_role_change on public.profiles;
 create trigger prevent_profile_role_change
 before update on public.profiles
 for each row execute function public.prevent_profile_role_change();
+
+create or replace function public.guard_check_in_review_fields()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'INSERT' then
+    if new.review_comment is not null
+       or new.reviewed_at is not null
+       or new.reviewer_id is not null then
+      raise exception 'review fields cannot be set on insert';
+    end if;
+    return new;
+  end if;
+
+  if new.review_comment is distinct from old.review_comment
+     or new.reviewed_at is distinct from old.reviewed_at
+     or new.reviewer_id is distinct from old.reviewer_id then
+    if not public.is_member_coach(new.user_id) then
+      raise exception 'only bound coach can change review fields';
+    end if;
+
+    new.reviewer_id := auth.uid();
+    new.reviewed_at := now();
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists guard_check_in_review_fields on public.check_ins;
+create trigger guard_check_in_review_fields
+before insert or update on public.check_ins
+for each row execute function public.guard_check_in_review_fields();
+
+create or replace function public.compute_penalty_amount(consecutive_days int)
+returns int
+language sql
+immutable
+as $$
+  select least(10 * greatest(1, consecutive_days), 50);
+$$;
+
+create or replace function public.compute_consecutive_misses(student uuid, target_date date)
+returns int
+language plpgsql
+security definer
+set search_path = public
+stable
+as $$
+declare
+  miss_count int := 1;
+  cursor_date date := target_date - 1;
+  check_status text;
+  penalty_status text;
+begin
+  for _index in 0..29 loop
+    if not exists (
+      select 1
+      from public.plans
+      where user_id = student
+        and date = cursor_date
+        and is_training = true
+    ) then
+      exit;
+    end if;
+
+    select status into check_status
+    from public.check_ins
+    where user_id = student
+      and date = cursor_date
+    limit 1;
+
+    select status into penalty_status
+    from public.penalties
+    where user_id = student
+      and date = cursor_date
+    limit 1;
+
+    if check_status = 'missed' or (penalty_status is not null and penalty_status <> 'waived') then
+      miss_count := miss_count + 1;
+      cursor_date := cursor_date - 1;
+      check_status := null;
+      penalty_status := null;
+    else
+      exit;
+    end if;
+  end loop;
+
+  return miss_count;
+end;
+$$;
+
+create or replace function public.ensure_penalty_for_missed_check_in()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  miss_count int;
+  miss_amount int;
+begin
+  if new.status = 'missed' and (tg_op = 'INSERT' or old.status is distinct from 'missed') then
+    miss_count := public.compute_consecutive_misses(new.user_id, new.date);
+    miss_amount := public.compute_penalty_amount(miss_count);
+
+    insert into public.penalties (
+      user_id,
+      date,
+      amount,
+      consecutive_count,
+      status,
+      reason,
+      source_type,
+      source_id
+    )
+    values (
+      new.user_id,
+      new.date,
+      miss_amount,
+      miss_count,
+      'pending',
+      '训练日未打卡',
+      'missed_checkin',
+      new.id::text
+    )
+    on conflict (user_id, date) do update
+    set amount = case
+          when public.penalties.status in ('paid', 'payment_reported') then public.penalties.amount
+          else excluded.amount
+        end,
+        consecutive_count = case
+          when public.penalties.status in ('paid', 'payment_reported') then public.penalties.consecutive_count
+          else excluded.consecutive_count
+        end,
+        status = case
+          when public.penalties.status in ('paid', 'payment_reported') then public.penalties.status
+          else 'pending'
+        end,
+        reason = excluded.reason,
+        source_type = coalesce(public.penalties.source_type, excluded.source_type),
+        source_id = coalesce(public.penalties.source_id, excluded.source_id);
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists ensure_penalty_for_missed_check_in on public.check_ins;
+create trigger ensure_penalty_for_missed_check_in
+after insert or update on public.check_ins
+for each row execute function public.ensure_penalty_for_missed_check_in();
 
 drop function if exists public.coach_add_member(text);
 create or replace function public.coach_add_member(identifier text, display_name text)
@@ -462,6 +629,18 @@ to authenticated
 with check (
   user_id = auth.uid()
   and status = 'pending'
+  and (source_type is null or source_type = 'missed_checkin')
+  and source_id is null
+);
+
+drop policy if exists "coach_insert_bound_penalties" on public.penalties;
+create policy "coach_insert_bound_penalties"
+on public.penalties for insert
+to authenticated
+with check (
+  public.is_member_coach(user_id)
+  and status = 'pending'
+  and (source_type is null or source_type = 'missed_checkin')
 );
 
 drop policy if exists "students_update_own_penalties" on public.penalties;
@@ -571,7 +750,10 @@ revoke insert on public.coach_members from authenticated;
 grant update (display_name) on public.coach_members to authenticated;
 grant select, insert, update, delete on public.plans to authenticated;
 grant select, insert, update, delete on public.plan_items to authenticated;
-grant select, insert, update, delete on public.check_ins to authenticated;
+grant select, delete on public.check_ins to authenticated;
+revoke insert, update on public.check_ins from authenticated;
+grant insert (user_id, plan_id, date, status, fatigue, issues, note, leave_reason) on public.check_ins to authenticated;
+grant update (plan_id, status, fatigue, issues, note, leave_reason, review_comment, reviewed_at, reviewer_id) on public.check_ins to authenticated;
 grant select, insert, delete on public.penalties to authenticated;
 revoke update on public.penalties from authenticated;
 grant update (status) on public.penalties to authenticated;

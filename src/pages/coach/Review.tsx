@@ -48,7 +48,7 @@ export default function CoachReview() {
     selectedMemberId,
     setSelectedMemberId,
   } = useMembers(coach?.id)
-  const { checkIns, penalties, updateCheckIn, updatePenalty } = useCoachData()
+  const { checkIns, markCheckInMissedWithPenalty, penalties, updateCheckIn, updatePenalty } = useCoachData()
   const { evidenceFor, reload: reloadEvidence } = useCheckInEvidence('coach')
   const retriedEvidenceKeysRef = useRef(new Set<string>())
   const reviewingCheckInIdRef = useRef('')
@@ -57,6 +57,7 @@ export default function CoachReview() {
   const [confirmRequest, setConfirmRequest] = useState<ReviewConfirmRequest | null>(null)
   const [expandedCheckInIds, setExpandedCheckInIds] = useState<Set<string>>(() => new Set())
   const [reviewingCheckInId, setReviewingCheckInId] = useState('')
+  const [reviewCommentById, setReviewCommentById] = useState<Record<string, string>>({})
   const [retryNonceByEvidenceKey, setRetryNonceByEvidenceKey] = useState<Record<string, number>>({})
   const { plans } = usePlans(selectedMember?.id)
   const memberNameById = new Map(members.map((member) => [member.id, displayMemberLabel(member)]))
@@ -65,14 +66,20 @@ export default function CoachReview() {
     : []
   const evidenceCount = pending.reduce((sum, item) => sum + evidenceFor(item.id).length, 0)
 
-  const approveLeave = async (id: string, userId: string, date: string) => {
-    await updateCheckIn(id, 'excused')
+  const buildReviewUpdate = (comment: string) => ({
+    review_comment: comment.trim() || null,
+    reviewed_at: new Date().toISOString(),
+    reviewer_id: coach?.id ?? null,
+  })
+
+  const approveLeave = async (id: string, userId: string, date: string, comment: string) => {
+    await updateCheckIn(id, 'excused', buildReviewUpdate(comment))
     const penalty = penalties.find((item) => item.user_id === userId && item.date === date)
     if (penalty) await updatePenalty(penalty.id, 'waived')
   }
 
-  const approveCheckIn = async (id: string, userId: string, date: string) => {
-    await updateCheckIn(id, 'completed')
+  const approveCheckIn = async (id: string, userId: string, date: string, comment: string) => {
+    await updateCheckIn(id, 'completed', buildReviewUpdate(comment))
     const penalty = penalties.find((item) => item.user_id === userId && item.date === date)
     if (penalty) await updatePenalty(penalty.id, 'waived')
   }
@@ -151,11 +158,13 @@ export default function CoachReview() {
         {pending.length === 0 && <p className="muted">当前没有待确认打卡。</p>}
         {pending.map((item) => {
           const displayName = coachMemberLabel(item.user_id)
-          const plan = plans.find((row) => row.id === item.plan_id || row.date === item.date)
+          const memberPlans = plans.filter((row) => row.user_id === item.user_id)
+          const plan = memberPlans.find((row) => row.id === item.plan_id || row.date === item.date)
           const itemEvidence = evidenceFor(item.id)
           const hasWaiverRequest = isWaiverRequest(item.leave_reason)
           const waiverReason = cleanWaiverReason(item.leave_reason)
           const isExpanded = expandedCheckInIds.has(item.id)
+          const reviewComment = reviewCommentById[item.id] ?? item.review_comment ?? ''
           return (
             <article className={`review-card review-detail-card${hasWaiverRequest ? ' waiver-review-card' : ''}`} key={item.id}>
               <div className="review-card-summary">
@@ -193,7 +202,12 @@ export default function CoachReview() {
                   failedEvidenceKeys={failedEvidenceKeys}
                   hasWaiverRequest={hasWaiverRequest}
                   onEvidenceError={handleEvidenceError}
+                  onReviewCommentChange={(nextComment) =>
+                    setReviewCommentById((current) => ({ ...current, [item.id]: nextComment }))
+                  }
                   plan={plan}
+                  reviewComment={reviewComment}
+                  reviewDisabled={Boolean(reviewingCheckInId || confirmRequest)}
                   signedEvidenceKey={evidenceKey}
                   signedEvidenceSrc={evidenceSrc}
                   waiverReason={waiverReason}
@@ -205,7 +219,7 @@ export default function CoachReview() {
                   onClick={() =>
                     requestReviewAction(
                       item.id,
-                      () => approveCheckIn(item.id, item.user_id, item.date),
+                      () => approveCheckIn(item.id, item.user_id, item.date, reviewComment),
                       hasWaiverRequest ? '已通过补卡，并处理当天罚款。' : '已通过这条打卡，并处理当天罚款。',
                       hasWaiverRequest
                         ? `确认通过 ${displayName} 在 ${formatDay(item.date)} 的补卡申请，并免除当天罚款？`
@@ -222,7 +236,7 @@ export default function CoachReview() {
                     onClick={() =>
                       requestReviewAction(
                         item.id,
-                        () => approveLeave(item.id, item.user_id, item.date),
+                        () => approveLeave(item.id, item.user_id, item.date, reviewComment),
                         '已准假，并处理当天罚款。',
                         `确认准假 ${displayName} 在 ${formatDay(item.date)} 的记录？`,
                       )
@@ -237,9 +251,9 @@ export default function CoachReview() {
                   onClick={() =>
                     requestReviewAction(
                       item.id,
-                      () => updateCheckIn(item.id, 'missed'),
-                      '已记录为缺卡。',
-                      `确认把 ${displayName} 在 ${formatDay(item.date)} 的记录改为缺卡？`,
+                      () => markCheckInMissedWithPenalty(item, memberPlans, buildReviewUpdate(reviewComment)),
+                      '已记录为缺卡，并同步当天罚款。',
+                      `确认把 ${displayName} 在 ${formatDay(item.date)} 的记录改为缺卡，并同步当天罚款？`,
                     )
                   }
                   disabled={Boolean(reviewingCheckInId || confirmRequest)}
@@ -280,7 +294,10 @@ function ReviewExpandedDetails({
   failedEvidenceKeys,
   hasWaiverRequest,
   onEvidenceError,
+  onReviewCommentChange,
   plan,
+  reviewComment,
+  reviewDisabled,
   signedEvidenceKey,
   signedEvidenceSrc,
   waiverReason,
@@ -290,7 +307,10 @@ function ReviewExpandedDetails({
   failedEvidenceKeys: Set<string>
   hasWaiverRequest: boolean
   onEvidenceError: (evidenceId: string, signedUrl: string) => void
+  onReviewCommentChange: (comment: string) => void
   plan?: Plan
+  reviewComment: string
+  reviewDisabled: boolean
   signedEvidenceKey: (evidenceId: string, signedUrl: string) => string
   signedEvidenceSrc: (signedUrl: string, evidenceId: string) => string
   waiverReason: string
@@ -375,6 +395,24 @@ function ReviewExpandedDetails({
         ) : (
           <p className="review-empty-detail">没有找到关联计划，可能是旧记录，或当前成员计划还未同步完成。</p>
         )}
+      </section>
+
+      <section className="review-detail-section review-comment-section">
+        <div className="review-detail-head">
+          <strong>审核评语</strong>
+          <span>成员端可见</span>
+        </div>
+        <label className="review-comment-field">
+          给成员的一句话反馈，可空
+          <textarea
+            disabled={reviewDisabled}
+            maxLength={220}
+            rows={4}
+            value={reviewComment}
+            onChange={(event) => onReviewCommentChange(event.target.value)}
+            placeholder="例如：动作完成得不错，下次深蹲注意膝盖方向。"
+          />
+        </label>
       </section>
     </div>
   )

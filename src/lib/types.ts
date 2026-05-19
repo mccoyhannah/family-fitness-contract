@@ -1,6 +1,7 @@
 export type Role = 'student' | 'coach'
 export type CheckInStatus = 'completed' | 'excused' | 'missed' | 'pending_review'
 export type PenaltyStatus = 'pending' | 'payment_reported' | 'paid' | 'waived'
+export type PenaltySourceType = 'missed_checkin'
 export type PlanSource = 'coach' | 'student'
 
 export type Profile = {
@@ -28,6 +29,9 @@ export type CheckIn = {
   issues: string[]
   note: string
   leave_reason: string | null
+  review_comment?: string | null
+  reviewed_at?: string | null
+  reviewer_id?: string | null
   created_at?: string
 }
 
@@ -39,6 +43,8 @@ export type Penalty = {
   consecutive_count: number
   status: PenaltyStatus
   reason: string
+  source_type?: PenaltySourceType | null
+  source_id?: string | null
   created_at?: string
 }
 

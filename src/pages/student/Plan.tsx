@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { usePlans } from '../../hooks/usePlans'
 import { formatDay } from '../../lib/date'
 import { buildPlan, planToExercises } from '../../lib/plan'
+import { formatPlanFocusText, formatPlanSourceLabel } from '../../lib/planDisplay'
 
 export default function Plan() {
   const { profile } = useAuth()
@@ -28,11 +29,13 @@ export default function Plan() {
             <article className="day-card" key={day.date}>
               <div className="day-head">
                 <strong>{formatDay(day.date)}</strong>
-                <span>{plan ? (plan.source === 'coach' ? '教练制定' : '自己制定') : '未制定'}</span>
+                <span className={plan ? `plan-source-tag ${plan.source}` : 'plan-source-tag empty'}>
+                  {plan ? formatPlanSourceLabel(plan.source) : '未制定'}
+                </span>
               </div>
               {plan ? (
                 <>
-                  <p className="muted">{plan.title} · {plan.focus} · 截止 {plan.deadline}</p>
+                  <p className="muted">{plan.title} · {formatPlanFocusText(plan.focus, plan.source)} · 截止 {plan.deadline}</p>
                   {planToExercises(plan).map((exercise) => (
                     <ExerciseCard exercise={exercise} key={exercise.id} />
                   ))}

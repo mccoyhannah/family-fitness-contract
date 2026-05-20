@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { readCache, writeCache } from '../lib/cache'
 import { shouldUsePreviewLocalScope } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import { friendlySupabaseMessage } from '../lib/supabaseErrors'
 import { notifySyncError } from '../lib/syncError'
 import type { CheckInEvidence } from '../lib/types'
 
@@ -121,7 +122,7 @@ export function useCheckInEvidence(scope = 'demo') {
         contentType: file.type,
         upsert: false,
       })
-      if (uploadError) throw uploadError
+      if (uploadError) throw new Error(friendlySupabaseMessage(uploadError, '照片上传失败：'))
 
       const { data, error } = await client
         .from('check_in_evidence')
@@ -135,7 +136,10 @@ export function useCheckInEvidence(scope = 'demo') {
         })
         .select('*')
         .single()
-      if (error) throw error
+      if (error) {
+        void client.storage.from(bucket).remove([path])
+        throw new Error(friendlySupabaseMessage(error, '照片已上传，但证据记录保存失败：'))
+      }
       inserted.push(data as CheckInEvidence)
     }
 
@@ -143,10 +147,47 @@ export function useCheckInEvidence(scope = 'demo') {
     return inserted
   }
 
+  const deleteEvidenceForCheckIn = async (checkInId: string, userId?: string) => {
+    if (shouldUseLocalEvidence(scope)) {
+      const cache = readCache(scope)
+      const nextEvidence = cache.evidence.filter(
+        (row) => row.check_in_id !== checkInId || Boolean(userId && row.user_id !== userId),
+      )
+      writeCache({ ...cache, evidence: nextEvidence }, scope)
+      setEvidence(nextEvidence)
+      return
+    }
+
+    const client = supabase
+    if (!client) throw new Error('Supabase 未配置，无法删除照片。')
+
+    let selectQuery = client
+      .from('check_in_evidence')
+      .select('id, storage_path')
+      .eq('check_in_id', checkInId)
+    if (userId) selectQuery = selectQuery.eq('user_id', userId)
+
+    const { data, error } = await selectQuery
+    if (error) throw new Error(friendlySupabaseMessage(error, '照片记录读取失败：'))
+
+    const paths = (data ?? []).map((row) => row.storage_path).filter(Boolean)
+    if (paths.length > 0) {
+      const { error: storageError } = await client.storage.from(bucket).remove(paths)
+      if (storageError) throw new Error(friendlySupabaseMessage(storageError, '照片删除失败：'))
+    }
+
+    let deleteQuery = client.from('check_in_evidence').delete().eq('check_in_id', checkInId)
+    if (userId) deleteQuery = deleteQuery.eq('user_id', userId)
+    const { error: deleteError } = await deleteQuery
+    if (deleteError) throw new Error(friendlySupabaseMessage(deleteError, '照片记录删除失败：'))
+
+    await load()
+  }
+
   const evidenceFor = useCallback(
     (checkInId: string) => evidence.filter((row) => row.check_in_id === checkInId),
     [evidence],
   )
 
-  return { evidence, evidenceFor, loading, reload: load, uploadEvidence }
+  return { deleteEvidenceForCheckIn, evidence, evidenceFor, loading, reload: load, uploadEvidence }
 }

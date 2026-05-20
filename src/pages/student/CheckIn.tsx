@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { CheckCircle2, ImagePlus, Loader2, Trash2, UploadCloud } from 'lucide-react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FatigueCards from '../../components/FatigueCards'
 import { useAuth } from '../../hooks/useAuth'
@@ -6,13 +7,20 @@ import { useCheckIns } from '../../hooks/useCheckIns'
 import { useCheckInEvidence } from '../../hooks/useCheckInEvidence'
 import { usePlans } from '../../hooks/usePlans'
 import { toISODate } from '../../lib/date'
+import { formatFileSize, MAX_EVIDENCE_FILES, prepareEvidenceFile } from '../../lib/evidenceFiles'
 import { planToExercises } from '../../lib/plan'
+import { formatPlanFocusText, formatPlanSourceLabel } from '../../lib/planDisplay'
+import { rawErrorMessage } from '../../lib/supabaseErrors'
 
 type EvidenceFile = {
   id: string
   file: File
+  originalName: string
   url: string
+  warning?: string
 }
+
+type SubmitStage = 'idle' | 'saving' | 'uploading'
 
 export default function CheckIn() {
   const { profile } = useAuth()
@@ -26,11 +34,16 @@ export default function CheckIn() {
   const evidenceFilesRef = useRef<EvidenceFile[]>([])
   const mountedRef = useRef(true)
   const [error, setError] = useState('')
+  const [fileMessage, setFileMessage] = useState('')
   const [pendingEvidenceCheckInId, setPendingEvidenceCheckInId] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
+  const [processingFiles, setProcessingFiles] = useState(false)
+  const [submitStage, setSubmitStage] = useState<SubmitStage>('idle')
   const navigate = useNavigate()
+  const fileInputId = useId()
   const today = toISODate(new Date())
   const todayPlan = plans.find((plan) => plan.date === today)
+  const submitting = submitStage !== 'idle'
+  const uploadSlotsLeft = MAX_EVIDENCE_FILES - evidenceFiles.length
 
   useEffect(() => {
     return () => {
@@ -47,11 +60,16 @@ export default function CheckIn() {
 
   const submit = async () => {
     if (submitting || !profile || !todayPlan) return
-    setSubmitting(true)
+    if (evidenceFilesRef.current.length === 0) {
+      setError('请先添加至少 1 张训练照片，再提交打卡。')
+      return
+    }
     setError('')
+    setFileMessage('')
     let savedCheckInId = pendingEvidenceCheckInId
     try {
       if (!savedCheckInId) {
+        setSubmitStage('saving')
         const checkIn = await upsertCheckIn({
           user_id: profile.id,
           plan_id: todayPlan.id,
@@ -66,37 +84,75 @@ export default function CheckIn() {
         savedCheckInId = checkIn.id
         if (mountedRef.current) setPendingEvidenceCheckInId(checkIn.id)
       }
-      const files = evidenceFiles.map((entry) => entry.file)
-      if (files.length > 0) await uploadEvidence(savedCheckInId, profile.id, files)
+      setSubmitStage('uploading')
+      const files = evidenceFilesRef.current.map((entry) => entry.file)
+      if (files.length === 0) throw new Error('请先添加至少 1 张训练照片。')
+      await uploadEvidence(savedCheckInId, profile.id, files)
       if (mountedRef.current) setPendingEvidenceCheckInId(null)
       navigate('/')
     } catch (err) {
       if (mountedRef.current) {
-        setError(
-          savedCheckInId
-            ? '打卡已保存，但图片证据上传失败。你可以重新选择图片再提交一次，或回到今日页等待审核。'
-            : err instanceof Error
-              ? err.message
-              : '提交失败，请稍后重试。',
-        )
+        const fallback = savedCheckInId
+          ? '打卡已保存，但图片证据上传失败。你可以重新选择图片再提交一次。'
+          : '打卡记录保存失败，请稍后重试。'
+        setError(rawErrorMessage(err, fallback))
       }
     } finally {
-      if (mountedRef.current) setSubmitting(false)
+      if (mountedRef.current) setSubmitStage('idle')
     }
   }
 
-  const chooseFiles = (nextFiles: FileList | null) => {
-    evidenceFilesRef.current.forEach((entry) => URL.revokeObjectURL(entry.url))
-    const next = Array.from(nextFiles ?? [])
-      .filter((file) => file.type.startsWith('image/'))
-      .slice(0, 3)
-      .map((file) => ({
-        id: makeEvidenceId(),
-        file,
-        url: URL.createObjectURL(file),
-      }))
+  const chooseFiles = async (nextFiles: FileList | null) => {
+    const incoming = Array.from(nextFiles ?? [])
+    if (processingFiles) {
+      setFileMessage('上一张照片还在处理，请稍等。')
+      return
+    }
+    if (incoming.length === 0) {
+      setError('')
+      setFileMessage('没有选到照片，请换一张或用系统浏览器重试。')
+      return
+    }
+    setError('')
+    setFileMessage('正在处理照片，请稍等。')
+    const slotsLeft = MAX_EVIDENCE_FILES - evidenceFilesRef.current.length
+    if (slotsLeft <= 0) {
+      setFileMessage(`最多只能上传 ${MAX_EVIDENCE_FILES} 张照片。`)
+      return
+    }
+
+    setProcessingFiles(true)
+    const accepted: EvidenceFile[] = []
+    const messages: string[] = []
+    const filesToPrepare = incoming.slice(0, slotsLeft)
+    const skippedCount = Math.max(0, incoming.length - slotsLeft)
+
+    for (const file of filesToPrepare) {
+      try {
+        const prepared = await prepareEvidenceFile(file)
+        accepted.push({
+          id: makeEvidenceId(),
+          file: prepared.file,
+          originalName: prepared.originalName,
+          url: URL.createObjectURL(prepared.file),
+          warning: prepared.warning,
+        })
+        if (prepared.warning) messages.push(prepared.warning)
+      } catch (err) {
+        messages.push(rawErrorMessage(err, `${file.name} 处理失败。`))
+      }
+    }
+
+    if (skippedCount > 0) messages.push(`最多保留 ${MAX_EVIDENCE_FILES} 张，已略过 ${skippedCount} 张。`)
+    const next = [...evidenceFilesRef.current, ...accepted]
     evidenceFilesRef.current = next
-    setEvidenceFiles(next)
+    if (mountedRef.current) {
+      setEvidenceFiles(next)
+      setFileMessage(messages.join(' ') || (accepted.length === 0 ? '照片处理失败，请换一张再试。' : ''))
+      setProcessingFiles(false)
+    } else {
+      accepted.forEach((entry) => URL.revokeObjectURL(entry.url))
+    }
   }
 
   const removeFile = (id: string) => {
@@ -105,6 +161,8 @@ export default function CheckIn() {
     const next = evidenceFiles.filter((entry) => entry.id !== id)
     evidenceFilesRef.current = next
     setEvidenceFiles(next)
+    setFileMessage('')
+    setError('')
   }
 
   const toggleIssue = (issue: string) => {
@@ -121,13 +179,13 @@ export default function CheckIn() {
   if (plansLoading && plans.length === 0) return <CheckInLoadingSkeleton />
 
   return (
-    <section className="screen with-nav">
-      <div className="page-title">
-        <h2>提交打卡</h2>
+    <section className="screen with-nav checkin-screen">
+      <div className="checkin-title-block">
+        <h2>训练打卡</h2>
         <p>
           {pendingEvidenceCheckInId
-            ? '打卡记录已保存。现在只需要重新上传图片证据，或直接返回今日页等待审核。'
-            : '打卡会关联今日计划，并把图片证据上传到 Supabase Storage。'}
+            ? '打卡记录已保存，重新添加照片后继续提交。'
+            : '记录状态，添加 1-3 张训练照片后提交给教练审核。'}
         </p>
       </div>
       {!todayPlan && (
@@ -137,12 +195,12 @@ export default function CheckIn() {
         </div>
       )}
       {todayPlan && (
-        <div className="day-card">
+        <div className="day-card checkin-plan-card">
           <div className="day-head">
             <strong>{todayPlan.title}</strong>
-            <span>{todayPlan.source === 'coach' ? '教练制定' : '自己制定'}</span>
+            <span className={`plan-source-tag ${todayPlan.source}`}>{formatPlanSourceLabel(todayPlan.source)}</span>
           </div>
-          <p className="muted">{todayPlan.focus}</p>
+          <p className="muted">{formatPlanFocusText(todayPlan.focus, todayPlan.source)} · 截止 {todayPlan.deadline}</p>
           <div className="exercise-list compact-list">
             {planToExercises(todayPlan).map((exercise) => (
               <span className="mini-chip" key={exercise.id}>{exercise.name}</span>
@@ -150,9 +208,16 @@ export default function CheckIn() {
           </div>
         </div>
       )}
-      <div className="form-card">
+      <div className="form-card checkin-panel">
+        <div className="checkin-section-head">
+          <span>01</span>
+          <div>
+            <strong>身体状态</strong>
+            <small>先记录今天训练后的感觉</small>
+          </div>
+        </div>
         <FatigueCards value={fatigue} onChange={changeFatigue} />
-        <div className="check-grid">
+        <div className="check-grid checkin-issue-grid">
           {['疼痛', '头晕', '胸闷', '不舒服'].map((issue) => (
             <label className="switch-row" key={issue}>
               <input
@@ -165,39 +230,86 @@ export default function CheckIn() {
             </label>
           ))}
         </div>
-        <label>
+        <label className="checkin-note-field">
           备注
-          <textarea disabled={submitting} value={note} onChange={(event) => setNote(event.target.value)} rows={4} />
-        </label>
-        <label>
-          图片证据，最多 3 张
-          <input
-            accept="image/*"
+          <textarea
             disabled={submitting}
+            placeholder="可以写今天哪里不舒服、哪个动作比较吃力。"
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            rows={4}
+          />
+        </label>
+
+        <div className="checkin-section-head">
+          <span>02</span>
+          <div>
+            <strong>图片证据</strong>
+            <small>{evidenceFiles.length}/{MAX_EVIDENCE_FILES} 张，单张不超过 5 MB</small>
+          </div>
+        </div>
+        <div className="evidence-uploader">
+          <input
+            accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif"
+            className="visually-hidden"
+            disabled={submitting || processingFiles || uploadSlotsLeft <= 0}
+            id={fileInputId}
             multiple
             type="file"
             onChange={(event) => {
-              chooseFiles(event.target.files)
+              void chooseFiles(event.target.files)
               event.currentTarget.value = ''
             }}
           />
-        </label>
+          <label
+            className={`upload-dropzone${uploadSlotsLeft <= 0 ? ' complete' : ''}${processingFiles ? ' busy' : ''}`}
+            htmlFor={uploadSlotsLeft <= 0 ? undefined : fileInputId}
+          >
+            <span className="upload-dropzone-icon" aria-hidden="true">
+              {processingFiles ? <Loader2 className="is-spinning" /> : uploadSlotsLeft <= 0 ? <CheckCircle2 /> : <ImagePlus />}
+            </span>
+            <strong>{processingFiles ? '正在处理照片' : uploadSlotsLeft <= 0 ? '照片已满' : '添加训练照片'}</strong>
+            <small>{uploadSlotsLeft <= 0 ? '最多 3 张，先删除后再添加。' : `还可以添加 ${uploadSlotsLeft} 张。`}</small>
+          </label>
+          <div className="upload-meter" aria-hidden="true">
+            {Array.from({ length: MAX_EVIDENCE_FILES }).map((_, index) => (
+              <span className={index < evidenceFiles.length ? 'filled' : ''} key={index} />
+            ))}
+          </div>
+        </div>
         {evidenceFiles.length > 0 && (
-          <div className="evidence-grid">
+          <div className="evidence-preview-grid">
             {evidenceFiles.map((preview) => (
-              <figure className="evidence-preview" key={preview.id}>
-                <button aria-label={`移除 ${preview.file.name}`} type="button" onClick={() => removeFile(preview.id)}>
-                  ×
+              <figure className="evidence-tile" key={preview.id}>
+                <img alt={preview.originalName} src={preview.url} />
+                <figcaption>
+                  <strong>{preview.originalName}</strong>
+                  <span>{formatFileSize(preview.file.size)}{preview.warning ? ' · 已压缩' : ''}</span>
+                </figcaption>
+                <button
+                  aria-label={`移除 ${preview.originalName}`}
+                  disabled={submitting}
+                  type="button"
+                  onClick={() => removeFile(preview.id)}
+                >
+                  <Trash2 size={16} />
                 </button>
-                <img alt={preview.file.name} src={preview.url} />
-                <figcaption>{preview.file.name}</figcaption>
               </figure>
             ))}
           </div>
         )}
-        {error && <strong className="form-error">{error}</strong>}
-        <button className="primary-action" disabled={!todayPlan || submitting} type="button" onClick={submit}>
-          {submitting ? '提交中...' : pendingEvidenceCheckInId ? '重新上传图片证据' : '提交打卡，等待审核'}
+        {fileMessage && <p className="form-success upload-feedback">{fileMessage}</p>}
+        {error && <strong className="form-error submit-error">{error}</strong>}
+        <button className="primary-action checkin-submit" disabled={!todayPlan || submitting || processingFiles} type="button" onClick={submit}>
+          {submitStage === 'saving' && <Loader2 className="is-spinning" size={20} />}
+          {submitStage === 'uploading' && <UploadCloud size={20} />}
+          {submitStage === 'saving'
+            ? '保存打卡中'
+            : submitStage === 'uploading'
+              ? '上传照片中'
+              : pendingEvidenceCheckInId
+                ? '重新上传照片，等待审核'
+                : '提交打卡，等待审核'}
         </button>
       </div>
     </section>

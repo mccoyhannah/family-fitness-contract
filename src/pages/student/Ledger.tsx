@@ -113,7 +113,7 @@ export default function Ledger() {
                 {penalty.status === 'payment_reported' && <span className="waiver-inline-note">付款已上报，等待管理端确认。</span>}
                 {checkIn?.review_comment && (
                   <div className="coach-comment-box ledger-comment-box">
-                    <strong>教练评语</strong>
+                    <strong>教练留言</strong>
                     <p>{checkIn.review_comment}</p>
                   </div>
                 )}

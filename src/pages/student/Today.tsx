@@ -1,4 +1,4 @@
-import { CalendarCheck, Flame, Umbrella } from 'lucide-react'
+import { CalendarCheck, ChevronDown, ChevronUp, Flame, RotateCcw, Umbrella } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ExerciseCard from '../../components/ExerciseCard'
@@ -6,21 +6,27 @@ import Metric from '../../components/Metric'
 import PlanEditor from '../../components/PlanEditor'
 import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
+import { useCheckInEvidence } from '../../hooks/useCheckInEvidence'
 import { useCheckIns } from '../../hooks/useCheckIns'
 import { usePenalties } from '../../hooks/usePenalties'
 import { usePlans } from '../../hooks/usePlans'
 import { toISODate } from '../../lib/date'
 import { notifyApp } from '../../lib/notice'
 import { buildPlan, planFromTemplate, planToExercises } from '../../lib/plan'
+import { formatPlanFocusText, formatPlanSourceLabel } from '../../lib/planDisplay'
 import { buildMissedSync } from '../../lib/sync'
+import { rawErrorMessage } from '../../lib/supabaseErrors'
 import type { CheckIn, Exercise, Plan, PlanDraft } from '../../lib/types'
 
 export default function Today() {
   const { profile } = useAuth()
-  const { checkIns, loading: checkInsLoading, reload: reloadCheckIns, setCheckIns, upsertCheckIn } = useCheckIns(profile?.id)
+  const { checkIns, loading: checkInsLoading, reload: reloadCheckIns, setCheckIns, upsertCheckIn, withdrawCheckIn } = useCheckIns(profile?.id)
+  const { deleteEvidenceForCheckIn } = useCheckInEvidence(profile?.id ?? 'demo')
   const { penalties, loading: penaltiesLoading, reload: reloadPenalties, setPenalties, upsertPenalty } = usePenalties(profile?.id)
   const { loading: plansLoading, plans, savePlan } = usePlans(profile?.id)
   const [leaveReason, setLeaveReason] = useState('')
+  const [memberCodeOpen, setMemberCodeOpen] = useState(false)
+  const [withdrawing, setWithdrawing] = useState(false)
   const navigate = useNavigate()
   const completedSyncKeyRef = useRef<string | null>(null)
   const syncingKeyRef = useRef<string | null>(null)
@@ -33,11 +39,6 @@ export default function Today() {
   const pendingTotal = penalties
     .filter((penalty) => penalty.status === 'pending')
     .reduce((sum, penalty) => sum + penalty.amount, 0)
-  const nextStep = todayCheckIn
-    ? '今天已记录，剩下就是等管理端确认。'
-    : todayPlan
-      ? '训练后去打卡页提交疲劳度、备注和图片证据。'
-      : '先自己制定今日计划，或等管理端下发计划。'
   const showLoadingSkeleton =
     (checkInsLoading || penaltiesLoading || plansLoading) &&
     plans.length === 0 &&
@@ -118,6 +119,24 @@ export default function Today() {
     }
   }
 
+  const withdrawTodayCheckIn = async () => {
+    if (!todayCheckIn || withdrawing) return
+    if (todayCheckIn.status !== 'pending_review') {
+      notifyApp({ tone: 'warning', message: '这条打卡已经审核，不能撤回。' })
+      return
+    }
+    setWithdrawing(true)
+    try {
+      await deleteEvidenceForCheckIn(todayCheckIn.id, todayCheckIn.user_id)
+      await withdrawCheckIn(todayCheckIn)
+      notifyApp({ tone: 'success', message: '已撤回本次打卡，可以重新提交。' })
+    } catch (err) {
+      notifyApp({ tone: 'warning', message: rawErrorMessage(err, '撤回失败，请稍后重试。') })
+    } finally {
+      setWithdrawing(false)
+    }
+  }
+
   const selfPlanDraft = useMemo<PlanDraft | null>(() => {
     if (!profile) return null
     return planFromTemplate(profile.id, todayTemplate, 'student')
@@ -144,9 +163,13 @@ export default function Today() {
         plan={todayPlan}
         todayExercises={todayExercises}
       />
-      <TodayActionCard nextStep={nextStep} />
-      {profile?.member_code && <MemberCodeCard memberCode={profile.member_code} />}
-      {todayCheckIn && <TodayCheckInSummary checkIn={todayCheckIn} />}
+      {todayCheckIn && (
+        <TodayCheckInSummary
+          checkIn={todayCheckIn}
+          withdrawing={withdrawing}
+          onWithdraw={withdrawTodayCheckIn}
+        />
+      )}
 
       {todayPlan ? (
         <TodayTrainingSection
@@ -160,6 +183,14 @@ export default function Today() {
         />
       ) : (
         selfPlanDraft && <TodaySelfPlanSection draft={selfPlanDraft} onSave={savePlan} />
+      )}
+
+      {profile?.member_code && (
+        <MemberCodeCard
+          memberCode={profile.member_code}
+          open={memberCodeOpen}
+          onToggle={() => setMemberCodeOpen((current) => !current)}
+        />
       )}
     </section>
   )
@@ -179,11 +210,14 @@ function TodayHeroSection({
   return (
     <div className="hero-panel contract-cover-panel">
       <span className="hero-kicker">
-        <Flame size={18} />
-        云同步 v2
+        <CalendarCheck size={18} />
+        今日计划
       </span>
-      <h2>{plan?.title ?? '今天还没有计划'}</h2>
-      <p>{plan ? `${plan.focus} · 截止 ${plan.deadline}` : '可以等教练制定，也可以自己先定今天的训练。'}</p>
+      <h2 className="plan-title-with-source">
+        <span>{plan?.title ?? '今天还没有计划'}</span>
+        {plan && <span className={`plan-source-tag ${plan.source}`}>{formatPlanSourceLabel(plan.source)}</span>}
+      </h2>
+      <p>{plan ? `${formatPlanFocusText(plan.focus, plan.source)} · 截止 ${plan.deadline}` : '可以等教练制定，也可以自己先定今天的训练。'}</p>
       <div className="metric-row three-col">
         <Metric icon={<CalendarCheck />} label="今日状态" value={checkIn ? '已记录' : '待完成'} />
         <Metric icon={<Flame />} label="待付罚款" value={`¥${pendingTotal}`} />
@@ -193,34 +227,62 @@ function TodayHeroSection({
   )
 }
 
-function TodayActionCard({ nextStep }: { nextStep: string }) {
+function MemberCodeCard({
+  memberCode,
+  open,
+  onToggle,
+}: {
+  memberCode: string
+  open: boolean
+  onToggle: () => void
+}) {
   return (
-    <div className="status-card action-card contract-clause-card">
-      <strong>下一步</strong>
-      <p>{nextStep}</p>
+    <div className={`status-card participant-code-card member-binding-card contract-clause-card${open ? ' open' : ''}`}>
+      <button aria-expanded={open} className="member-binding-toggle" type="button" onClick={onToggle}>
+        <span>
+          <strong>绑定信息</strong>
+          <small>{open ? '成员码用于绑定管理端' : '成员码已收起'}</small>
+        </span>
+        {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+      </button>
+      {open && (
+        <div className="member-binding-detail">
+          <span className="member-code-value">{memberCode}</span>
+          <p>需要重新绑定时，把这个码发给管理者。</p>
+        </div>
+      )}
     </div>
   )
 }
 
-function MemberCodeCard({ memberCode }: { memberCode: string }) {
+function TodayCheckInSummary({
+  checkIn,
+  onWithdraw,
+  withdrawing,
+}: {
+  checkIn: CheckIn
+  onWithdraw: () => void
+  withdrawing: boolean
+}) {
+  const canWithdraw = checkIn.status === 'pending_review'
   return (
-    <div className="status-card participant-code-card contract-clause-card">
-      <strong>我的成员码：{memberCode}</strong>
-      <p>把这个码发给管理者，就能把你的账号绑定进家庭成员列表。</p>
-    </div>
-  )
-}
-
-function TodayCheckInSummary({ checkIn }: { checkIn: CheckIn }) {
-  return (
-    <div className="status-card checkin-clause-card contract-clause-card">
-      <StatusPill status={checkIn.status} />
+    <div className={`status-card checkin-clause-card contract-clause-card${canWithdraw ? ' pending-checkin-card' : ''}`}>
+      <div className="checkin-summary-head">
+        <StatusPill status={checkIn.status} />
+        <span>{canWithdraw ? '等待教练审核' : '今日记录'}</span>
+      </div>
       <p>{checkIn.leave_reason || checkIn.note || '记录已同步。'}</p>
       {checkIn.review_comment && (
         <div className="coach-comment-box">
-          <strong>教练评语</strong>
+          <strong>教练留言</strong>
           <p>{checkIn.review_comment}</p>
         </div>
+      )}
+      {canWithdraw && (
+        <button className="withdraw-checkin-button" disabled={withdrawing} type="button" onClick={() => void onWithdraw()}>
+          <RotateCcw size={18} />
+          {withdrawing ? '撤回中' : '撤回本次打卡'}
+        </button>
       )}
     </div>
   )

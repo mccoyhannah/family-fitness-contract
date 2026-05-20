@@ -636,6 +636,15 @@ with check (
   )
 );
 
+drop policy if exists "students_delete_pending_own_check_ins" on public.check_ins;
+create policy "students_delete_pending_own_check_ins"
+on public.check_ins for delete
+to authenticated
+using (
+  user_id = auth.uid()
+  and status = 'pending_review'
+);
+
 drop policy if exists "coach_update_all_check_ins" on public.check_ins;
 drop policy if exists "coach_update_bound_check_ins" on public.check_ins;
 create policy "coach_update_bound_check_ins"
@@ -779,8 +788,9 @@ revoke insert on public.coach_members from authenticated;
 grant update (display_name) on public.coach_members to authenticated;
 grant select, insert, update, delete on public.plans to authenticated;
 grant select, insert, update, delete on public.plan_items to authenticated;
-grant select, delete on public.check_ins to authenticated;
-revoke insert, update on public.check_ins from authenticated;
+-- PostgREST upsert requires table-level insert/update grants; RLS and
+-- guard_check_in_review_fields still restrict who can write review fields.
+grant select, insert, update, delete on public.check_ins to authenticated;
 grant insert (user_id, plan_id, date, status, fatigue, issues, note, leave_reason) on public.check_ins to authenticated;
 grant update (plan_id, status, fatigue, issues, note, leave_reason, review_comment, reviewed_at, reviewer_id) on public.check_ins to authenticated;
 grant select, insert, delete on public.penalties to authenticated;

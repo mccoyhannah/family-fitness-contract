@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { readCache, writeCache } from '../lib/cache'
 import { shouldUsePreviewLocalScope } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import { friendlySupabaseMessage } from '../lib/supabaseErrors'
 import { notifySyncError } from '../lib/syncError'
 import type { CheckIn } from '../lib/types'
 
@@ -77,10 +78,42 @@ export function useCheckIns(userId?: string) {
     const client = supabase
     if (!client) throw new Error('Supabase 未配置，无法保存打卡。')
     const { data, error } = await client.from('check_ins').upsert(row, { onConflict: 'user_id,date' }).select('*').single()
-    if (error) throw error
+    if (error) throw new Error(friendlySupabaseMessage(error, '打卡记录保存失败：'))
     await load()
     return data as CheckIn
   }
 
-  return { checkIns, loading: loadingState, reload: load, upsertCheckIn, setCheckIns }
+  const withdrawCheckIn = async (checkIn: CheckIn) => {
+    if (checkIn.status !== 'pending_review') {
+      throw new Error('只有待审核的打卡可以撤回。')
+    }
+
+    if (shouldUseLocalCheckIns(checkIn.user_id)) {
+      const cache = readCache(cacheScope)
+      const nextCheckIns = cache.checkIns.filter((item) => item.id !== checkIn.id)
+      writeCache({ ...cache, checkIns: nextCheckIns }, cacheScope)
+      setCheckIns(nextCheckIns.filter((item) => item.user_id === userId))
+      setLoadedUserId(userId ?? checkIn.user_id)
+      return
+    }
+
+    const client = supabase
+    if (!client) throw new Error('Supabase 未配置，无法撤回打卡。')
+    const { data, error } = await client
+      .from('check_ins')
+      .delete()
+      .eq('id', checkIn.id)
+      .eq('user_id', checkIn.user_id)
+      .eq('status', 'pending_review')
+      .select('id')
+
+    if (error) throw new Error(friendlySupabaseMessage(error, '撤回打卡失败：'))
+    if (!data || data.length === 0) {
+      throw new Error('撤回打卡失败：这条记录可能已经被审核，请刷新后再看。')
+    }
+
+    await load()
+  }
+
+  return { checkIns, loading: loadingState, reload: load, setCheckIns, upsertCheckIn, withdrawCheckIn }
 }

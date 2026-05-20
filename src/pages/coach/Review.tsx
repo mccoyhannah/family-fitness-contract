@@ -202,17 +202,28 @@ export default function CoachReview() {
                   failedEvidenceKeys={failedEvidenceKeys}
                   hasWaiverRequest={hasWaiverRequest}
                   onEvidenceError={handleEvidenceError}
-                  onReviewCommentChange={(nextComment) =>
-                    setReviewCommentById((current) => ({ ...current, [item.id]: nextComment }))
-                  }
                   plan={plan}
-                  reviewComment={reviewComment}
-                  reviewDisabled={Boolean(reviewingCheckInId || confirmRequest)}
                   signedEvidenceKey={evidenceKey}
                   signedEvidenceSrc={evidenceSrc}
                   waiverReason={waiverReason}
                 />
               )}
+              <label className="review-comment-field review-inline-comment">
+                <span className="review-comment-label-row">
+                  <strong>给学员留言</strong>
+                  <small>审核后学生端可见，可空</small>
+                </span>
+                <textarea
+                  disabled={Boolean(reviewingCheckInId || confirmRequest)}
+                  maxLength={220}
+                  rows={3}
+                  value={reviewComment}
+                  onChange={(event) =>
+                    setReviewCommentById((current) => ({ ...current, [item.id]: event.target.value }))
+                  }
+                  placeholder="例如：动作完成得不错，下次深蹲注意膝盖方向。"
+                />
+              </label>
               <div className="row-actions">
                 <button
                   type="button"
@@ -294,10 +305,7 @@ function ReviewExpandedDetails({
   failedEvidenceKeys,
   hasWaiverRequest,
   onEvidenceError,
-  onReviewCommentChange,
   plan,
-  reviewComment,
-  reviewDisabled,
   signedEvidenceKey,
   signedEvidenceSrc,
   waiverReason,
@@ -307,10 +315,7 @@ function ReviewExpandedDetails({
   failedEvidenceKeys: Set<string>
   hasWaiverRequest: boolean
   onEvidenceError: (evidenceId: string, signedUrl: string) => void
-  onReviewCommentChange: (comment: string) => void
   plan?: Plan
-  reviewComment: string
-  reviewDisabled: boolean
   signedEvidenceKey: (evidenceId: string, signedUrl: string) => string
   signedEvidenceSrc: (signedUrl: string, evidenceId: string) => string
   waiverReason: string
@@ -397,23 +402,6 @@ function ReviewExpandedDetails({
         )}
       </section>
 
-      <section className="review-detail-section review-comment-section">
-        <div className="review-detail-head">
-          <strong>审核评语</strong>
-          <span>成员端可见</span>
-        </div>
-        <label className="review-comment-field">
-          给成员的一句话反馈，可空
-          <textarea
-            disabled={reviewDisabled}
-            maxLength={220}
-            rows={4}
-            value={reviewComment}
-            onChange={(event) => onReviewCommentChange(event.target.value)}
-            placeholder="例如：动作完成得不错，下次深蹲注意膝盖方向。"
-          />
-        </label>
-      </section>
     </div>
   )
 }

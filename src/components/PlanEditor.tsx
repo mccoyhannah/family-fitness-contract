@@ -1,6 +1,7 @@
 import { Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
+import { defaultPlanFocusForSource } from '../lib/planDisplay'
 import type { PlanDraft } from '../lib/types'
 
 type PlanEditorProps = {
@@ -34,12 +35,12 @@ export default function PlanEditor({ initial, onSubmit, submitLabel }: PlanEdito
       await onSubmit({
         ...draft,
         title: draft.title.trim() || '今日训练',
-        focus: draft.focus.trim() || '自定训练',
+        focus: draft.focus.trim() || defaultPlanFocusForSource(draft.source),
         deadline: draft.deadline || '23:00',
         items: draft.is_training
           ? items.length > 0
             ? items
-            : [{ name: '自定训练', sets: '1 次', reps: '完成即可', note: '按身体状态量力而行', sort_order: 0 }]
+            : [{ name: defaultPlanFocusForSource(draft.source), sets: '1 次', reps: '完成即可', note: '按身体状态量力而行', sort_order: 0 }]
           : items,
       })
     } catch (err) {

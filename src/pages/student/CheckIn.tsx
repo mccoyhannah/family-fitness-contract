@@ -36,7 +36,7 @@ type SubmitErrorDetail = {
   status?: number
 }
 
-const PHOTO_LIBRARY_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif'
+const PHOTO_LIBRARY_ACCEPT = 'image/*'
 const CAMERA_ACCEPT = 'image/*'
 
 export default function CheckIn() {
@@ -73,6 +73,7 @@ export default function CheckIn() {
   const submitting = !['idle', 'failed'].includes(submitStage)
   const uploadSlotsLeft = MAX_EVIDENCE_FILES - evidenceFiles.length
   const usingLocalPreview = isLocalPreviewActive()
+  const isWeChatBrowser = typeof navigator !== 'undefined' && /MicroMessenger/i.test(navigator.userAgent)
 
   useEffect(() => {
     mountedRef.current = true
@@ -217,11 +218,13 @@ export default function CheckIn() {
       return
     }
     if (incoming.length === 0) {
-      const message = '没有收到照片，请换一张或用系统浏览器打开后重试。'
+      const message = isWeChatBrowser
+        ? '微信内置浏览器没有把照片交给网页。请点右上角用系统浏览器打开，或直接拍照打卡。'
+        : '没有收到照片，请换一张或用系统浏览器打开后重试。'
       setError(message)
       setSubmitErrorDetail(null)
       setFileMessage('')
-      setSubmitStatus('相册没有把照片交给网页，请重新点“添加训练照片”。')
+      setSubmitStatus(isWeChatBrowser ? '微信里选相册不稳定，建议用系统浏览器或直接拍照。' : '相册没有把照片交给网页，请重新点“添加训练照片”。')
       notifyApp({ tone: 'warning', message })
       flashEvidenceUpload()
       return
@@ -414,16 +417,20 @@ export default function CheckIn() {
 
         <div className="checkin-section-head">
           <span>02</span>
-          <div>
+          <div className="checkin-section-copy">
             <strong>图片证据</strong>
-            <small>{evidenceFiles.length}/{MAX_EVIDENCE_FILES} 张，优先选择 JPG/PNG/WebP/GIF，单张不超过 5 MB</small>
+            <small>最多 3 张，单张不超过 5 MB</small>
           </div>
+          <em className="checkin-count-badge">{evidenceFiles.length}/{MAX_EVIDENCE_FILES}</em>
         </div>
         {usingLocalPreview && (
           <p className="local-preview-warning">本地预览照片只保存在这台电脑，不会同步到线上管理端。</p>
         )}
         {!usingLocalPreview && !isOnline && (
           <p className="local-preview-warning">当前离线。可以先选照片和填写备注，恢复网络后再提交。</p>
+        )}
+        {!usingLocalPreview && isWeChatBrowser && (
+          <p className="browser-warning">微信里相册可能不稳定；若选不到照片，点右上角用系统浏览器打开，或直接拍照。</p>
         )}
         {(submitStage !== 'idle' || submitStatus) && (
           <SubmitProgress stage={submitStage} status={submitStatus} />
@@ -470,7 +477,7 @@ export default function CheckIn() {
               {processingFiles ? <Loader2 className="is-spinning" /> : uploadSlotsLeft <= 0 ? <CheckCircle2 /> : <ImagePlus />}
             </span>
             <strong>{processingFiles ? '正在处理照片' : uploadSlotsLeft <= 0 ? '照片已满' : '添加训练照片'}</strong>
-            <small>{uploadSlotsLeft <= 0 ? '最多 3 张，先删除后再添加。' : `还可以添加 ${uploadSlotsLeft} 张。iPhone 原图会尽量交给系统转成 JPG。`}</small>
+            <small>{uploadSlotsLeft <= 0 ? '最多 3 张，先删除后再添加。' : `还可以添加 ${uploadSlotsLeft} 张。`}</small>
           </label>
           <label className={`camera-capture-button${uploadSlotsLeft <= 0 ? ' disabled' : ''}`}>
             <input

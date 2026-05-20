@@ -417,6 +417,7 @@ textarea:focus-visible,
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   padding: 0 10px;
   border: 1px solid #bdd6e3;
   border-radius: var(--radius);
@@ -426,6 +427,17 @@ textarea:focus-visible,
   font-weight: 840;
   line-height: 1;
   white-space: nowrap;
+}
+
+.plan-source-tag small {
+  min-height: 20px;
+  display: inline-flex;
+  align-items: center;
+  padding-left: 6px;
+  border-left: 1px solid currentColor;
+  opacity: 0.72;
+  font-size: 11px;
+  line-height: 1;
 }
 
 .plan-source-tag.coach {
@@ -2018,6 +2030,18 @@ label {
   font-weight: 760;
 }
 
+.browser-warning {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #d8e4dc;
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, 0.74);
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.45;
+}
+
 .withdraw-checkin-button {
   width: 100%;
   min-height: 52px;
@@ -2444,7 +2468,7 @@ code {
 
 .checkin-section-head {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
 }
@@ -2476,6 +2500,26 @@ code {
   margin-top: 2px;
   color: var(--muted);
   font-weight: 700;
+}
+
+.checkin-section-copy {
+  min-width: 0;
+}
+
+.checkin-count-badge {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid #b7d8c2;
+  border-radius: 999px;
+  color: var(--brand-2);
+  background: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 840;
+  white-space: nowrap;
 }
 
 .checkin-issue-grid {

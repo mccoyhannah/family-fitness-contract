@@ -107,6 +107,7 @@ function PlanDayCard({
           <strong>{formatDay(day.date)}</strong>
           <span className={plan ? `plan-source-tag ${plan.source}` : 'plan-source-tag empty'}>
             {plan ? formatPlanSourceLabel(plan.source) : '未制定'}
+            {plan?.source === 'coach' && <small>只读</small>}
           </span>
         </div>
         <p className="muted">
@@ -114,10 +115,11 @@ function PlanDayCard({
             ? `${plan.title} · ${formatPlanFocusText(plan.focus, plan.source)} · 截止 ${plan.deadline}`
             : '当天还没有明确计划。'}
         </p>
-        <div className="plan-day-meta">
-          <span>{plan ? (plan.is_training ? `${plan.items.length} 个动作` : '恢复日') : '不会自动罚款'}</span>
-          {plan?.source === 'coach' && <span>教练计划只读</span>}
-        </div>
+        {plan && (
+          <div className="plan-day-meta">
+            <span>{plan.is_training ? `${plan.items.length} 个动作` : '恢复日'}</span>
+          </div>
+        )}
       </div>
 
       <div className="plan-card-actions">

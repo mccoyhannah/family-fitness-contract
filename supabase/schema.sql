@@ -645,6 +645,15 @@ using (
   and status = 'pending_review'
 );
 
+drop policy if exists "coach_delete_pending_member_check_ins" on public.check_ins;
+create policy "coach_delete_pending_member_check_ins"
+on public.check_ins for delete
+to authenticated
+using (
+  public.is_member_coach(user_id)
+  and status = 'pending_review'
+);
+
 drop policy if exists "coach_update_all_check_ins" on public.check_ins;
 drop policy if exists "coach_update_bound_check_ins" on public.check_ins;
 create policy "coach_update_bound_check_ins"
@@ -725,12 +734,26 @@ on public.check_in_evidence for delete
 to authenticated
 using (user_id = auth.uid());
 
+drop policy if exists "coach_delete_member_evidence" on public.check_in_evidence;
+create policy "coach_delete_member_evidence"
+on public.check_in_evidence for delete
+to authenticated
+using (
+  public.is_member_coach(user_id)
+  and exists (
+    select 1 from public.check_ins
+    where id = check_in_id
+      and user_id = check_in_evidence.user_id
+      and status = 'pending_review'
+  )
+);
+
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('checkin-evidence', 'checkin-evidence', false, 5242880, array['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+values ('checkin-evidence', 'checkin-evidence', false, 5242880, array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'])
 on conflict (id) do update
 set public = false,
     file_size_limit = 5242880,
-    allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
 
 drop policy if exists "evidence_objects_select_related" on storage.objects;
 create policy "evidence_objects_select_related"
@@ -776,6 +799,22 @@ to authenticated
 using (
   bucket_id = 'checkin-evidence'
   and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+drop policy if exists "evidence_objects_delete_member_coach" on storage.objects;
+create policy "evidence_objects_delete_member_coach"
+on storage.objects for delete
+to authenticated
+using (
+  bucket_id = 'checkin-evidence'
+  and exists (
+    select 1
+    from public.check_in_evidence e
+    join public.check_ins c on c.id = e.check_in_id
+    where e.storage_path = storage.objects.name
+      and c.status = 'pending_review'
+      and public.is_member_coach(e.user_id)
+  )
 );
 
 grant select on public.profiles to authenticated;

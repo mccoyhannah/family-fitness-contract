@@ -171,6 +171,37 @@ export function useCoachData() {
     await load()
   }
 
+  const deletePendingCheckIn = async (checkIn: Pick<CheckIn, 'id' | 'status' | 'user_id'>) => {
+    if (checkIn.status !== 'pending_review') {
+      throw new Error('只能退回待审核的打卡。')
+    }
+
+    if (shouldUseDemoCoachData()) {
+      const cache = readCache(demoStudent.id)
+      const next = cache.checkIns.filter((item) => item.id !== checkIn.id)
+      writeCache({ ...cache, checkIns: next }, demoStudent.id)
+      setState((current) => {
+        const nextState = { ...current, checkIns: next, ready: true }
+        rememberCoachData({ checkIns: nextState.checkIns, penalties: nextState.penalties, profiles: nextState.profiles, ready: nextState.ready })
+        return nextState
+      })
+      return
+    }
+
+    const client = supabase
+    if (!client) return
+    const { data, error } = await client
+      .from('check_ins')
+      .delete()
+      .eq('id', checkIn.id)
+      .eq('user_id', checkIn.user_id)
+      .eq('status', 'pending_review')
+      .select('id')
+    if (error) throw error
+    if (!data || data.length === 0) throw new Error('退回失败：这条记录可能已经被审核或删除，请刷新后再看。')
+    await load()
+  }
+
   const markCheckInMissedWithPenalty = async (checkIn: CheckIn, plans: Array<Pick<Plan, 'date' | 'is_training'>>, review?: CheckInReviewUpdate) => {
     const nextCheckIn = { ...checkIn, status: 'missed' as const, ...review }
     const userCheckIns = state.checkIns
@@ -252,6 +283,7 @@ export function useCoachData() {
     profiles: state.profiles,
     ready: state.ready,
     reload: load,
+    deletePendingCheckIn,
     markCheckInMissedWithPenalty,
     updateCheckIn,
     updatePenalty,

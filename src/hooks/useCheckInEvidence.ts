@@ -2,11 +2,42 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { readCache, writeCache } from '../lib/cache'
 import { shouldUsePreviewLocalScope } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
-import { friendlySupabaseMessage } from '../lib/supabaseErrors'
+import { errorDiagnostic, friendlySupabaseMessage } from '../lib/supabaseErrors'
 import { notifySyncError } from '../lib/syncError'
 import type { CheckInEvidence } from '../lib/types'
 
 const bucket = 'checkin-evidence'
+const DEFAULT_UPLOAD_TIMEOUT_MS = 45_000
+
+export type EvidenceUploadStage = 'storage_upload' | 'evidence_insert' | 'evidence_confirm'
+
+export type EvidenceUploadProgress = {
+  fileName?: string
+  index?: number
+  stage: EvidenceUploadStage
+  total?: number
+}
+
+export type EvidenceUploadDebug = {
+  code?: string
+  details?: string | null
+  fileName?: string
+  fileSize?: number
+  fileType?: string
+  message: string
+  stage: EvidenceUploadStage
+  status?: number
+}
+
+export class EvidenceUploadError extends Error {
+  debug: EvidenceUploadDebug
+
+  constructor(message: string, debug: EvidenceUploadDebug) {
+    super(message)
+    this.name = 'EvidenceUploadError'
+    this.debug = debug
+  }
+}
 
 function safeFileName(name: string) {
   return name.replace(/[^a-zA-Z0-9._-]/g, '-').slice(-80) || 'image.jpg'
@@ -20,6 +51,29 @@ function localEvidencePreview(fileName: string) {
 
 function shouldUseLocalEvidence(scope?: string) {
   return !isSupabaseConfigured || !supabase || shouldUsePreviewLocalScope(scope)
+}
+
+async function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number, makeError: () => EvidenceUploadError) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => reject(makeError()), timeoutMs)
+  })
+  try {
+    return await Promise.race([promise, timeout])
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+  }
+}
+
+function uploadDebug(stage: EvidenceUploadStage, file: File | undefined, error: unknown): EvidenceUploadDebug {
+  const diagnostic = errorDiagnostic(error)
+  return {
+    ...diagnostic,
+    fileName: file?.name,
+    fileSize: file?.size,
+    fileType: file?.type,
+    stage,
+  }
 }
 
 export function useCheckInEvidence(scope = 'demo') {
@@ -90,11 +144,18 @@ export function useCheckInEvidence(scope = 'demo') {
     }
   }, [load, scope])
 
-  const uploadEvidence = async (checkInId: string, userId: string, files: File[]) => {
+  const uploadEvidence = async (
+    checkInId: string,
+    userId: string,
+    files: File[],
+    options: { onProgress?: (progress: EvidenceUploadProgress) => void; timeoutMs?: number } = {},
+  ) => {
     if (files.length === 0) return []
     if (files.length > 3) throw new Error('最多只能上传 3 张图片。')
+    const timeoutMs = options.timeoutMs ?? DEFAULT_UPLOAD_TIMEOUT_MS
 
     if (shouldUseLocalEvidence(scope)) {
+      options.onProgress?.({ stage: 'storage_upload', index: files.length, total: files.length })
       const rows = files.map((file, index) => ({
         id: `local-evidence-${checkInId}-${index}`,
         check_in_id: checkInId,
@@ -109,42 +170,125 @@ export function useCheckInEvidence(scope = 'demo') {
       const nextEvidence = [...cache.evidence, ...rows]
       writeCache({ ...cache, evidence: nextEvidence }, scope)
       setEvidence(nextEvidence)
+      options.onProgress?.({ stage: 'evidence_confirm', total: files.length })
       return rows
     }
 
     const inserted: CheckInEvidence[] = []
-    for (const file of files) {
+    for (const [fileIndex, file] of files.entries()) {
       if (!file.type.startsWith('image/')) throw new Error('只能上传图片文件。')
       const path = `${userId}/${checkInId}/${crypto.randomUUID()}-${safeFileName(file.name)}`
       const client = supabase
       if (!client) throw new Error('Supabase 未配置，无法上传图片。')
-      const { error: uploadError } = await client.storage.from(bucket).upload(path, file, {
-        contentType: file.type,
-        upsert: false,
-      })
-      if (uploadError) throw new Error(friendlySupabaseMessage(uploadError, '照片上传失败：'))
+      options.onProgress?.({ fileName: file.name, index: fileIndex + 1, stage: 'storage_upload', total: files.length })
+      const { error: uploadError } = await withTimeout(
+        client.storage.from(bucket).upload(path, file, {
+          contentType: file.type,
+          upsert: false,
+        }),
+        timeoutMs,
+        () =>
+          new EvidenceUploadError('照片上传超时：网络太慢或浏览器阻止了上传，请换网络后重试。', {
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.type,
+            message: '照片上传超时。',
+            stage: 'storage_upload',
+          }),
+      )
+      if (uploadError) {
+        throw new EvidenceUploadError(
+          friendlySupabaseMessage(uploadError, '照片上传失败：'),
+          uploadDebug('storage_upload', file, uploadError),
+        )
+      }
 
-      const { data, error } = await client
-        .from('check_in_evidence')
-        .insert({
-          check_in_id: checkInId,
-          user_id: userId,
-          storage_path: path,
-          file_name: file.name,
-          mime_type: file.type,
-          size_bytes: file.size,
-        })
-        .select('*')
-        .single()
+      options.onProgress?.({ fileName: file.name, index: fileIndex + 1, stage: 'evidence_insert', total: files.length })
+      const { data, error } = await withTimeout(
+        client
+          .from('check_in_evidence')
+          .insert({
+            check_in_id: checkInId,
+            user_id: userId,
+            storage_path: path,
+            file_name: file.name,
+            mime_type: file.type,
+            size_bytes: file.size,
+          })
+          .select('*')
+          .single(),
+        timeoutMs,
+        () =>
+          new EvidenceUploadError('照片记录保存超时：照片可能已上传，请稍后重试。', {
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.type,
+            message: '照片记录保存超时。',
+            stage: 'evidence_insert',
+          }),
+      )
       if (error) {
         void client.storage.from(bucket).remove([path])
-        throw new Error(friendlySupabaseMessage(error, '照片已上传，但证据记录保存失败：'))
+        throw new EvidenceUploadError(
+          friendlySupabaseMessage(error, '照片已上传，但证据记录保存失败：'),
+          uploadDebug('evidence_insert', file, error),
+        )
       }
       inserted.push(data as CheckInEvidence)
     }
 
-    await load()
-    return inserted
+    if (inserted.length < files.length) {
+      throw new EvidenceUploadError('照片记录没有全部保存，请重新提交。', {
+        details: `期望 ${files.length} 条，实际 ${inserted.length} 条。`,
+        message: '本次上传的照片记录数量不足。',
+        stage: 'evidence_confirm',
+      })
+    }
+
+    options.onProgress?.({ stage: 'evidence_confirm', total: files.length })
+    const client = supabase
+    if (!client) throw new Error('Supabase 未配置，无法确认图片。')
+    const insertedIds = inserted.map((row) => row.id)
+    const { data: confirmedEvidence, error: confirmError } = await withTimeout(
+      client
+        .from('check_in_evidence')
+        .select('id')
+        .eq('check_in_id', checkInId)
+        .eq('user_id', userId)
+        .in('id', insertedIds),
+      timeoutMs,
+      () =>
+        new EvidenceUploadError('照片确认超时：请稍后刷新查看是否已提交。', {
+          message: '照片确认超时。',
+          stage: 'evidence_confirm',
+        }),
+    )
+    if (confirmError) {
+      throw new EvidenceUploadError(
+        friendlySupabaseMessage(confirmError, '照片确认失败：'),
+        uploadDebug('evidence_confirm', undefined, confirmError),
+      )
+    }
+    if (!confirmedEvidence || confirmedEvidence.length < files.length) {
+      throw new EvidenceUploadError('照片没有全部写入记录，请重新提交。', {
+        details: `期望确认 ${files.length} 条，实际确认 ${confirmedEvidence?.length ?? 0} 条。`,
+        message: '回读本次 check_in_evidence 不完整。',
+        stage: 'evidence_confirm',
+      })
+    }
+
+    const signedInserted = await signRows(inserted).catch(() => inserted)
+    const nextInsertedIds = new Set(signedInserted.map((row) => row.id))
+    setEvidence((current) => {
+      const nextEvidence = [...signedInserted, ...current.filter((row) => !nextInsertedIds.has(row.id))]
+      writeCache({ ...readCache(scope), evidence: nextEvidence }, scope)
+      return nextEvidence
+    })
+
+    await load().catch(() => {
+      notifySyncError('evidence', '照片已提交，但列表刷新失败，请稍后刷新页面查看。')
+    })
+    return signedInserted
   }
 
   const deleteEvidenceForCheckIn = async (checkInId: string, userId?: string) => {

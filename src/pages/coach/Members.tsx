@@ -285,25 +285,25 @@ export default function CoachMembers() {
                     className={plan.date === selectedDate ? 'day-card planned-plan-card active' : 'day-card planned-plan-card'}
                     key={plan.id}
                   >
-                    <button
-                      aria-pressed={plan.date === selectedDate}
-                      className="planned-plan-main"
-                      type="button"
-                      onClick={() => selectPlanDate(plan.date)}
-                    >
-                      <strong>{formatDay(plan.date)} · {plan.title}</strong>
-                    </button>
-                    <div className="planned-plan-exercises">
-                      {planToExercises(plan).map((exercise) => (
-                        <ExerciseCard exercise={exercise} key={exercise.id} />
-                      ))}
-                    </div>
-                    <div className="planned-plan-actions">
-                      <span className="planned-source-chip">{plan.source === 'coach' ? '教练制定' : '成员自定'}</span>
+                    <div className="planned-plan-topline">
+                      <button
+                        aria-pressed={plan.date === selectedDate}
+                        className="planned-plan-main"
+                        type="button"
+                        onClick={() => selectPlanDate(plan.date)}
+                      >
+                        <strong>{formatDay(plan.date)} · {plan.title}</strong>
+                        <span className="planned-source-chip">{plan.source === 'coach' ? '教练制定' : '成员自定'}</span>
+                      </button>
                       <button className="planned-copy-button" type="button" onClick={() => copyPlanToToday(plan)}>
                         <Copy size={16} />
                         复制到今天
                       </button>
+                    </div>
+                    <div className="planned-plan-exercises">
+                      {planToExercises(plan).map((exercise) => (
+                        <ExerciseCard exercise={exercise} key={exercise.id} />
+                      ))}
                     </div>
                   </article>
                 ))}

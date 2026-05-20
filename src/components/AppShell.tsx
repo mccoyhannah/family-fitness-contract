@@ -1,4 +1,5 @@
 import { Dumbbell, LogOut } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import BottomNav from './BottomNav'
 import { useAuth } from '../hooks/useAuth'
@@ -7,10 +8,11 @@ import type { Role } from '../lib/types'
 
 export default function AppShell({ role }: { role: Role }) {
   const { profile, signOut } = useAuth()
+  const keyboardOpen = useKeyboardOpen()
 
   return (
     <main className="app-shell contract-app-shell">
-      <section className="app-frame contract-paper">
+      <section className={`app-frame contract-paper${keyboardOpen ? ' keyboard-open' : ''}`}>
         <header className="topbar contract-paper-header">
           <div className="brand-block contract-party-block">
             <span className="brand-mark">
@@ -38,4 +40,49 @@ export default function AppShell({ role }: { role: Role }) {
       </section>
     </main>
   )
+}
+
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false
+  const tagName = target.tagName.toLowerCase()
+  return target.isContentEditable || tagName === 'input' || tagName === 'textarea' || tagName === 'select'
+}
+
+function useKeyboardOpen() {
+  const [keyboardOpen, setKeyboardOpen] = useState(false)
+
+  useEffect(() => {
+    let editableFocused = isEditableTarget(document.activeElement)
+    const initialViewportHeight = window.visualViewport?.height ?? window.innerHeight
+
+    const update = () => {
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+      const viewportShrunk = initialViewportHeight - viewportHeight > 90
+      setKeyboardOpen(window.innerWidth <= 760 && (editableFocused || viewportShrunk))
+    }
+
+    const onFocusIn = (event: FocusEvent) => {
+      editableFocused = isEditableTarget(event.target)
+      update()
+    }
+    const onFocusOut = () => {
+      editableFocused = false
+      window.setTimeout(update, 80)
+    }
+
+    document.addEventListener('focusin', onFocusIn)
+    document.addEventListener('focusout', onFocusOut)
+    window.visualViewport?.addEventListener('resize', update)
+    window.addEventListener('resize', update)
+    update()
+
+    return () => {
+      document.removeEventListener('focusin', onFocusIn)
+      document.removeEventListener('focusout', onFocusOut)
+      window.visualViewport?.removeEventListener('resize', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [])
+
+  return keyboardOpen
 }

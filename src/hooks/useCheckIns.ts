@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { readCache, writeCache } from '../lib/cache'
 import { shouldUsePreviewLocalScope } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
-import { friendlySupabaseMessage } from '../lib/supabaseErrors'
+import { friendlySupabaseError, friendlySupabaseMessage } from '../lib/supabaseErrors'
 import { notifySyncError } from '../lib/syncError'
 import type { CheckIn } from '../lib/types'
 
@@ -78,7 +78,7 @@ export function useCheckIns(userId?: string) {
     const client = supabase
     if (!client) throw new Error('Supabase 未配置，无法保存打卡。')
     const { data, error } = await client.from('check_ins').upsert(row, { onConflict: 'user_id,date' }).select('*').single()
-    if (error) throw new Error(friendlySupabaseMessage(error, '打卡记录保存失败：'))
+    if (error) throw friendlySupabaseError(error, '打卡记录保存失败：')
     await load()
     return data as CheckIn
   }

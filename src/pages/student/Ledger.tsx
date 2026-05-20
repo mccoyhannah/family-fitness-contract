@@ -105,10 +105,10 @@ export default function Ledger() {
           const canRequestWaiver = penalty.status === 'pending' && checkIn?.status === 'missed'
           return (
             <article className={`penalty-card${isWaiverPending ? ' waiver-under-review' : ''}`} key={penalty.id}>
-              <div>
+              <div className="penalty-copy">
                 <strong>¥{formatAmount(penalty.amount)}</strong>
-                <span>{formatDay(penalty.date)} · 连续第 {penalty.consecutive_count} 天</span>
-                {penalty.source_type === 'missed_checkin' && <span className="penalty-source-note">来源：缺卡联动</span>}
+                <span className="penalty-meta">{formatDay(penalty.date)} · 连续第 {penalty.consecutive_count} 天</span>
+                {penalty.source_type === 'missed_checkin' && <span className="penalty-source-note">原因：缺卡自动生成</span>}
                 {isWaiverPending && <span className="waiver-inline-note">免罚申请已提交，先等管理端审核。</span>}
                 {penalty.status === 'payment_reported' && <span className="waiver-inline-note">付款已上报，等待管理端确认。</span>}
                 {checkIn?.review_comment && (

@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronUp, RotateCcw } from 'lucide-react'
 import { useRef, useState } from 'react'
 import MemberSelect from '../../components/MemberSelect'
 import StatusPill from '../../components/StatusPill'
@@ -48,8 +48,8 @@ export default function CoachReview() {
     selectedMemberId,
     setSelectedMemberId,
   } = useMembers(coach?.id)
-  const { checkIns, markCheckInMissedWithPenalty, penalties, updateCheckIn, updatePenalty } = useCoachData()
-  const { evidenceFor, reload: reloadEvidence } = useCheckInEvidence('coach')
+  const { checkIns, deletePendingCheckIn, markCheckInMissedWithPenalty, penalties, updateCheckIn, updatePenalty } = useCoachData()
+  const { deleteEvidenceForCheckIn, evidenceFor, reload: reloadEvidence } = useCheckInEvidence('coach')
   const retriedEvidenceKeysRef = useRef(new Set<string>())
   const reviewingCheckInIdRef = useRef('')
   const retrySequenceRef = useRef(0)
@@ -82,6 +82,14 @@ export default function CoachReview() {
     await updateCheckIn(id, 'completed', buildReviewUpdate(comment))
     const penalty = penalties.find((item) => item.user_id === userId && item.date === date)
     if (penalty) await updatePenalty(penalty.id, 'waived')
+  }
+
+  const returnForResubmission = async (checkIn: CheckIn) => {
+    if (checkIn.status !== 'pending_review') {
+      throw new Error('只能退回待审核的打卡。')
+    }
+    await deleteEvidenceForCheckIn(checkIn.id, checkIn.user_id)
+    await deletePendingCheckIn(checkIn)
   }
 
   const requestReviewAction = (checkInId: string, action: () => Promise<void>, successMessage: string, message: string) => {
@@ -257,6 +265,22 @@ export default function CoachReview() {
                     准假
                   </button>
                 )}
+                <button
+                  className="return-review-button"
+                  type="button"
+                  onClick={() =>
+                    requestReviewAction(
+                      item.id,
+                      () => returnForResubmission(item),
+                      '已退回，学员可以重新提交打卡。',
+                      `确认退回 ${displayName} 在 ${formatDay(item.date)} 的打卡，让学员重新提交？`,
+                    )
+                  }
+                  disabled={Boolean(reviewingCheckInId || confirmRequest)}
+                >
+                  <RotateCcw size={17} />
+                  退回重交
+                </button>
                 <button
                   type="button"
                   onClick={() =>

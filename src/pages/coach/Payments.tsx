@@ -203,8 +203,8 @@ export default function CoachPayments() {
             <article className="penalty-card payment-card" key={penalty.id}>
               <div className="payment-copy">
                 <strong>¥{formatAmount(penalty.amount)}</strong>
-                <span>{displayName} · {formatDay(penalty.date)} · 连续第 {penalty.consecutive_count} 天</span>
-                {penalty.source_type === 'missed_checkin' && <span className="penalty-source-note">来源：缺卡审核联动</span>}
+                <span className="penalty-meta">{displayName} · {formatDay(penalty.date)} · 连续第 {penalty.consecutive_count} 天</span>
+                {penalty.source_type === 'missed_checkin' && <span className="penalty-source-note">原因：缺卡自动生成</span>}
               </div>
               <div className="payment-status">
                 <StatusPill status={penalty.status} />

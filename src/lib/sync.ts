@@ -52,7 +52,7 @@ export function buildMissedSync(
       const existingPenalty = nextPenalties.find(
         (penalty) => penalty.user_id === userId && penalty.date === day.date,
       )
-      if (existingCheckIn?.status === 'completed' || existingCheckIn?.status === 'excused') return
+      if (existingCheckIn) return
       if (existingPenalty) return
 
       const missedCheckInId = `local-missed-${day.date}`

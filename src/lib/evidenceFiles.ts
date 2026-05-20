@@ -1,7 +1,8 @@
 export const MAX_EVIDENCE_FILES = 3
 export const MAX_EVIDENCE_FILE_BYTES = 5 * 1024 * 1024
 
-const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'])
+const browserCompressedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
 export type PreparedEvidenceFile = {
   file: File
@@ -122,11 +123,8 @@ async function compressImage(file: File) {
 
 export async function prepareEvidenceFile(file: File): Promise<PreparedEvidenceFile> {
   const mimeType = inferMimeType(file)
-  if (mimeType === 'image/heic' || mimeType === 'image/heif') {
-    throw new Error(`${file.name} 是 HEIC 格式，当前不支持直接上传，请在相册里转成 JPG 后再上传。`)
-  }
   if (!allowedMimeTypes.has(mimeType)) {
-    throw new Error(`${file.name} 不是支持的图片格式。请上传 JPG、PNG、WebP 或 GIF。`)
+    throw new Error(`${file.name} 不是支持的图片格式。请上传 JPG、PNG、WebP、GIF 或 HEIC。`)
   }
 
   const typedFile = file.type === mimeType ? file : new File([file], file.name, { lastModified: file.lastModified, type: mimeType })
@@ -134,6 +132,9 @@ export async function prepareEvidenceFile(file: File): Promise<PreparedEvidenceF
 
   if (mimeType === 'image/gif') {
     throw new Error(`${file.name} 超过 5 MB。GIF 不能稳定压缩，请换一张更小的图片。`)
+  }
+  if (!browserCompressedMimeTypes.has(mimeType)) {
+    throw new Error(`${file.name} 超过 5 MB。请在相册里压缩或转成 JPG 后再上传。`)
   }
 
   const compressed = await compressImage(typedFile)

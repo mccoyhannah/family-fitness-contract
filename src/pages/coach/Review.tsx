@@ -1,5 +1,5 @@
-import { ChevronDown, ChevronUp, RotateCcw } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { ChevronDown, ChevronUp, RotateCcw, X, ZoomIn } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import MemberSelect from '../../components/MemberSelect'
 import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
@@ -19,6 +19,11 @@ type ReviewConfirmRequest = {
   checkInId: string
   message: string
   successMessage: string
+}
+
+type EvidenceLightbox = {
+  fileName: string
+  url: string
 }
 
 function isWaiverRequest(reason?: string | null) {
@@ -56,6 +61,7 @@ export default function CoachReview() {
   const [failedEvidenceKeys, setFailedEvidenceKeys] = useState<Set<string>>(() => new Set())
   const [confirmRequest, setConfirmRequest] = useState<ReviewConfirmRequest | null>(null)
   const [expandedCheckInIds, setExpandedCheckInIds] = useState<Set<string>>(() => new Set())
+  const [lightboxEvidence, setLightboxEvidence] = useState<EvidenceLightbox | null>(null)
   const [reviewingCheckInId, setReviewingCheckInId] = useState('')
   const [reviewCommentById, setReviewCommentById] = useState<Record<string, string>>({})
   const [retryNonceByEvidenceKey, setRetryNonceByEvidenceKey] = useState<Record<string, number>>({})
@@ -65,6 +71,15 @@ export default function CoachReview() {
     ? checkIns.filter((item) => item.status === 'pending_review' && (!selectedMember || item.user_id === selectedMember.id))
     : []
   const evidenceCount = pending.reduce((sum, item) => sum + evidenceFor(item.id).length, 0)
+
+  useEffect(() => {
+    if (!lightboxEvidence) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setLightboxEvidence(null)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [lightboxEvidence])
 
   const buildReviewUpdate = (comment: string) => ({
     review_comment: comment.trim() || null,
@@ -210,6 +225,7 @@ export default function CoachReview() {
                   failedEvidenceKeys={failedEvidenceKeys}
                   hasWaiverRequest={hasWaiverRequest}
                   onEvidenceError={handleEvidenceError}
+                  onOpenEvidence={setLightboxEvidence}
                   plan={plan}
                   signedEvidenceKey={evidenceKey}
                   signedEvidenceSrc={evidenceSrc}
@@ -319,6 +335,25 @@ export default function CoachReview() {
           </section>
         </div>
       )}
+      {lightboxEvidence && (
+        <div className="evidence-lightbox-backdrop" role="presentation" onClick={() => setLightboxEvidence(null)}>
+          <section
+            aria-label={`${lightboxEvidence.fileName} 图片预览`}
+            aria-modal="true"
+            className="evidence-lightbox"
+            role="dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header>
+              <strong>{lightboxEvidence.fileName}</strong>
+              <button aria-label="关闭图片预览" type="button" onClick={() => setLightboxEvidence(null)}>
+                <X size={20} />
+              </button>
+            </header>
+            <img alt={lightboxEvidence.fileName} src={lightboxEvidence.url} />
+          </section>
+        </div>
+      )}
     </section>
   )
 }
@@ -329,6 +364,7 @@ function ReviewExpandedDetails({
   failedEvidenceKeys,
   hasWaiverRequest,
   onEvidenceError,
+  onOpenEvidence,
   plan,
   signedEvidenceKey,
   signedEvidenceSrc,
@@ -339,6 +375,7 @@ function ReviewExpandedDetails({
   failedEvidenceKeys: Set<string>
   hasWaiverRequest: boolean
   onEvidenceError: (evidenceId: string, signedUrl: string) => void
+  onOpenEvidence: (evidence: EvidenceLightbox) => void
   plan?: Plan
   signedEvidenceKey: (evidenceId: string, signedUrl: string) => string
   signedEvidenceSrc: (signedUrl: string, evidenceId: string) => string
@@ -355,26 +392,32 @@ function ReviewExpandedDetails({
         </div>
         {evidence.length > 0 ? (
           <div className="evidence-grid review-evidence-grid">
-            {evidence.map((row) => (
-              row.signed_url ? (
-                failedEvidenceKeys.has(signedEvidenceKey(row.id, row.signed_url)) ? (
-                  <span className="mini-chip" key={row.id}>{row.file_name} 无法加载</span>
-                ) : (
-                  <figure className="review-evidence-thumb" key={row.id}>
+            {evidence.map((row) => {
+              if (!row.signed_url) return <span className="mini-chip" key={row.id}>{row.file_name}</span>
+              const key = signedEvidenceKey(row.id, row.signed_url)
+              if (failedEvidenceKeys.has(key)) return <span className="mini-chip" key={row.id}>{row.file_name} 无法加载</span>
+              const src = signedEvidenceSrc(row.signed_url, row.id)
+              return (
+                <figure className="review-evidence-thumb" key={row.id}>
+                  <button
+                    aria-label={`放大查看 ${row.file_name}`}
+                    className="review-evidence-open"
+                    type="button"
+                    onClick={() => onOpenEvidence({ fileName: row.file_name, url: src })}
+                  >
                     <img
                       alt={row.file_name}
                       decoding="async"
                       loading="lazy"
-                      src={signedEvidenceSrc(row.signed_url, row.id)}
+                      src={src}
                       onError={() => onEvidenceError(row.id, row.signed_url!)}
                     />
-                    <figcaption>{row.file_name}</figcaption>
-                  </figure>
-                )
-              ) : (
-                <span className="mini-chip" key={row.id}>{row.file_name}</span>
+                    <span><ZoomIn size={14} /> 放大查看</span>
+                  </button>
+                  <figcaption>{row.file_name}</figcaption>
+                </figure>
               )
-            ))}
+            })}
           </div>
         ) : (
           <p className="review-empty-detail">成员没有上传图片，重点看备注、异常和计划完成情况。</p>

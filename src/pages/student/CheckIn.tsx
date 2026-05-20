@@ -36,6 +36,9 @@ type SubmitErrorDetail = {
   status?: number
 }
 
+const PHOTO_LIBRARY_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif'
+const CAMERA_ACCEPT = 'image/*'
+
 export default function CheckIn() {
   const { profile } = useAuth()
   const { checkIns, upsertCheckIn } = useCheckIns(profile?.id)
@@ -56,10 +59,10 @@ export default function CheckIn() {
   const [submitErrorDetail, setSubmitErrorDetail] = useState<SubmitErrorDetail | null>(null)
   const [copiedError, setCopiedError] = useState(false)
   const [highlightUpload, setHighlightUpload] = useState(false)
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine))
   const navigate = useNavigate()
   const evidenceUploadRef = useRef<HTMLDivElement | null>(null)
   const lastFileSelectionKeyRef = useRef<string | null>(null)
-  const selectionResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const uploadHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const today = toISODate(new Date())
   const todayPlan = plans.find((plan) => plan.date === today)
@@ -75,10 +78,19 @@ export default function CheckIn() {
     mountedRef.current = true
     return () => {
       mountedRef.current = false
-      if (selectionResetTimerRef.current) clearTimeout(selectionResetTimerRef.current)
       if (uploadHighlightTimerRef.current) clearTimeout(uploadHighlightTimerRef.current)
       evidenceFilesRef.current.forEach((entry) => URL.revokeObjectURL(entry.url))
       evidenceFilesRef.current = []
+    }
+  }, [])
+
+  useEffect(() => {
+    const updateOnlineState = () => setIsOnline(navigator.onLine)
+    window.addEventListener('online', updateOnlineState)
+    window.addEventListener('offline', updateOnlineState)
+    return () => {
+      window.removeEventListener('online', updateOnlineState)
+      window.removeEventListener('offline', updateOnlineState)
     }
   }, [])
 
@@ -99,6 +111,14 @@ export default function CheckIn() {
   const submit = async () => {
     if (submitting || !profile || !todayPlan) return
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+    if (!usingLocalPreview && !isOnline) {
+      const message = '当前网络不可用。请恢复网络后再提交照片，页面上的备注和照片预览会先保留。'
+      setError(message)
+      setSubmitStage('idle')
+      setSubmitStatus('网络恢复后直接点提交即可。')
+      notifyApp({ tone: 'warning', message })
+      return
+    }
     setSubmitStage('checking')
     setSubmitStatus('正在检查训练照片。')
     setSubmitErrorDetail(null)
@@ -283,13 +303,10 @@ export default function CheckIn() {
     if (key && key === lastFileSelectionKeyRef.current) return
 
     lastFileSelectionKeyRef.current = key || null
-    void chooseFiles(files)
-
-    if (selectionResetTimerRef.current) clearTimeout(selectionResetTimerRef.current)
-    selectionResetTimerRef.current = setTimeout(() => {
+    void chooseFiles(files).finally(() => {
       input.value = ''
       lastFileSelectionKeyRef.current = null
-    }, 300)
+    })
   }
 
   const removeFile = (id: string) => {
@@ -387,6 +404,10 @@ export default function CheckIn() {
             placeholder="可以写今天哪里不舒服、哪个动作比较吃力。"
             value={note}
             onChange={(event) => setNote(event.target.value)}
+            onFocus={(event) => {
+              const target = event.currentTarget
+              window.setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 120)
+            }}
             rows={4}
           />
         </label>
@@ -395,11 +416,14 @@ export default function CheckIn() {
           <span>02</span>
           <div>
             <strong>图片证据</strong>
-            <small>{evidenceFiles.length}/{MAX_EVIDENCE_FILES} 张，支持 JPG/PNG/HEIC，单张不超过 5 MB</small>
+            <small>{evidenceFiles.length}/{MAX_EVIDENCE_FILES} 张，优先选择 JPG/PNG/WebP/GIF，单张不超过 5 MB</small>
           </div>
         </div>
         {usingLocalPreview && (
           <p className="local-preview-warning">本地预览照片只保存在这台电脑，不会同步到线上管理端。</p>
+        )}
+        {!usingLocalPreview && !isOnline && (
+          <p className="local-preview-warning">当前离线。可以先选照片和填写备注，恢复网络后再提交。</p>
         )}
         {(submitStage !== 'idle' || submitStatus) && (
           <SubmitProgress stage={submitStage} status={submitStatus} />
@@ -434,7 +458,7 @@ export default function CheckIn() {
             className={`upload-dropzone${uploadSlotsLeft <= 0 ? ' complete' : ''}${processingFiles ? ' busy' : ''}`}
           >
             <input
-              accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif"
+              accept={PHOTO_LIBRARY_ACCEPT}
               className="upload-input-cover"
               disabled={submitting || processingFiles || uploadSlotsLeft <= 0}
               multiple
@@ -446,7 +470,18 @@ export default function CheckIn() {
               {processingFiles ? <Loader2 className="is-spinning" /> : uploadSlotsLeft <= 0 ? <CheckCircle2 /> : <ImagePlus />}
             </span>
             <strong>{processingFiles ? '正在处理照片' : uploadSlotsLeft <= 0 ? '照片已满' : '添加训练照片'}</strong>
-            <small>{uploadSlotsLeft <= 0 ? '最多 3 张，先删除后再添加。' : `还可以添加 ${uploadSlotsLeft} 张。`}</small>
+            <small>{uploadSlotsLeft <= 0 ? '最多 3 张，先删除后再添加。' : `还可以添加 ${uploadSlotsLeft} 张。iPhone 原图会尽量交给系统转成 JPG。`}</small>
+          </label>
+          <label className={`camera-capture-button${uploadSlotsLeft <= 0 ? ' disabled' : ''}`}>
+            <input
+              accept={CAMERA_ACCEPT}
+              capture="environment"
+              disabled={submitting || processingFiles || uploadSlotsLeft <= 0}
+              type="file"
+              onChange={(event) => handleFileInput(event.currentTarget)}
+            />
+            <ImagePlus size={18} />
+            直接拍照打卡
           </label>
           <div className="upload-meter" aria-hidden="true">
             {Array.from({ length: MAX_EVIDENCE_FILES }).map((_, index) => (

@@ -28,10 +28,14 @@ function normalizeMimeType(type: string) {
   return lowerType
 }
 
+function isHeicMimeType(type: string) {
+  return type === 'image/heic' || type === 'image/heif'
+}
+
 function inferMimeType(file: File) {
   const nameType = mimeTypeFromName(file.name)
   const rawType = normalizeMimeType(file.type || '')
-  if (rawType === 'image/heic' || rawType === 'image/heif') return rawType
+  if (isHeicMimeType(rawType)) return rawType
   if (allowedMimeTypes.has(rawType)) return rawType
   if (rawType.startsWith('image/') && nameType) return nameType
   if (nameType) return nameType
@@ -124,7 +128,7 @@ async function compressImage(file: File) {
 export async function prepareEvidenceFile(file: File): Promise<PreparedEvidenceFile> {
   const mimeType = inferMimeType(file)
   if (!allowedMimeTypes.has(mimeType)) {
-    throw new Error(`${file.name} 不是支持的图片格式。请上传 JPG、PNG、WebP、GIF 或 HEIC。`)
+    throw new Error(`${file.name} 不是支持的图片格式。请上传 JPG、PNG、WebP 或 GIF。`)
   }
 
   const typedFile = file.type === mimeType ? file : new File([file], file.name, { lastModified: file.lastModified, type: mimeType })
@@ -133,11 +137,20 @@ export async function prepareEvidenceFile(file: File): Promise<PreparedEvidenceF
   if (mimeType === 'image/gif') {
     throw new Error(`${file.name} 超过 5 MB。GIF 不能稳定压缩，请换一张更小的图片。`)
   }
+  if (isHeicMimeType(mimeType)) {
+    throw new Error(`${file.name} 是超过 5 MB 的 iPhone 原图。请回到相册重新选择，或先转成 JPG 后再上传。`)
+  }
   if (!browserCompressedMimeTypes.has(mimeType)) {
     throw new Error(`${file.name} 超过 5 MB。请在相册里压缩或转成 JPG 后再上传。`)
   }
 
-  const compressed = await compressImage(typedFile)
+  let compressed: File
+  try {
+    compressed = await compressImage(typedFile)
+  } catch (err) {
+    if (err instanceof Error && err.message) throw err
+    throw new Error(`${file.name} 太大，当前手机浏览器处理失败。请换一张小一点的照片再试。`)
+  }
   return {
     file: compressed,
     originalName: file.name,

@@ -7,7 +7,7 @@ import { notifySyncError } from '../lib/syncError'
 import type { CheckInEvidence } from '../lib/types'
 
 const bucket = 'checkin-evidence'
-const DEFAULT_UPLOAD_TIMEOUT_MS = 45_000
+const DEFAULT_UPLOAD_TIMEOUT_MS = 75_000
 
 export type EvidenceUploadStage = 'storage_upload' | 'evidence_insert' | 'evidence_confirm'
 
@@ -175,66 +175,80 @@ export function useCheckInEvidence(scope = 'demo') {
     }
 
     const inserted: CheckInEvidence[] = []
-    for (const [fileIndex, file] of files.entries()) {
-      if (!file.type.startsWith('image/')) throw new Error('只能上传图片文件。')
-      const path = `${userId}/${checkInId}/${crypto.randomUUID()}-${safeFileName(file.name)}`
-      const client = supabase
-      if (!client) throw new Error('Supabase 未配置，无法上传图片。')
-      options.onProgress?.({ fileName: file.name, index: fileIndex + 1, stage: 'storage_upload', total: files.length })
-      const { error: uploadError } = await withTimeout(
-        client.storage.from(bucket).upload(path, file, {
-          contentType: file.type,
-          upsert: false,
-        }),
-        timeoutMs,
-        () =>
-          new EvidenceUploadError('照片上传超时：网络太慢或浏览器阻止了上传，请换网络后重试。', {
-            fileName: file.name,
-            fileSize: file.size,
-            fileType: file.type,
-            message: '照片上传超时。',
-            stage: 'storage_upload',
+    const uploadedPaths: string[] = []
+    try {
+      for (const [fileIndex, file] of files.entries()) {
+        if (!file.type.startsWith('image/')) throw new Error('只能上传图片文件。')
+        const path = `${userId}/${checkInId}/${crypto.randomUUID()}-${safeFileName(file.name)}`
+        const client = supabase
+        if (!client) throw new Error('Supabase 未配置，无法上传图片。')
+        options.onProgress?.({ fileName: file.name, index: fileIndex + 1, stage: 'storage_upload', total: files.length })
+        const { error: uploadError } = await withTimeout(
+          client.storage.from(bucket).upload(path, file, {
+            contentType: file.type,
+            upsert: false,
           }),
-      )
-      if (uploadError) {
-        throw new EvidenceUploadError(
-          friendlySupabaseMessage(uploadError, '照片上传失败：'),
-          uploadDebug('storage_upload', file, uploadError),
+          timeoutMs,
+          () =>
+            new EvidenceUploadError('照片上传超时：网络太慢或浏览器阻止了上传，请换网络后重试。', {
+              fileName: file.name,
+              fileSize: file.size,
+              fileType: file.type,
+              message: '照片上传超时。',
+              stage: 'storage_upload',
+            }),
         )
-      }
+        if (uploadError) {
+          throw new EvidenceUploadError(
+            friendlySupabaseMessage(uploadError, '照片上传失败：'),
+            uploadDebug('storage_upload', file, uploadError),
+          )
+        }
+        uploadedPaths.push(path)
 
-      options.onProgress?.({ fileName: file.name, index: fileIndex + 1, stage: 'evidence_insert', total: files.length })
-      const { data, error } = await withTimeout(
-        client
-          .from('check_in_evidence')
-          .insert({
-            check_in_id: checkInId,
-            user_id: userId,
-            storage_path: path,
-            file_name: file.name,
-            mime_type: file.type,
-            size_bytes: file.size,
-          })
-          .select('*')
-          .single(),
-        timeoutMs,
-        () =>
-          new EvidenceUploadError('照片记录保存超时：照片可能已上传，请稍后重试。', {
-            fileName: file.name,
-            fileSize: file.size,
-            fileType: file.type,
-            message: '照片记录保存超时。',
-            stage: 'evidence_insert',
-          }),
-      )
-      if (error) {
-        void client.storage.from(bucket).remove([path])
-        throw new EvidenceUploadError(
-          friendlySupabaseMessage(error, '照片已上传，但证据记录保存失败：'),
-          uploadDebug('evidence_insert', file, error),
+        options.onProgress?.({ fileName: file.name, index: fileIndex + 1, stage: 'evidence_insert', total: files.length })
+        const { data, error } = await withTimeout(
+          client
+            .from('check_in_evidence')
+            .insert({
+              check_in_id: checkInId,
+              user_id: userId,
+              storage_path: path,
+              file_name: file.name,
+              mime_type: file.type,
+              size_bytes: file.size,
+            })
+            .select('*')
+            .single(),
+          timeoutMs,
+          () =>
+            new EvidenceUploadError('照片记录保存超时：照片可能已上传，请稍后重试。', {
+              fileName: file.name,
+              fileSize: file.size,
+              fileType: file.type,
+              message: '照片记录保存超时。',
+              stage: 'evidence_insert',
+            }),
         )
+        if (error) {
+          void client.storage.from(bucket).remove([path])
+          throw new EvidenceUploadError(
+            friendlySupabaseMessage(error, '照片已上传，但证据记录保存失败：'),
+            uploadDebug('evidence_insert', file, error),
+          )
+        }
+        inserted.push(data as CheckInEvidence)
       }
-      inserted.push(data as CheckInEvidence)
+    } catch (err) {
+      const client = supabase
+      if (client) {
+        const insertedIds = inserted.map((row) => row.id)
+        await Promise.allSettled([
+          insertedIds.length > 0 ? client.from('check_in_evidence').delete().in('id', insertedIds) : Promise.resolve(),
+          uploadedPaths.length > 0 ? client.storage.from(bucket).remove(uploadedPaths) : Promise.resolve(),
+        ])
+      }
+      throw err
     }
 
     if (inserted.length < files.length) {

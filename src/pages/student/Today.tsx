@@ -424,7 +424,6 @@ function TodaySelfPlanSection({ draft, onSave }: { draft: PlanDraft; onSave: (dr
     <section className="contract-section self-plan-clause-section">
       <div className="section-heading contract-section-heading">
         <h3>自己制定今日计划</h3>
-        <span>不等于罚款</span>
       </div>
       <PlanEditor initial={draft} submitLabel="保存今日自定计划" onSubmit={async (nextDraft) => void (await onSave(nextDraft))} />
     </section>

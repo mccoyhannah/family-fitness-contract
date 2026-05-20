@@ -38,6 +38,13 @@ type SubmitErrorDetail = {
 
 const PHOTO_LIBRARY_ACCEPT = 'image/*'
 const CAMERA_ACCEPT = 'image/*'
+type FilePickerSource = 'camera' | 'library'
+
+type PendingFilePicker = {
+  beforeCount: number
+  source: FilePickerSource
+  startedAt: number
+}
 
 export default function CheckIn() {
   const { profile } = useAuth()
@@ -63,6 +70,8 @@ export default function CheckIn() {
   const navigate = useNavigate()
   const evidenceUploadRef = useRef<HTMLDivElement | null>(null)
   const lastFileSelectionKeyRef = useRef<string | null>(null)
+  const pendingFilePickerRef = useRef<PendingFilePicker | null>(null)
+  const pickerFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const uploadHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const today = toISODate(new Date())
   const todayPlan = plans.find((plan) => plan.date === today)
@@ -80,10 +89,37 @@ export default function CheckIn() {
     return () => {
       mountedRef.current = false
       if (uploadHighlightTimerRef.current) clearTimeout(uploadHighlightTimerRef.current)
+      if (pickerFallbackTimerRef.current) clearTimeout(pickerFallbackTimerRef.current)
       evidenceFilesRef.current.forEach((entry) => URL.revokeObjectURL(entry.url))
       evidenceFilesRef.current = []
     }
   }, [])
+
+  useEffect(() => {
+    const checkPickerReturn = () => {
+      const pending = pendingFilePickerRef.current
+      if (!pending || document.visibilityState !== 'visible') return
+      if (Date.now() - pending.startedAt < 700) return
+      if (pickerFallbackTimerRef.current) clearTimeout(pickerFallbackTimerRef.current)
+      pickerFallbackTimerRef.current = setTimeout(() => {
+        const latestPending = pendingFilePickerRef.current
+        if (!latestPending || processingFiles) return
+        if (evidenceFilesRef.current.length !== latestPending.beforeCount) {
+          pendingFilePickerRef.current = null
+          return
+        }
+        showEmptyFileMessage(latestPending.source)
+        pendingFilePickerRef.current = null
+      }, 900)
+    }
+
+    window.addEventListener('focus', checkPickerReturn)
+    document.addEventListener('visibilitychange', checkPickerReturn)
+    return () => {
+      window.removeEventListener('focus', checkPickerReturn)
+      document.removeEventListener('visibilitychange', checkPickerReturn)
+    }
+  }, [processingFiles])
 
   useEffect(() => {
     const updateOnlineState = () => setIsOnline(navigator.onLine)
@@ -107,6 +143,45 @@ export default function CheckIn() {
     uploadHighlightTimerRef.current = setTimeout(() => {
       if (mountedRef.current) setHighlightUpload(false)
     }, 1400)
+  }
+
+  const pickerSourceLabel = (source: FilePickerSource) => (source === 'camera' ? '相机' : '相册')
+
+  const showEmptyFileMessage = (source: FilePickerSource) => {
+    const sourceLabel = pickerSourceLabel(source)
+    const message = isWeChatBrowser
+      ? `没有收到${sourceLabel}照片。微信内置浏览器可能拦截了文件，请点右上角用系统浏览器打开后重试。`
+      : `没有收到${sourceLabel}照片。请确认拍照后点“确定”，或换一张照片再试。`
+    setError(message)
+    setSubmitErrorDetail(null)
+    setFileMessage('')
+    setSubmitStatus(source === 'camera' ? '相机没有把照片交给网页，请重新拍照并确认保存。' : '相册没有把照片交给网页，请重新选择照片。')
+    notifyApp({ tone: 'warning', message })
+    flashEvidenceUpload()
+  }
+
+  const armFilePickerFallback = (source: FilePickerSource) => {
+    if (submitting || processingFiles || uploadSlotsLeft <= 0) return
+    pendingFilePickerRef.current = {
+      beforeCount: evidenceFilesRef.current.length,
+      source,
+      startedAt: Date.now(),
+    }
+    setError('')
+    setSubmitErrorDetail(null)
+    setSubmitStatus(source === 'camera' ? '正在打开相机。拍照后请点确认/完成。' : '正在打开相册。选择照片后会自动处理。')
+    setFileMessage('')
+    if (pickerFallbackTimerRef.current) clearTimeout(pickerFallbackTimerRef.current)
+    pickerFallbackTimerRef.current = setTimeout(() => {
+      const pending = pendingFilePickerRef.current
+      if (!pending || processingFiles) return
+      if (evidenceFilesRef.current.length !== pending.beforeCount) {
+        pendingFilePickerRef.current = null
+        return
+      }
+      showEmptyFileMessage(pending.source)
+      pendingFilePickerRef.current = null
+    }, 15000)
   }
 
   const submit = async () => {
@@ -212,23 +287,17 @@ export default function CheckIn() {
     }
   }
 
-  const chooseFiles = async (incoming: File[]) => {
+  const chooseFiles = async (incoming: File[], source: FilePickerSource = 'library') => {
     if (processingFiles) {
       setFileMessage('上一张照片还在处理，请稍等。')
       return
     }
     if (incoming.length === 0) {
-      const message = isWeChatBrowser
-        ? '微信内置浏览器没有把照片交给网页。请点右上角用系统浏览器打开，或直接拍照打卡。'
-        : '没有收到照片，请换一张或用系统浏览器打开后重试。'
-      setError(message)
-      setSubmitErrorDetail(null)
-      setFileMessage('')
-      setSubmitStatus(isWeChatBrowser ? '微信里选相册不稳定，建议用系统浏览器或直接拍照。' : '相册没有把照片交给网页，请重新点“添加训练照片”。')
-      notifyApp({ tone: 'warning', message })
-      flashEvidenceUpload()
+      showEmptyFileMessage(source)
       return
     }
+    pendingFilePickerRef.current = null
+    if (pickerFallbackTimerRef.current) clearTimeout(pickerFallbackTimerRef.current)
     setError('')
     setSubmitErrorDetail(null)
     setCopiedError(false)
@@ -298,7 +367,7 @@ export default function CheckIn() {
   const fileSelectionKey = (files: File[]) =>
     files.map((file) => `${file.name}:${file.size}:${file.lastModified}`).join('|')
 
-  const handleFileInput = (input: HTMLInputElement) => {
+  const handleFileInput = (input: HTMLInputElement, source: FilePickerSource = 'library') => {
     const files = Array.from(input.files ?? [])
     const key = fileSelectionKey(files)
 
@@ -306,7 +375,7 @@ export default function CheckIn() {
     if (key && key === lastFileSelectionKeyRef.current) return
 
     lastFileSelectionKeyRef.current = key || null
-    void chooseFiles(files).finally(() => {
+    void chooseFiles(files, source).finally(() => {
       input.value = ''
       lastFileSelectionKeyRef.current = null
     })
@@ -470,8 +539,10 @@ export default function CheckIn() {
               disabled={submitting || processingFiles || uploadSlotsLeft <= 0}
               multiple
               type="file"
-              onChange={(event) => handleFileInput(event.currentTarget)}
-              onInput={(event) => handleFileInput(event.currentTarget)}
+              onChange={(event) => handleFileInput(event.currentTarget, 'library')}
+              onClick={() => armFilePickerFallback('library')}
+              onInput={(event) => handleFileInput(event.currentTarget, 'library')}
+              onPointerDown={() => armFilePickerFallback('library')}
             />
             <span className="upload-dropzone-icon" aria-hidden="true">
               {processingFiles ? <Loader2 className="is-spinning" /> : uploadSlotsLeft <= 0 ? <CheckCircle2 /> : <ImagePlus />}
@@ -482,10 +553,14 @@ export default function CheckIn() {
           <label className={`camera-capture-button${uploadSlotsLeft <= 0 ? ' disabled' : ''}`}>
             <input
               accept={CAMERA_ACCEPT}
+              className="camera-input-cover"
               capture="environment"
               disabled={submitting || processingFiles || uploadSlotsLeft <= 0}
               type="file"
-              onChange={(event) => handleFileInput(event.currentTarget)}
+              onChange={(event) => handleFileInput(event.currentTarget, 'camera')}
+              onClick={() => armFilePickerFallback('camera')}
+              onInput={(event) => handleFileInput(event.currentTarget, 'camera')}
+              onPointerDown={() => armFilePickerFallback('camera')}
             />
             <ImagePlus size={18} />
             直接拍照打卡

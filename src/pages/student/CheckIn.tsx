@@ -96,32 +96,6 @@ export default function CheckIn() {
   }, [])
 
   useEffect(() => {
-    const checkPickerReturn = () => {
-      const pending = pendingFilePickerRef.current
-      if (!pending || document.visibilityState !== 'visible') return
-      if (Date.now() - pending.startedAt < 700) return
-      if (pickerFallbackTimerRef.current) clearTimeout(pickerFallbackTimerRef.current)
-      pickerFallbackTimerRef.current = setTimeout(() => {
-        const latestPending = pendingFilePickerRef.current
-        if (!latestPending || processingFiles) return
-        if (evidenceFilesRef.current.length !== latestPending.beforeCount) {
-          pendingFilePickerRef.current = null
-          return
-        }
-        showEmptyFileMessage(latestPending.source)
-        pendingFilePickerRef.current = null
-      }, 900)
-    }
-
-    window.addEventListener('focus', checkPickerReturn)
-    document.addEventListener('visibilitychange', checkPickerReturn)
-    return () => {
-      window.removeEventListener('focus', checkPickerReturn)
-      document.removeEventListener('visibilitychange', checkPickerReturn)
-    }
-  }, [processingFiles])
-
-  useEffect(() => {
     const updateOnlineState = () => setIsOnline(navigator.onLine)
     window.addEventListener('online', updateOnlineState)
     window.addEventListener('offline', updateOnlineState)
@@ -542,7 +516,6 @@ export default function CheckIn() {
               onChange={(event) => handleFileInput(event.currentTarget, 'library')}
               onClick={() => armFilePickerFallback('library')}
               onInput={(event) => handleFileInput(event.currentTarget, 'library')}
-              onPointerDown={() => armFilePickerFallback('library')}
             />
             <span className="upload-dropzone-icon" aria-hidden="true">
               {processingFiles ? <Loader2 className="is-spinning" /> : uploadSlotsLeft <= 0 ? <CheckCircle2 /> : <ImagePlus />}
@@ -560,7 +533,6 @@ export default function CheckIn() {
               onChange={(event) => handleFileInput(event.currentTarget, 'camera')}
               onClick={() => armFilePickerFallback('camera')}
               onInput={(event) => handleFileInput(event.currentTarget, 'camera')}
-              onPointerDown={() => armFilePickerFallback('camera')}
             />
             <ImagePlus size={18} />
             直接拍照打卡

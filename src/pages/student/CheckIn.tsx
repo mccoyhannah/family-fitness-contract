@@ -261,15 +261,12 @@ export default function CheckIn() {
     }
   }
 
-  const chooseFiles = async (incoming: File[], source: FilePickerSource = 'library') => {
+  const chooseFiles = async (incoming: File[]) => {
     if (processingFiles) {
       setFileMessage('上一张照片还在处理，请稍等。')
       return
     }
-    if (incoming.length === 0) {
-      showEmptyFileMessage(source)
-      return
-    }
+    if (incoming.length === 0) return
     pendingFilePickerRef.current = null
     if (pickerFallbackTimerRef.current) clearTimeout(pickerFallbackTimerRef.current)
     setError('')
@@ -341,15 +338,16 @@ export default function CheckIn() {
   const fileSelectionKey = (files: File[]) =>
     files.map((file) => `${file.name}:${file.size}:${file.lastModified}`).join('|')
 
-  const handleFileInput = (input: HTMLInputElement, source: FilePickerSource = 'library') => {
+  const handleFileInput = (input: HTMLInputElement) => {
     const files = Array.from(input.files ?? [])
-    const key = fileSelectionKey(files)
 
-    if (files.length === 0 && lastFileSelectionKeyRef.current) return
+    if (files.length === 0) return
+
+    const key = fileSelectionKey(files)
     if (key && key === lastFileSelectionKeyRef.current) return
 
     lastFileSelectionKeyRef.current = key || null
-    void chooseFiles(files, source).finally(() => {
+    void chooseFiles(files).finally(() => {
       input.value = ''
       lastFileSelectionKeyRef.current = null
     })
@@ -513,9 +511,8 @@ export default function CheckIn() {
               disabled={submitting || processingFiles || uploadSlotsLeft <= 0}
               multiple
               type="file"
-              onChange={(event) => handleFileInput(event.currentTarget, 'library')}
+              onChange={(event) => handleFileInput(event.currentTarget)}
               onClick={() => armFilePickerFallback('library')}
-              onInput={(event) => handleFileInput(event.currentTarget, 'library')}
             />
             <span className="upload-dropzone-icon" aria-hidden="true">
               {processingFiles ? <Loader2 className="is-spinning" /> : uploadSlotsLeft <= 0 ? <CheckCircle2 /> : <ImagePlus />}
@@ -530,9 +527,8 @@ export default function CheckIn() {
               capture="environment"
               disabled={submitting || processingFiles || uploadSlotsLeft <= 0}
               type="file"
-              onChange={(event) => handleFileInput(event.currentTarget, 'camera')}
+              onChange={(event) => handleFileInput(event.currentTarget)}
               onClick={() => armFilePickerFallback('camera')}
-              onInput={(event) => handleFileInput(event.currentTarget, 'camera')}
             />
             <ImagePlus size={18} />
             直接拍照打卡

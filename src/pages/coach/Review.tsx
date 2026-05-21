@@ -1,16 +1,15 @@
-import { ChevronDown, ChevronUp, RotateCcw, X, ZoomIn } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { ChevronDown, ChevronUp, RotateCcw } from 'lucide-react'
+import { useRef, useState } from 'react'
 import MemberSelect from '../../components/MemberSelect'
 import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
-import { useCheckInEvidence } from '../../hooks/useCheckInEvidence'
 import { useCoachData } from '../../hooks/useCoachData'
 import { useMembers } from '../../hooks/useMembers'
 import { usePlans } from '../../hooks/usePlans'
 import { formatDay } from '../../lib/date'
 import { displayMemberLabel } from '../../lib/memberLabels'
 import { notifyApp } from '../../lib/notice'
-import type { CheckIn, CheckInEvidence, Plan } from '../../lib/types'
+import type { CheckIn, Plan } from '../../lib/types'
 
 const WAIVER_PREFIX = '[免罚申请]'
 
@@ -19,11 +18,6 @@ type ReviewConfirmRequest = {
   checkInId: string
   message: string
   successMessage: string
-}
-
-type EvidenceLightbox = {
-  fileName: string
-  url: string
 }
 
 function isWaiverRequest(reason?: string | null) {
@@ -54,32 +48,16 @@ export default function CoachReview() {
     setSelectedMemberId,
   } = useMembers(coach?.id)
   const { checkIns, deletePendingCheckIn, markCheckInMissedWithPenalty, penalties, updateCheckIn, updatePenalty } = useCoachData()
-  const { deleteEvidenceForCheckIn, evidenceFor, reload: reloadEvidence } = useCheckInEvidence('coach')
-  const retriedEvidenceKeysRef = useRef(new Set<string>())
   const reviewingCheckInIdRef = useRef('')
-  const retrySequenceRef = useRef(0)
-  const [failedEvidenceKeys, setFailedEvidenceKeys] = useState<Set<string>>(() => new Set())
   const [confirmRequest, setConfirmRequest] = useState<ReviewConfirmRequest | null>(null)
   const [expandedCheckInIds, setExpandedCheckInIds] = useState<Set<string>>(() => new Set())
-  const [lightboxEvidence, setLightboxEvidence] = useState<EvidenceLightbox | null>(null)
   const [reviewingCheckInId, setReviewingCheckInId] = useState('')
   const [reviewCommentById, setReviewCommentById] = useState<Record<string, string>>({})
-  const [retryNonceByEvidenceKey, setRetryNonceByEvidenceKey] = useState<Record<string, number>>({})
   const { plans } = usePlans(selectedMember?.id)
   const memberNameById = new Map(members.map((member) => [member.id, displayMemberLabel(member)]))
   const pending = membersReady
     ? checkIns.filter((item) => item.status === 'pending_review' && (!selectedMember || item.user_id === selectedMember.id))
     : []
-  const evidenceCount = pending.reduce((sum, item) => sum + evidenceFor(item.id).length, 0)
-
-  useEffect(() => {
-    if (!lightboxEvidence) return
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setLightboxEvidence(null)
-    }
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [lightboxEvidence])
 
   const buildReviewUpdate = (comment: string) => ({
     review_comment: comment.trim() || null,
@@ -103,7 +81,6 @@ export default function CoachReview() {
     if (checkIn.status !== 'pending_review') {
       throw new Error('只能退回待审核的打卡。')
     }
-    await deleteEvidenceForCheckIn(checkIn.id, checkIn.user_id)
     await deletePendingCheckIn(checkIn)
   }
 
@@ -134,28 +111,6 @@ export default function CoachReview() {
     }
   }
 
-  const evidenceKey = (evidenceId: string, signedUrl: string) => `${evidenceId}:${signedUrl}`
-
-  const handleEvidenceError = (evidenceId: string, signedUrl: string) => {
-    const key = evidenceKey(evidenceId, signedUrl)
-    if (retriedEvidenceKeysRef.current.has(key)) {
-      setFailedEvidenceKeys((current) => new Set(current).add(key))
-      return
-    }
-    retriedEvidenceKeysRef.current.add(key)
-    retrySequenceRef.current += 1
-    setRetryNonceByEvidenceKey((current) => ({ ...current, [key]: retrySequenceRef.current }))
-    void reloadEvidence().catch(() => {
-      setFailedEvidenceKeys((current) => new Set(current).add(key))
-    })
-  }
-
-  const evidenceSrc = (signedUrl: string, evidenceId: string) => {
-    const nonce = retryNonceByEvidenceKey[evidenceKey(evidenceId, signedUrl)]
-    if (!nonce) return signedUrl
-    return `${signedUrl}${signedUrl.includes('?') ? '&' : '?'}retry=${nonce}`
-  }
-
   const coachMemberLabel = (memberId: string) => memberNameById.get(memberId) || '成员'
   const toggleExpanded = (checkInId: string) => {
     setExpandedCheckInIds((current) => {
@@ -170,12 +125,12 @@ export default function CoachReview() {
     <section className="screen with-nav">
       <div className="page-title">
         <h2>异常待确认</h2>
-        <p>按成员审核打卡、请假和图片证据。</p>
+        <p>按成员审核打卡、请假和备注。</p>
       </div>
       <MemberSelect loading={membersLoading} members={members} ready={membersReady} selectedMemberId={selectedMemberId} onChange={setSelectedMemberId} />
       <div className="status-card action-card">
         <strong>{membersReady ? `${pending.length} 条待确认` : '正在同步成员'}</strong>
-        <p>{membersReady ? evidenceCount > 0 ? `包含 ${evidenceCount} 张图片证据。` : '没有图片证据时，重点看备注和异常标记。' : '成员列表稳定后再显示待确认记录。'}</p>
+        <p>{membersReady ? '重点看训练备注、疲劳度、异常标记和计划内容。' : '成员列表稳定后再显示待确认记录。'}</p>
       </div>
       <div className="review-list">
         {pending.length === 0 && <p className="muted">当前没有待确认打卡。</p>}
@@ -183,7 +138,6 @@ export default function CoachReview() {
           const displayName = coachMemberLabel(item.user_id)
           const memberPlans = plans.filter((row) => row.user_id === item.user_id)
           const plan = memberPlans.find((row) => row.id === item.plan_id || row.date === item.date)
-          const itemEvidence = evidenceFor(item.id)
           const hasWaiverRequest = isWaiverRequest(item.leave_reason)
           const waiverReason = cleanWaiverReason(item.leave_reason)
           const isExpanded = expandedCheckInIds.has(item.id)
@@ -221,14 +175,8 @@ export default function CoachReview() {
               {isExpanded && (
                 <ReviewExpandedDetails
                   checkIn={item}
-                  evidence={itemEvidence}
-                  failedEvidenceKeys={failedEvidenceKeys}
                   hasWaiverRequest={hasWaiverRequest}
-                  onEvidenceError={handleEvidenceError}
-                  onOpenEvidence={setLightboxEvidence}
                   plan={plan}
-                  signedEvidenceKey={evidenceKey}
-                  signedEvidenceSrc={evidenceSrc}
                   waiverReason={waiverReason}
                 />
               )}
@@ -335,95 +283,25 @@ export default function CoachReview() {
           </section>
         </div>
       )}
-      {lightboxEvidence && (
-        <div className="evidence-lightbox-backdrop" role="presentation" onClick={() => setLightboxEvidence(null)}>
-          <section
-            aria-label={`${lightboxEvidence.fileName} 图片预览`}
-            aria-modal="true"
-            className="evidence-lightbox"
-            role="dialog"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header>
-              <strong>{lightboxEvidence.fileName}</strong>
-              <button aria-label="关闭图片预览" type="button" onClick={() => setLightboxEvidence(null)}>
-                <X size={20} />
-              </button>
-            </header>
-            <img alt={lightboxEvidence.fileName} src={lightboxEvidence.url} />
-          </section>
-        </div>
-      )}
     </section>
   )
 }
 
 function ReviewExpandedDetails({
   checkIn,
-  evidence,
-  failedEvidenceKeys,
   hasWaiverRequest,
-  onEvidenceError,
-  onOpenEvidence,
   plan,
-  signedEvidenceKey,
-  signedEvidenceSrc,
   waiverReason,
 }: {
   checkIn: CheckIn
-  evidence: CheckInEvidence[]
-  failedEvidenceKeys: Set<string>
   hasWaiverRequest: boolean
-  onEvidenceError: (evidenceId: string, signedUrl: string) => void
-  onOpenEvidence: (evidence: EvidenceLightbox) => void
   plan?: Plan
-  signedEvidenceKey: (evidenceId: string, signedUrl: string) => string
-  signedEvidenceSrc: (signedUrl: string, evidenceId: string) => string
   waiverReason: string
 }) {
   const note = checkIn.note || (checkIn.leave_reason && !hasWaiverRequest ? checkIn.leave_reason : '')
 
   return (
     <div className="review-detail-panel">
-      <section className="review-detail-section">
-        <div className="review-detail-head">
-          <strong>打卡凭证</strong>
-          <span>{evidence.length > 0 ? `${evidence.length} 张` : '无图片'}</span>
-        </div>
-        {evidence.length > 0 ? (
-          <div className="evidence-grid review-evidence-grid">
-            {evidence.map((row) => {
-              if (!row.signed_url) return <span className="mini-chip" key={row.id}>{row.file_name}</span>
-              const key = signedEvidenceKey(row.id, row.signed_url)
-              if (failedEvidenceKeys.has(key)) return <span className="mini-chip" key={row.id}>{row.file_name} 无法加载</span>
-              const src = signedEvidenceSrc(row.signed_url, row.id)
-              return (
-                <figure className="review-evidence-thumb" key={row.id}>
-                  <button
-                    aria-label={`放大查看 ${row.file_name}`}
-                    className="review-evidence-open"
-                    type="button"
-                    onClick={() => onOpenEvidence({ fileName: row.file_name, url: src })}
-                  >
-                    <img
-                      alt={row.file_name}
-                      decoding="async"
-                      loading="lazy"
-                      src={src}
-                      onError={() => onEvidenceError(row.id, row.signed_url!)}
-                    />
-                    <span><ZoomIn size={14} /> 放大查看</span>
-                  </button>
-                  <figcaption>{row.file_name}</figcaption>
-                </figure>
-              )
-            })}
-          </div>
-        ) : (
-          <p className="review-empty-detail">成员没有上传图片，重点看备注、异常和计划完成情况。</p>
-        )}
-      </section>
-
       <section className="review-detail-section">
         <div className="review-detail-head">
           <strong>打卡备注</strong>

@@ -6,7 +6,6 @@ import Metric from '../../components/Metric'
 import PlanEditor from '../../components/PlanEditor'
 import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
-import { useCheckInEvidence } from '../../hooks/useCheckInEvidence'
 import { useCheckIns } from '../../hooks/useCheckIns'
 import { usePenalties } from '../../hooks/usePenalties'
 import { usePlans } from '../../hooks/usePlans'
@@ -14,15 +13,13 @@ import { toISODate } from '../../lib/date'
 import { notifyApp } from '../../lib/notice'
 import { buildPlan, planFromTemplate, planToExercises } from '../../lib/plan'
 import { formatPlanFocusText, formatPlanSourceLabel } from '../../lib/planDisplay'
-import { isLocalPreviewActive } from '../../lib/preview'
 import { buildMissedSync } from '../../lib/sync'
 import { rawErrorMessage } from '../../lib/supabaseErrors'
-import type { CheckIn, CheckInEvidence, Exercise, Plan, PlanDraft } from '../../lib/types'
+import type { CheckIn, Exercise, Plan, PlanDraft } from '../../lib/types'
 
 export default function Today() {
   const { profile } = useAuth()
   const { checkIns, loading: checkInsLoading, reload: reloadCheckIns, setCheckIns, upsertCheckIn, withdrawCheckIn } = useCheckIns(profile?.id)
-  const { deleteEvidenceForCheckIn, evidenceFor, loading: evidenceLoading } = useCheckInEvidence(profile?.id ?? 'demo')
   const { penalties, loading: penaltiesLoading, reload: reloadPenalties, setPenalties, upsertPenalty } = usePenalties(profile?.id)
   const { loading: plansLoading, plans, savePlan } = usePlans(profile?.id)
   const [leaveReason, setLeaveReason] = useState('')
@@ -37,8 +34,6 @@ export default function Today() {
   const todayPlan = plans.find((plan) => plan.date === today)
   const todayExercises = todayPlan ? planToExercises(todayPlan) : []
   const todayCheckIn = checkIns.find((checkIn) => checkIn.date === today)
-  const todayEvidence = todayCheckIn ? evidenceFor(todayCheckIn.id) : []
-  const usingLocalPreview = isLocalPreviewActive()
   const pendingTotal = penalties
     .filter((penalty) => penalty.status === 'pending')
     .reduce((sum, penalty) => sum + penalty.amount, 0)
@@ -130,7 +125,6 @@ export default function Today() {
     }
     setWithdrawing(true)
     try {
-      await deleteEvidenceForCheckIn(todayCheckIn.id, todayCheckIn.user_id)
       await withdrawCheckIn(todayCheckIn)
       notifyApp({ tone: 'success', message: '已撤回本次打卡，可以重新提交。' })
     } catch (err) {
@@ -170,12 +164,9 @@ export default function Today() {
         <TodayCheckInSummary
           checkIn={todayCheckIn}
           canMakeUp={todayCheckIn.status === 'missed'}
-          evidence={todayEvidence}
-          evidenceLoading={evidenceLoading}
           onMakeUp={startCheckIn}
           withdrawing={withdrawing}
           onWithdraw={withdrawTodayCheckIn}
-          usingLocalPreview={usingLocalPreview}
         />
       )}
 
@@ -266,24 +257,17 @@ function MemberCodeCard({
 function TodayCheckInSummary({
   checkIn,
   canMakeUp,
-  evidence,
-  evidenceLoading,
   onMakeUp,
   onWithdraw,
-  usingLocalPreview,
   withdrawing,
 }: {
   checkIn: CheckIn
   canMakeUp: boolean
-  evidence: CheckInEvidence[]
-  evidenceLoading: boolean
   onMakeUp: () => void
   onWithdraw: () => void
-  usingLocalPreview: boolean
   withdrawing: boolean
 }) {
   const canWithdraw = checkIn.status === 'pending_review'
-  const shouldShowEvidence = canWithdraw || evidence.length > 0 || evidenceLoading || usingLocalPreview
   return (
     <div className={`status-card checkin-clause-card contract-clause-card${canWithdraw ? ' pending-checkin-card' : ''}`}>
       <div className="checkin-summary-head">
@@ -296,9 +280,6 @@ function TodayCheckInSummary({
           <strong>教练留言</strong>
           <p>{checkIn.review_comment}</p>
         </div>
-      )}
-      {shouldShowEvidence && (
-        <TodayEvidenceSummary evidence={evidence} loading={evidenceLoading} usingLocalPreview={usingLocalPreview} />
       )}
       {canWithdraw && (
         <button className="withdraw-checkin-button" disabled={withdrawing} type="button" onClick={() => void onWithdraw()}>
@@ -313,57 +294,6 @@ function TodayCheckInSummary({
         </button>
       )}
     </div>
-  )
-}
-
-function TodayEvidenceSummary({
-  evidence,
-  loading,
-  usingLocalPreview,
-}: {
-  evidence: CheckInEvidence[]
-  loading: boolean
-  usingLocalPreview: boolean
-}) {
-  const count = evidence.length
-  const status = loading
-    ? '正在同步训练照片。'
-    : count > 0
-      ? `已上传 ${count} 张训练照片。`
-      : '还没有同步到训练照片。'
-
-  return (
-    <div className={`today-evidence-summary${count > 0 ? ' has-evidence' : ''}`}>
-      <div className="today-evidence-status">
-        <strong>训练照片</strong>
-        <span>{status}</span>
-      </div>
-      {count > 0 && (
-        <div className="today-evidence-grid">
-          {evidence.slice(0, 3).map((row) => (
-            <TodayEvidenceThumb key={row.id} row={row} />
-          ))}
-        </div>
-      )}
-      {usingLocalPreview && (
-        <p className="today-evidence-warning">本地预览照片只保存在这台电脑，不会同步到线上管理端。</p>
-      )}
-    </div>
-  )
-}
-
-function TodayEvidenceThumb({ row }: { row: CheckInEvidence }) {
-  const [imageFailed, setImageFailed] = useState(false)
-  const fileName = row.file_name || '训练照片'
-  return (
-    <figure className="today-evidence-thumb">
-      {row.signed_url && !imageFailed ? (
-        <img alt={fileName} src={row.signed_url} onError={() => setImageFailed(true)} />
-      ) : (
-        <span className="today-evidence-file">{fileName}</span>
-      )}
-      <figcaption>{fileName}</figcaption>
-    </figure>
   )
 }
 

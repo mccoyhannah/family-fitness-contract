@@ -1,15 +1,15 @@
 # 家庭健身契约
 
-v1.1 家庭成员版：`Vite + React + TypeScript + Supabase + React Router + PWA + Cloudflare Pages`。当前版本支持管理者绑定多个成员、按成员制定计划、成员当天自定计划、文字加图片打卡、审核和账款记录。
+v1.1 家庭成员版：`Vite + React + TypeScript + Supabase + React Router + PWA + Cloudflare Pages`。当前版本支持管理者绑定多个成员、按成员制定计划、成员当天自定计划、状态备注打卡、审核和账款记录。
 
 ## 当前状态
 
-- 已接入 Supabase SDK、Realtime 订阅骨架和私有 Storage 图片证据桶。
+- 已接入 Supabase SDK、Realtime 订阅骨架；历史图片证据表和私有 Storage bucket 保留兼容旧记录，新打卡不再要求上传照片。
 - 已拆路由：`/login`、`/`、`/plan`、`/checkin`、`/ledger`、`/admin`、`/admin/members`、`/admin/review`、`/admin/payments`。
 - 已拆角色：`student` 只能进学员端，`coach` 只能进管理端。
 - 已加成员绑定：管理者可用成员邮箱或成员码绑定已有学员账号，并给每个成员设置管理端显示昵称。
 - 已加云端计划：管理者给成员制定计划；无计划时，成员可自己制定当天计划。
-- 已加图片打卡：成员可上传 1-3 张图片，管理端审核页可查看证据。
+- 已改为无照片打卡：成员记录身体状态、异常和备注，管理端按成员审核打卡、请假和备注。
 - 已加请假按钮：当天写入 `check_ins.status='excused'`，如有当天罚款则置为 `waived`。
 - 已加递增罚款：第 1 天 `¥10`，第 2 天 `¥20`，第 3 天 `¥30`，第 4 天 `¥40`，第 5 天起封顶 `¥50`。
 - 已加付款确认闭环：成员只能上报“已付款”，管理端确认后才会变成“已支付”。
@@ -52,7 +52,7 @@ VITE_SUPABASE_ANON_KEY=你的 anon key
 supabase/schema.sql
 ```
 
-这会创建 `profiles`、`coach_members`、`plans`、`plan_items`、`check_in_evidence`、RLS policy，以及私有 Storage bucket：`checkin-evidence`。
+这会创建 `profiles`、`coach_members`、`plans`、`plan_items`、RLS policy，并保留历史兼容用的 `check_in_evidence` 表和私有 Storage bucket：`checkin-evidence`。
 
 5. 在 Supabase Auth 后台手动创建用户：你和成员。
 6. 把 Auth user UUID 插入 `profiles`：

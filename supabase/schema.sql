@@ -112,6 +112,20 @@ create unique index if not exists penalties_source_unique_idx
 on public.penalties (source_type, source_id)
 where source_type is not null and source_id is not null;
 
+create table if not exists public.penalty_settings (
+  id boolean primary key default true,
+  base_amount int not null default 10 check (base_amount >= 0),
+  daily_increment int not null default 10 check (daily_increment >= 0),
+  max_amount int not null default 50 check (max_amount >= base_amount),
+  updated_at timestamptz default now(),
+  updated_by uuid references public.profiles(id) on delete set null,
+  check (id)
+);
+
+insert into public.penalty_settings (id, base_amount, daily_increment, max_amount)
+values (true, 10, 10, 50)
+on conflict (id) do nothing;
+
 create table if not exists public.check_in_evidence (
   id uuid primary key default gen_random_uuid(),
   check_in_id uuid not null references public.check_ins(id) on delete cascade,
@@ -129,6 +143,7 @@ alter table public.plans enable row level security;
 alter table public.plan_items enable row level security;
 alter table public.check_ins enable row level security;
 alter table public.penalties enable row level security;
+alter table public.penalty_settings enable row level security;
 alter table public.check_in_evidence enable row level security;
 
 create or replace function public.is_coach()
@@ -257,14 +272,56 @@ for each row execute function public.guard_check_in_review_fields();
 
 create or replace function public.compute_penalty_amount(consecutive_days int)
 returns int
-language sql
-immutable
+language plpgsql
+security definer
 set search_path = public
+stable
 as $$
-  select least(10 * greatest(1, consecutive_days), 50);
+declare
+  rule record;
+  base int := 10;
+  increment int := 10;
+  cap int := 50;
+  days int := greatest(1, consecutive_days);
+begin
+  select base_amount, daily_increment, max_amount
+  into rule
+  from public.penalty_settings
+  where id = true
+  limit 1;
+
+  if found then
+    base := rule.base_amount;
+    increment := rule.daily_increment;
+    cap := rule.max_amount;
+  end if;
+
+  return least(base + ((days - 1) * increment), cap);
+end;
 $$;
 
 revoke execute on function public.compute_penalty_amount(int) from public, anon, authenticated;
+
+create or replace function public.touch_penalty_settings()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  new.id := true;
+  new.updated_at := now();
+  new.updated_by := auth.uid();
+  return new;
+end;
+$$;
+
+revoke execute on function public.touch_penalty_settings() from public, anon, authenticated;
+
+drop trigger if exists touch_penalty_settings on public.penalty_settings;
+create trigger touch_penalty_settings
+before update on public.penalty_settings
+for each row execute function public.touch_penalty_settings();
 
 create or replace function public.compute_consecutive_misses(student uuid, target_date date)
 returns int
@@ -700,6 +757,19 @@ on public.penalties for select
 to authenticated
 using (public.can_read_student(user_id));
 
+drop policy if exists "penalty_settings_select_authenticated" on public.penalty_settings;
+create policy "penalty_settings_select_authenticated"
+on public.penalty_settings for select
+to authenticated
+using (true);
+
+drop policy if exists "penalty_settings_update_coach" on public.penalty_settings;
+create policy "penalty_settings_update_coach"
+on public.penalty_settings for update
+to authenticated
+using (public.is_coach() and id = true)
+with check (public.is_coach() and id = true);
+
 drop policy if exists "students_insert_own_penalties" on public.penalties;
 create policy "students_insert_own_penalties"
 on public.penalties for insert
@@ -866,6 +936,8 @@ grant update (plan_id, status, fatigue, issues, note, leave_reason, review_comme
 grant select, insert, delete on public.penalties to authenticated;
 revoke update on public.penalties from authenticated;
 grant update (status) on public.penalties to authenticated;
+grant select on public.penalty_settings to authenticated;
+grant update (base_amount, daily_increment, max_amount, updated_at, updated_by) on public.penalty_settings to authenticated;
 grant select, insert, delete on public.check_in_evidence to authenticated;
 
 -- After creating Auth users manually, insert profiles like:

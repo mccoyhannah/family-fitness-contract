@@ -1,8 +1,10 @@
 import { addDays, toISODate } from './date'
-import type { CheckIn, Penalty, Plan } from './types'
+import { DEFAULT_PENALTY_SETTINGS } from './penaltySettings'
+import type { CheckIn, Penalty, PenaltySettings, Plan } from './types'
 
-export function computePenaltyAmount(consecutiveDays: number) {
-  return Math.min(10 * Math.max(1, consecutiveDays), 50)
+export function computePenaltyAmount(consecutiveDays: number, settings: PenaltySettings = DEFAULT_PENALTY_SETTINGS) {
+  const days = Math.max(1, consecutiveDays)
+  return Math.min(settings.base_amount + (days - 1) * settings.daily_increment, settings.max_amount)
 }
 
 export function computeConsecutiveMisses(

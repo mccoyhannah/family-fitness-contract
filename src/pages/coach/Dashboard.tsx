@@ -19,6 +19,14 @@ type RecentRecord = {
   status: CheckInStatus
 }
 
+function cleanRecentRecordDetail(detail: string) {
+  return detail
+    .replace('最近 7 天无计划且未打卡，自动判定缺卡', '最近 7 天无计划且未打卡')
+    .replace('过了截止时间自动判定缺卡', '过了截止时间未打卡')
+    .replace(/^.+ · 过了截止时间未打卡$/, '过了截止时间未打卡')
+    .replace('自动判定缺卡', '缺卡')
+}
+
 export default function CoachDashboard() {
   const { profile } = useAuth()
   const {
@@ -56,7 +64,7 @@ export default function CoachDashboard() {
       .map((plan) => ({
         id: `missed-plan-${plan.id}`,
         date: plan.date,
-        detail: `${plan.title} · 过了截止时间未打卡`,
+        detail: '过了截止时间未打卡',
         status: 'missed' as CheckInStatus,
       })),
   ]
@@ -123,9 +131,9 @@ export default function CoachDashboard() {
             {recentRecords.length === 0 && <p className="muted">这个成员还没有已完成或已过截止时间的计划记录。</p>}
             {recentRecords.map((item) => (
               <article className="review-card dashboard-row" key={item.id}>
-                <div>
-                  <strong>{formatDay(item.date)}</strong>
-                  <span>{item.detail}</span>
+                <div className="dashboard-record-copy">
+                  <strong className="dashboard-record-date">{formatDay(item.date)}</strong>
+                  <span className="dashboard-record-detail">{cleanRecentRecordDetail(item.detail)}</span>
                 </div>
                 <StatusPill status={item.status} />
               </article>

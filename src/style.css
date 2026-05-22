@@ -2185,7 +2185,23 @@ code {
 }
 
 .dashboard-row {
-  align-items: center;
+  align-items: flex-start;
+}
+
+.dashboard-record-copy {
+  min-width: 0;
+  display: grid;
+  gap: 9px;
+}
+
+.dashboard-record-date {
+  line-height: 1.2;
+}
+
+.dashboard-record-detail {
+  display: block;
+  color: var(--muted);
+  line-height: 1.55;
 }
 
 .checkin-screen {
@@ -2443,6 +2459,104 @@ code {
 
 .payments-screen {
   padding-bottom: calc(34px + env(safe-area-inset-bottom, 0px));
+}
+
+.penalty-rule-card {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 18px;
+}
+
+.penalty-rule-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.penalty-rule-head > div {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.penalty-rule-head strong {
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 820;
+}
+
+.penalty-rule-head span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.penalty-rule-head button {
+  min-height: 40px;
+  flex: 0 0 auto;
+  padding: 0 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--muted);
+  background: var(--paper-soft);
+  font-weight: 760;
+}
+
+.penalty-rule-head button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.penalty-rule-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(112px, max-content);
+  gap: 12px;
+  align-items: end;
+}
+
+.penalty-rule-grid label {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 740;
+}
+
+.penalty-rule-grid input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink);
+  background: #fff;
+  font-weight: 820;
+}
+
+.penalty-rule-grid button {
+  min-height: 46px;
+  padding: 0 16px;
+  border: 1px solid #aad4b9;
+  border-radius: var(--radius);
+  color: var(--brand-2);
+  background: var(--brand-soft);
+  font-weight: 820;
+  white-space: nowrap;
+}
+
+.penalty-rule-grid button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.penalty-rule-message {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .payments-controls {
@@ -2722,6 +2836,7 @@ button:active,
   .check-grid,
   .member-choice-list,
   .week-tabs,
+  .penalty-rule-grid,
   .payments-toolbar {
     grid-template-columns: 1fr;
   }
@@ -2864,9 +2979,14 @@ button:active,
   }
 
   .checkin-summary-head,
+  .penalty-rule-head,
   .review-comment-label-row {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .penalty-rule-head button {
+    width: 100%;
   }
 
   .review-comment-label-row small {

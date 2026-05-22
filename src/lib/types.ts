@@ -48,6 +48,15 @@ export type Penalty = {
   created_at?: string
 }
 
+export type PenaltySettings = {
+  id?: boolean
+  base_amount: number
+  daily_increment: number
+  max_amount: number
+  updated_at?: string
+  updated_by?: string | null
+}
+
 export type Exercise = {
   id: string
   name: string

@@ -1,4 +1,5 @@
 import { CheckCircle2, CircleSlash, ReceiptText } from 'lucide-react'
+import type { FormEvent } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import MemberSelect from '../../components/MemberSelect'
 import Metric from '../../components/Metric'
@@ -6,6 +7,7 @@ import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
 import { useCoachData } from '../../hooks/useCoachData'
 import { useMembers } from '../../hooks/useMembers'
+import { usePenaltySettings } from '../../hooks/usePenaltySettings'
 import { formatDay } from '../../lib/date'
 import { displayMemberLabel } from '../../lib/memberLabels'
 import { notifyApp } from '../../lib/notice'
@@ -31,9 +33,17 @@ export default function CoachPayments() {
     setSelectedMemberId,
   } = useMembers(profile?.id)
   const { penalties, updatePenalty } = useCoachData()
+  const { loading: penaltySettingsLoading, saveSettings, settings: penaltySettings } = usePenaltySettings()
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'payment_reported' | 'paid' | 'waived'>('all')
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'amount-desc'>('newest')
   const [confirmRequest, setConfirmRequest] = useState<PenaltyConfirmRequest | null>(null)
+  const [ruleDraft, setRuleDraft] = useState(() => ({
+    base_amount: penaltySettings.base_amount,
+    daily_increment: penaltySettings.daily_increment,
+    max_amount: penaltySettings.max_amount,
+  }))
+  const [ruleMessage, setRuleMessage] = useState('')
+  const [savingRule, setSavingRule] = useState(false)
   const modalRef = useRef<HTMLElement | null>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const [updatingPenaltyId, setUpdatingPenaltyId] = useState('')
@@ -74,6 +84,15 @@ export default function CoachPayments() {
     })
   }, [scopedPenalties, sortOrder, statusFilter])
   const formatAmount = (amount: number) => (Number.isInteger(amount) ? `${amount}` : amount.toFixed(2))
+
+  useEffect(() => {
+    if (savingRule) return
+    setRuleDraft({
+      base_amount: penaltySettings.base_amount,
+      daily_increment: penaltySettings.daily_increment,
+      max_amount: penaltySettings.max_amount,
+    })
+  }, [penaltySettings, savingRule])
 
   useEffect(() => {
     if (!confirmRequest) return
@@ -157,6 +176,37 @@ export default function CoachPayments() {
     }
   }
 
+  const changeRuleDraft = (key: keyof typeof ruleDraft, value: number) => {
+    setRuleDraft((current) => ({ ...current, [key]: Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0 }))
+    setRuleMessage('')
+  }
+
+  const submitPenaltyRule = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (savingRule) return
+    if (ruleDraft.max_amount < ruleDraft.base_amount) {
+      setRuleMessage('封顶金额不能小于首日金额。')
+      notifyApp({ tone: 'warning', message: '封顶金额不能小于首日金额。' })
+      return
+    }
+    setSavingRule(true)
+    try {
+      const saved = await saveSettings(ruleDraft)
+      setRuleDraft({
+        base_amount: saved.base_amount,
+        daily_increment: saved.daily_increment,
+        max_amount: saved.max_amount,
+      })
+      setRuleMessage('罚款规则已保存，只影响之后新生成的账款。')
+      notifyApp({ tone: 'success', message: '罚款规则已保存。' })
+    } catch {
+      setRuleMessage('罚款规则保存失败，请检查网络后再试。')
+      notifyApp({ tone: 'warning', message: '罚款规则保存失败，请检查网络后再试。' })
+    } finally {
+      setSavingRule(false)
+    }
+  }
+
   return (
     <section className="screen with-nav payments-screen">
       <div className="page-title">
@@ -169,6 +219,55 @@ export default function CoachPayments() {
         <Metric icon={<CheckCircle2 />} label="已支付" value={`¥${formatAmount(penaltySummary.paidTotal)}`} />
         <Metric icon={<CircleSlash />} label="已豁免" value={`¥${formatAmount(penaltySummary.waivedTotal)}`} />
       </div>
+      <section className="status-card penalty-rule-card" aria-label="罚款规则设置">
+        <div className="penalty-rule-head">
+          <div>
+            <strong>罚款规则</strong>
+            <span>只影响之后新生成的缺卡账款</span>
+          </div>
+        </div>
+        <form className="penalty-rule-grid" onSubmit={(event) => void submitPenaltyRule(event)}>
+          <label>
+            首日金额
+            <input
+              max={9999}
+              min={0}
+              step={1}
+              type="number"
+              value={ruleDraft.base_amount}
+              onChange={(event) => changeRuleDraft('base_amount', event.currentTarget.valueAsNumber)}
+            />
+          </label>
+          <label>
+            每天递增
+            <input
+              max={9999}
+              min={0}
+              step={1}
+              type="number"
+              value={ruleDraft.daily_increment}
+              onChange={(event) => changeRuleDraft('daily_increment', event.currentTarget.valueAsNumber)}
+            />
+          </label>
+          <label>
+            单笔封顶
+            <input
+              max={9999}
+              min={0}
+              step={1}
+              type="number"
+              value={ruleDraft.max_amount}
+              onChange={(event) => changeRuleDraft('max_amount', event.currentTarget.valueAsNumber)}
+            />
+          </label>
+          <button type="submit" disabled={penaltySettingsLoading || savingRule}>
+            {savingRule ? '保存中' : '保存规则'}
+          </button>
+        </form>
+        <p className={ruleMessage ? ruleMessage.includes('失败') || ruleMessage.includes('不能') ? 'form-error penalty-rule-message' : 'form-success penalty-rule-message' : 'penalty-rule-message'} aria-live="polite">
+          {ruleMessage || `当前：第 1 天 ¥${formatAmount(ruleDraft.base_amount)}，之后每天加 ¥${formatAmount(ruleDraft.daily_increment)}，最高 ¥${formatAmount(ruleDraft.max_amount)}。`}
+        </p>
+      </section>
       <div className="payments-controls">
         <div className="status-card action-card payments-summary">
           <strong>{membersReady ? `${visiblePenalties.length} 条当前记录` : '正在同步成员'}</strong>
@@ -204,7 +303,7 @@ export default function CoachPayments() {
               <div className="payment-copy">
                 <strong>¥{formatAmount(penalty.amount)}</strong>
                 <span className="penalty-meta">{displayName} · {formatDay(penalty.date)} · 连续第 {penalty.consecutive_count} 天</span>
-                {penalty.source_type === 'missed_checkin' && <span className="penalty-source-note">原因：缺卡自动生成</span>}
+                {penalty.source_type === 'missed_checkin' && <span className="penalty-source-note">原因：缺卡</span>}
               </div>
               <div className="payment-status">
                 <StatusPill status={penalty.status} />

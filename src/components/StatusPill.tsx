@@ -3,7 +3,7 @@ import type { CheckInStatus, PenaltyStatus } from '../lib/types'
 const checkInLabel: Record<CheckInStatus, string> = {
   completed: '已完成',
   excused: '已请假',
-  missed: '已缺卡',
+  missed: '缺卡',
   pending_review: '待审核',
 }
 

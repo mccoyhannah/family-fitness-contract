@@ -1,6 +1,6 @@
 import { addDays, isPastDeadline, toISODate } from './date'
 import { computeConsecutiveMisses, computePenaltyAmount } from './penalty'
-import type { CheckIn, Penalty, Plan } from './types'
+import type { CheckIn, Penalty, PenaltySettings, Plan } from './types'
 
 const MISSED_SYNC_LOOKBACK_DAYS = 7
 
@@ -24,6 +24,7 @@ export function buildMissedPenalty(
   penalties: Penalty[],
   sourceId?: string | null,
   reason = '训练日未打卡',
+  settings?: PenaltySettings,
 ): Penalty {
   const sortedPlan = plan.slice().sort((a, b) => a.date.localeCompare(b.date))
   const consecutive = computeConsecutiveMisses(
@@ -37,7 +38,7 @@ export function buildMissedPenalty(
     id: `local-penalty-${userId}-${date}`,
     user_id: userId,
     date,
-    amount: computePenaltyAmount(consecutive),
+    amount: computePenaltyAmount(consecutive, settings),
     consecutive_count: consecutive,
     status: 'pending',
     reason,
@@ -53,6 +54,7 @@ export function buildMissedSync(
   penalties: Penalty[],
   now = new Date(),
   activeFrom?: string | null,
+  settings?: PenaltySettings,
 ) {
   const nextCheckIns = [...checkIns]
   const nextPenalties = [...penalties]
@@ -64,7 +66,7 @@ export function buildMissedSync(
     .filter((day) => day.is_training && isPastDeadline(day.date, day.deadline, now))
     .map((day) => ({
       date: day.date,
-      note: '过了截止时间自动判定缺卡',
+      note: '过了截止时间未打卡',
       planId: day.id,
       reason: '训练日未打卡',
     }))
@@ -73,7 +75,7 @@ export function buildMissedSync(
     .filter((date) => !planByDate.has(date))
     .map((date) => ({
       date,
-      note: '最近 7 天无计划且未打卡，自动判定缺卡',
+      note: '最近 7 天无计划且未打卡',
       planId: null,
       reason: '无计划、未请假且未选择休息',
     }))
@@ -103,7 +105,7 @@ export function buildMissedSync(
         note: day.note,
         leave_reason: null,
       })
-      nextPenalties.push(buildMissedPenalty(userId, day.date, sortedPlan, nextCheckIns, nextPenalties, null, day.reason))
+      nextPenalties.push(buildMissedPenalty(userId, day.date, sortedPlan, nextCheckIns, nextPenalties, null, day.reason, settings))
     })
 
   return { checkIns: nextCheckIns, penalties: nextPenalties }

@@ -4,7 +4,8 @@ import { DEMO_STUDENT_ID, PREVIEW_ROLE_KEY, isLocalhostPreview } from '../lib/pr
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { buildMissedPenalty, buildMissedSync } from '../lib/sync'
 import { notifySyncError } from '../lib/syncError'
-import type { CheckIn, Penalty, Plan, Profile } from '../lib/types'
+import type { CheckIn, Penalty, PenaltySettings, Plan, Profile } from '../lib/types'
+import { usePenaltySettings } from './usePenaltySettings'
 
 type CoachDataState = {
   checkIns: CheckIn[]
@@ -70,6 +71,7 @@ function buildCoachMissedSync(
   checkIns: CheckIn[],
   penalties: Penalty[],
   memberStartByStudentId: Map<string, string | null>,
+  penaltySettings: PenaltySettings,
 ) {
   let nextCheckIns = checkIns
   let nextPenalties = penalties
@@ -78,7 +80,7 @@ function buildCoachMissedSync(
   profiles.forEach((profile) => {
     const userPlans = plans.filter((plan) => plan.user_id === profile.id)
     const activeFrom = memberStartByStudentId.get(profile.id) ?? profile.created_at
-    const synced = buildMissedSync(profile.id, userPlans, nextCheckIns, nextPenalties, now, activeFrom)
+    const synced = buildMissedSync(profile.id, userPlans, nextCheckIns, nextPenalties, now, activeFrom, penaltySettings)
     nextCheckIns = synced.checkIns
     nextPenalties = synced.penalties
   })
@@ -94,12 +96,14 @@ function findNewCheckIns(nextCheckIns: CheckIn[], currentCheckIns: CheckIn[]) {
 }
 
 export function useCoachData() {
+  const { ready: penaltySettingsReady, settings: penaltySettings } = usePenaltySettings()
   const [state, setState] = useState<CoachDataState>(() => initialCoachDataState())
 
   const load = useCallback(async () => {
+    if (!penaltySettingsReady) return
     if (shouldUseDemoCoachData()) {
       const cache = readCache(demoStudent.id)
-      const synced = buildMissedSync(demoStudent.id, [], cache.checkIns, cache.penalties, new Date(), demoStudent.created_at)
+      const synced = buildMissedSync(demoStudent.id, [], cache.checkIns, cache.penalties, new Date(), demoStudent.created_at, penaltySettings)
       if (synced.checkIns.length !== cache.checkIns.length || synced.penalties.length !== cache.penalties.length) {
         writeCache({ ...cache, checkIns: synced.checkIns, penalties: synced.penalties }, demoStudent.id)
       }
@@ -161,7 +165,7 @@ export function useCoachData() {
       let finalPenaltiesData = penaltiesData
       if (profilesData !== null && checkInsData !== null && penaltiesData !== null && plansData !== null && memberStartsData !== null) {
         const memberStartByStudentId = new Map(memberStartsData.map((binding) => [binding.student_id, binding.created_at ?? null]))
-        const synced = buildCoachMissedSync(profilesData, plansData, checkInsData, penaltiesData, memberStartByStudentId)
+        const synced = buildCoachMissedSync(profilesData, plansData, checkInsData, penaltiesData, memberStartByStudentId, penaltySettings)
         const newCheckIns = findNewCheckIns(synced.checkIns, checkInsData)
 
         if (newCheckIns.length > 0) {
@@ -201,7 +205,7 @@ export function useCoachData() {
     } finally {
       setState((current) => (current.loading ? { ...current, loading: false } : current))
     }
-  }, [])
+  }, [penaltySettings, penaltySettingsReady])
 
   useEffect(() => {
     void load().catch(() => notifySyncError('coach-data', '管理端数据同步失败，请检查网络后刷新。'))
@@ -288,7 +292,7 @@ export function useCoachData() {
       const hasPenalty = cache.penalties.some((item) => item.user_id === checkIn.user_id && item.date === checkIn.date)
       const nextPenalties = hasPenalty
         ? cache.penalties
-        : [...cache.penalties, buildMissedPenalty(checkIn.user_id, checkIn.date, plans, userCheckIns, userPenalties, checkIn.id)]
+        : [...cache.penalties, buildMissedPenalty(checkIn.user_id, checkIn.date, plans, userCheckIns, userPenalties, checkIn.id, '训练日未打卡', penaltySettings)]
       writeCache({ ...cache, checkIns: nextCheckIns, penalties: nextPenalties }, demoStudent.id)
       setState((current) => {
         const nextState = { ...current, checkIns: nextCheckIns, penalties: nextPenalties, ready: true }
@@ -321,7 +325,7 @@ export function useCoachData() {
           .eq('user_id', checkIn.user_id)
         if (!plansError) penaltyPlan = (remotePlans ?? []) as Array<Pick<Plan, 'date' | 'is_training'>>
       }
-      const penalty = buildMissedPenalty(checkIn.user_id, checkIn.date, penaltyPlan, userCheckIns, userPenalties, checkIn.id)
+      const penalty = buildMissedPenalty(checkIn.user_id, checkIn.date, penaltyPlan, userCheckIns, userPenalties, checkIn.id, '训练日未打卡', penaltySettings)
       const { id: _id, ...row } = penalty
       const { error: penaltyError } = await client.from('penalties').insert(row)
       if (penaltyError && penaltyError.code !== '23505') throw penaltyError

@@ -8,6 +8,7 @@ import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
 import { useCheckIns } from '../../hooks/useCheckIns'
 import { usePenalties } from '../../hooks/usePenalties'
+import { usePenaltySettings } from '../../hooks/usePenaltySettings'
 import { usePlans } from '../../hooks/usePlans'
 import { toISODate } from '../../lib/date'
 import { notifyApp } from '../../lib/notice'
@@ -21,6 +22,7 @@ export default function Today() {
   const { profile } = useAuth()
   const { checkIns, loading: checkInsLoading, reload: reloadCheckIns, setCheckIns, upsertCheckIn, withdrawCheckIn } = useCheckIns(profile?.id)
   const { penalties, loading: penaltiesLoading, reload: reloadPenalties, setPenalties, upsertPenalty } = usePenalties(profile?.id)
+  const { ready: penaltySettingsReady, settings: penaltySettings } = usePenaltySettings()
   const { loading: plansLoading, plans, savePlan } = usePlans(profile?.id)
   const [leaveReason, setLeaveReason] = useState('')
   const [memberCodeOpen, setMemberCodeOpen] = useState(false)
@@ -48,11 +50,12 @@ export default function Today() {
 
   useEffect(() => {
     if (!profile) return
+    if (!penaltySettingsReady) return
     if (checkInsLoading || penaltiesLoading || plansLoading) return
-    const syncKey = `${profile.id}:${profile.created_at ?? 'unknown'}:${today}:${plans.map((plan) => plan.id).join(',')}`
+    const syncKey = `${profile.id}:${profile.created_at ?? 'unknown'}:${today}:${plans.map((plan) => plan.id).join(',')}:${penaltySettings.base_amount}:${penaltySettings.daily_increment}:${penaltySettings.max_amount}`
     if (completedSyncKeyRef.current === syncKey || syncingKeyRef.current === syncKey) return
 
-    const synced = buildMissedSync(profile.id, plans, checkIns, penalties, new Date(), profile.created_at)
+    const synced = buildMissedSync(profile.id, plans, checkIns, penalties, new Date(), profile.created_at, penaltySettings)
     const userCheckIns = synced.checkIns.filter((checkIn) => checkIn.user_id === profile.id)
     const userPenalties = synced.penalties.filter((penalty) => penalty.user_id === profile.id)
     const newCheckIns = userCheckIns.filter(
@@ -93,6 +96,8 @@ export default function Today() {
     checkInsLoading,
     penalties,
     penaltiesLoading,
+    penaltySettings,
+    penaltySettingsReady,
     plans,
     plansLoading,
     profile,

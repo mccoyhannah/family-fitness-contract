@@ -66,6 +66,7 @@ export default function CoachMembers() {
   const [copyDraftToken, setCopyDraftToken] = useState(0)
   const [copyMessage, setCopyMessage] = useState('')
   const [expandedPlanIds, setExpandedPlanIds] = useState<Set<string>>(() => new Set())
+  const planWorkspaceRef = useRef<HTMLElement | null>(null)
   const today = toISODate(new Date())
   const week = useMemo(() => buildPlan(new Date(`${selectedDate}T12:00:00`)), [selectedDate])
   const selectedPlan = plans.find((plan) => plan.date === selectedDate)
@@ -129,6 +130,18 @@ export default function CoachMembers() {
     setSelectedDate(date)
     setCopiedDraft(null)
     setCopyMessage('')
+  }
+
+  const scrollToPlanWorkspace = () => {
+    const target = planWorkspaceRef.current
+    if (!target) return
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    target.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' })
+  }
+
+  const editPlanDate = (date: string) => {
+    selectPlanDate(date)
+    window.requestAnimationFrame(scrollToPlanWorkspace)
   }
 
   const selectMember = (memberId: string) => {
@@ -319,10 +332,10 @@ export default function CoachMembers() {
                             aria-pressed={plan.date === selectedDate}
                             className="planned-edit-button"
                             type="button"
-                            onClick={() => selectPlanDate(plan.date)}
+                            onClick={() => editPlanDate(plan.date)}
                           >
                             <Pencil size={16} />
-                            选择编辑
+                            编辑
                           </button>
                           <button
                             aria-controls={detailId}
@@ -353,6 +366,7 @@ export default function CoachMembers() {
 
           <section
             className={copyMessage ? 'plan-workspace plan-workspace-copied' : 'plan-workspace'}
+            ref={planWorkspaceRef}
             aria-label={`给 ${displayMemberLabel(selectedMember)} 制定计划`}
           >
             <div className="section-heading">

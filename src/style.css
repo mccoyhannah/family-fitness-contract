@@ -2572,14 +2572,18 @@ code {
 
 .fund-expense-card {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   margin-top: 18px;
-  padding: 18px;
+  padding: 20px;
+  border-color: #cddbcf;
+  background:
+    linear-gradient(180deg, rgba(255, 254, 250, 0.96), rgba(247, 251, 247, 0.94)),
+    linear-gradient(135deg, rgba(21, 148, 93, 0.08), transparent 42%);
 }
 
 .fund-section-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
@@ -2600,6 +2604,7 @@ code {
   color: var(--muted);
   font-size: 13px;
   font-weight: 720;
+  line-height: 1.45;
 }
 
 .fund-expense-form {
@@ -2607,6 +2612,7 @@ code {
   grid-template-columns: minmax(86px, 0.7fr) minmax(140px, 1fr) minmax(132px, 1fr) minmax(160px, 1.2fr);
   gap: 12px;
   align-items: end;
+  padding-top: 2px;
 }
 
 .fund-expense-form label,
@@ -2632,6 +2638,7 @@ code {
 
 .fund-expense-actions button,
 .fund-expense-item-actions button,
+.fund-expense-toggle,
 .inline-confirm button {
   min-height: 42px;
   display: inline-flex;
@@ -2656,14 +2663,67 @@ code {
 
 .fund-expense-actions button:disabled,
 .fund-expense-item-actions button:disabled,
+.fund-expense-toggle:disabled,
 .inline-confirm button:disabled {
   cursor: default;
   opacity: 0.56;
 }
 
+.fund-expense-history {
+  display: grid;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.fund-expense-history-summary {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #d7e3d9;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.fund-expense-history-summary > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.fund-expense-history-summary strong {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 820;
+}
+
+.fund-expense-history-summary span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.4;
+}
+
+.fund-expense-toggle {
+  flex: 0 0 auto;
+  color: var(--brand-2);
+  border-color: #c3dacb;
+  background: #eef8f1;
+}
+
+.fund-expense-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
 .fund-expense-list {
   display: grid;
   gap: 10px;
+  max-height: min(360px, 52vh);
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .fund-expense-item {
@@ -2709,21 +2769,46 @@ code {
 }
 
 .compact-payments-controls {
-  grid-template-columns: minmax(0, 0.8fr) minmax(320px, 1.2fr);
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.76fr);
+  align-items: stretch;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid rgba(199, 213, 202, 0.82);
+  border-radius: var(--radius);
+  background: rgba(255, 254, 250, 0.58);
 }
 
-.payments-compact-summary {
+.payments-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(74px, 1fr));
+  gap: 8px;
+}
+
+.payments-stat-chip {
+  min-width: 0;
   min-height: 56px;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
   align-items: center;
-  padding: 0 14px;
-  border: 1px solid var(--line);
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(220, 230, 221, 0.95);
   border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.payments-stat-chip span {
   color: var(--ink-soft);
-  background: var(--paper-soft);
-  font-weight: 800;
-  line-height: 1.35;
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.2;
+}
+
+.payments-stat-chip strong {
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 860;
+  line-height: 1;
 }
 
 .payments-summary {
@@ -2745,12 +2830,12 @@ code {
 .payments-toolbar {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--line);
+  gap: 8px;
+  padding: 0;
+  border: 0;
   border-radius: var(--radius);
-  background: var(--paper-soft);
-  box-shadow: var(--shadow-soft);
+  background: transparent;
+  box-shadow: none;
 }
 
 .payments-toolbar label {
@@ -2878,6 +2963,7 @@ code {
   .waiver-modal-actions button:hover:not(:disabled),
   .fund-expense-actions button:hover:not(:disabled),
   .fund-expense-item-actions button:hover:not(:disabled),
+  .fund-expense-toggle:hover:not(:disabled),
   .inline-confirm button:hover:not(:disabled),
   .admin-button:hover,
   .icon-action:hover,
@@ -2919,6 +3005,7 @@ button:active,
 .waiver-modal-actions button:active,
 .fund-expense-actions button:active,
 .fund-expense-item-actions button:active,
+.fund-expense-toggle:active,
 .inline-confirm button:active {
   transform: translateY(0) scale(0.99);
 }
@@ -3062,6 +3149,10 @@ button:active,
 
   .fund-expense-note {
     grid-column: auto;
+  }
+
+  .payments-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .fund-expense-actions,
@@ -3212,12 +3303,14 @@ button:active,
   .checkin-summary-head,
   .penalty-rule-head,
   .fund-section-head,
+  .fund-expense-history-summary,
   .review-comment-label-row {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .penalty-rule-head button {
+  .penalty-rule-head button,
+  .fund-expense-toggle {
     width: 100%;
   }
 

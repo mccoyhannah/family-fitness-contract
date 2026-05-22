@@ -103,12 +103,12 @@ export default function Ledger() {
         <p>缺卡贡献会进入同一个家庭基金，用来买健身装备、AI TOKEN 和 AI 订阅。</p>
       </div>
       <div className="status-card action-card ledger-fund-summary">
-        <strong>已入账 ¥{formatAmount(paidTotal)} · 已支出 ¥{formatAmount(expenseTotal)}</strong>
+        <strong>已入账 ¥{formatAmount(paidTotal)} · 已用于 ¥{formatAmount(expenseTotal)}</strong>
         <p>{reported} 笔等待确认入账，{settled} 条已处理；如已线下付款，可点“我已付款”。</p>
       </div>
       {fundExpenses.length > 0 && (
         <div className="status-card ledger-expense-preview">
-          <strong>最近支出</strong>
+          <strong>基金使用记录</strong>
           <div className="ledger-expense-list">
             {fundExpenses.slice(0, 3).map((expense) => (
               <span key={expense.id}>

@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleSlash, ReceiptText, WalletCards } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronUp, CircleSlash, ReceiptText, WalletCards } from 'lucide-react'
 import type { FormEvent, MouseEvent } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import MemberSelect from '../../components/MemberSelect'
@@ -74,6 +74,7 @@ export default function CoachPayments() {
   const [savingRule, setSavingRule] = useState(false)
   const [expenseDraft, setExpenseDraft] = useState<ExpenseDraft>(() => emptyExpenseDraft())
   const [editingExpenseId, setEditingExpenseId] = useState('')
+  const [expenseHistoryOpen, setExpenseHistoryOpen] = useState(false)
   const [savingExpense, setSavingExpense] = useState(false)
   const [updatingPenaltyId, setUpdatingPenaltyId] = useState('')
   const paymentReturnPointRef = useRef<PaymentReturnPoint | null>(null)
@@ -120,9 +121,12 @@ export default function CoachPayments() {
     [scopedPenalties],
   )
   const formatAmount = (amount: number) => (Number.isInteger(amount) ? `${amount}` : amount.toFixed(2))
-  const compactStats = membersReady
-    ? `全部 ${visiblePenalties.length} · 待贡献 ${penaltySummary.pendingCount} · 待确认 ${penaltySummary.reportedCount} · 已处理 ${penaltySummary.settledCount}`
-    : '正在同步成员和家庭基金'
+  const ledgerStats = [
+    { label: '全部', value: membersReady ? scopedPenalties.length : '-' },
+    { label: '待贡献', value: membersReady ? penaltySummary.pendingCount : '-' },
+    { label: '待确认', value: membersReady ? penaltySummary.reportedCount : '-' },
+    { label: '已处理', value: membersReady ? penaltySummary.settledCount : '-' },
+  ]
 
   useEffect(() => {
     if (savingRule) return
@@ -235,6 +239,7 @@ export default function CoachPayments() {
 
   const startEditExpense = (expense: FundExpense) => {
     setEditingExpenseId(expense.id)
+    setExpenseHistoryOpen(true)
     setExpenseDraft({
       amount: String(expense.amount),
       note: expense.note ?? '',
@@ -254,7 +259,7 @@ export default function CoachPayments() {
       return
     }
     if (!title) {
-      notifyApp({ tone: 'warning', message: '请写一句支出用途。' })
+      notifyApp({ tone: 'warning', message: '请填写支出标题。' })
       return
     }
 
@@ -360,11 +365,11 @@ export default function CoachPayments() {
         </p>
       </section>
 
-      <section className="status-card fund-expense-card" aria-label="家庭基金支出">
+      <section className="status-card fund-expense-card" aria-label="家庭基金记账">
         <div className="fund-section-head">
           <div>
-            <strong>基金支出</strong>
-            <span>已入账 ¥{formatAmount(fundSummary.paidTotal)} · 已支出 ¥{formatAmount(fundSummary.expenseTotal)}</span>
+            <strong>基金流水</strong>
+            <span>累计入账 ¥{formatAmount(fundSummary.paidTotal)} · 已用于 ¥{formatAmount(fundSummary.expenseTotal)} · 当前余额 ¥{formatAmount(fundSummary.balance)}</span>
           </div>
           {fundExpensesLoading && <span className="mini-chip">同步中</span>}
         </div>
@@ -394,7 +399,7 @@ export default function CoachPayments() {
           </label>
           <label>
             标题
-            <input value={expenseDraft.title} onChange={(event) => changeExpenseDraft('title', event.currentTarget.value)} placeholder="AI 订阅" maxLength={40} />
+            <input value={expenseDraft.title} onChange={(event) => changeExpenseDraft('title', event.currentTarget.value)} placeholder="例如：AI 订阅 / 弹力带 / 蛋白粉" maxLength={40} />
           </label>
           <label className="fund-expense-note">
             备注
@@ -411,27 +416,52 @@ export default function CoachPayments() {
             </button>
           </div>
         </form>
-        <div className="fund-expense-list">
+        <div className="fund-expense-history">
+          <div className="fund-expense-history-summary">
+            <div>
+              <strong>支出记录</strong>
+              <span>{fundExpenses.length} 笔 · 合计 ¥{formatAmount(fundSummary.expenseTotal)}</span>
+            </div>
+            <button
+              aria-expanded={expenseHistoryOpen}
+              type="button"
+              className="fund-expense-toggle"
+              disabled={fundExpenses.length === 0}
+              onClick={() => setExpenseHistoryOpen((open) => !open)}
+            >
+              {expenseHistoryOpen ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+              {expenseHistoryOpen ? '收起' : '展开'}
+            </button>
+          </div>
           {fundExpenses.length === 0 && <p className="muted">还没有支出记录。家庭基金可以用于健身装备、AI TOKEN 和订阅。</p>}
-          {fundExpenses.slice(0, 6).map((expense) => (
-            <article className="fund-expense-item" key={expense.id}>
-              <div>
-                <strong>{expense.title}</strong>
-                <span>{fundPurposeLabel[expense.purpose]} · ¥{formatAmount(expense.amount)} · {expense.spent_on}</span>
-                {expense.note && <p>{expense.note}</p>}
-              </div>
-              <div className="fund-expense-item-actions">
-                <button type="button" onClick={() => startEditExpense(expense)} disabled={savingExpense}>编辑</button>
-                <button type="button" onClick={() => void removeExpense(expense.id)} disabled={savingExpense}>删除</button>
-              </div>
-            </article>
-          ))}
+          {expenseHistoryOpen && fundExpenses.length > 0 && (
+            <div className="fund-expense-list">
+              {fundExpenses.map((expense) => (
+                <article className="fund-expense-item" key={expense.id}>
+                  <div>
+                    <strong>{expense.title}</strong>
+                    <span>{fundPurposeLabel[expense.purpose]} · ¥{formatAmount(expense.amount)} · {expense.spent_on}</span>
+                    {expense.note && <p>{expense.note}</p>}
+                  </div>
+                  <div className="fund-expense-item-actions">
+                    <button type="button" onClick={() => startEditExpense(expense)} disabled={savingExpense}>编辑</button>
+                    <button type="button" onClick={() => void removeExpense(expense.id)} disabled={savingExpense}>删除</button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
       <div className="payments-controls compact-payments-controls">
-        <div className="payments-compact-summary" aria-live="polite">
-          {compactStats}
+        <div className="payments-stat-grid" aria-label="家庭基金记录统计" aria-live="polite">
+          {ledgerStats.map((item) => (
+            <div className="payments-stat-chip" key={item.label}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </div>
+          ))}
         </div>
         <div className="payments-toolbar" aria-label="家庭基金筛选">
           <label>

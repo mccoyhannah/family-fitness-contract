@@ -126,6 +126,21 @@ insert into public.penalty_settings (id, base_amount, daily_increment, max_amoun
 values (true, 10, 10, 50)
 on conflict (id) do nothing;
 
+create table if not exists public.fund_expenses (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references public.profiles(id) on delete cascade,
+  spent_on date not null default current_date,
+  amount int not null check (amount > 0),
+  purpose text not null default 'general' check (purpose in ('fitness', 'ai', 'general')),
+  title text not null,
+  note text not null default '',
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists fund_expenses_coach_spent_on_idx
+on public.fund_expenses (coach_id, spent_on desc, created_at desc);
+
 create table if not exists public.check_in_evidence (
   id uuid primary key default gen_random_uuid(),
   check_in_id uuid not null references public.check_ins(id) on delete cascade,
@@ -144,6 +159,7 @@ alter table public.plan_items enable row level security;
 alter table public.check_ins enable row level security;
 alter table public.penalties enable row level security;
 alter table public.penalty_settings enable row level security;
+alter table public.fund_expenses enable row level security;
 alter table public.check_in_evidence enable row level security;
 
 create or replace function public.is_coach()
@@ -322,6 +338,25 @@ drop trigger if exists touch_penalty_settings on public.penalty_settings;
 create trigger touch_penalty_settings
 before update on public.penalty_settings
 for each row execute function public.touch_penalty_settings();
+
+create or replace function public.touch_fund_expenses()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+revoke execute on function public.touch_fund_expenses() from public, anon, authenticated;
+
+drop trigger if exists touch_fund_expenses on public.fund_expenses;
+create trigger touch_fund_expenses
+before update on public.fund_expenses
+for each row execute function public.touch_fund_expenses();
 
 create or replace function public.compute_consecutive_misses(student uuid, target_date date)
 returns int
@@ -770,6 +805,50 @@ to authenticated
 using (public.is_coach() and id = true)
 with check (public.is_coach() and id = true);
 
+drop policy if exists "fund_expenses_select_related" on public.fund_expenses;
+create policy "fund_expenses_select_related"
+on public.fund_expenses for select
+to authenticated
+using (
+  coach_id = auth.uid()
+  or exists (
+    select 1 from public.coach_members
+    where coach_id = fund_expenses.coach_id
+      and student_id = auth.uid()
+  )
+);
+
+drop policy if exists "fund_expenses_insert_own_coach" on public.fund_expenses;
+create policy "fund_expenses_insert_own_coach"
+on public.fund_expenses for insert
+to authenticated
+with check (
+  coach_id = auth.uid()
+  and public.is_coach()
+);
+
+drop policy if exists "fund_expenses_update_own_coach" on public.fund_expenses;
+create policy "fund_expenses_update_own_coach"
+on public.fund_expenses for update
+to authenticated
+using (
+  coach_id = auth.uid()
+  and public.is_coach()
+)
+with check (
+  coach_id = auth.uid()
+  and public.is_coach()
+);
+
+drop policy if exists "fund_expenses_delete_own_coach" on public.fund_expenses;
+create policy "fund_expenses_delete_own_coach"
+on public.fund_expenses for delete
+to authenticated
+using (
+  coach_id = auth.uid()
+  and public.is_coach()
+);
+
 drop policy if exists "students_insert_own_penalties" on public.penalties;
 create policy "students_insert_own_penalties"
 on public.penalties for insert
@@ -938,6 +1017,7 @@ revoke update on public.penalties from authenticated;
 grant update (status) on public.penalties to authenticated;
 grant select on public.penalty_settings to authenticated;
 grant update (base_amount, daily_increment, max_amount, updated_at, updated_by) on public.penalty_settings to authenticated;
+grant select, insert, update, delete on public.fund_expenses to authenticated;
 grant select, insert, delete on public.check_in_evidence to authenticated;
 
 -- After creating Auth users manually, insert profiles like:

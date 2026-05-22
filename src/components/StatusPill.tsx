@@ -8,9 +8,9 @@ const checkInLabel: Record<CheckInStatus, string> = {
 }
 
 const penaltyLabel: Record<PenaltyStatus, string> = {
-  pending: '待支付',
-  payment_reported: '付款待确认',
-  paid: '已支付',
+  pending: '待贡献',
+  payment_reported: '等待入账',
+  paid: '已入账',
   waived: '已豁免',
 }
 

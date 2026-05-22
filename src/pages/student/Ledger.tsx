@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react'
 import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
 import { useCheckIns } from '../../hooks/useCheckIns'
+import { useFundExpenses } from '../../hooks/useFundExpenses'
 import { usePenalties } from '../../hooks/usePenalties'
 import { formatDay } from '../../lib/date'
 import { notifyApp } from '../../lib/notice'
-import type { Penalty } from '../../lib/types'
+import type { FundExpensePurpose, Penalty } from '../../lib/types'
 
 const WAIVER_PREFIX = '[免罚申请]'
 const waiverReasonTemplates = [
@@ -14,40 +15,50 @@ const waiverReasonTemplates = [
   '不会操作软件，其实训练已经做完了。',
 ]
 
+const fundPurposeLabel: Record<FundExpensePurpose, string> = {
+  ai: 'AI TOKEN / 订阅',
+  fitness: '健身装备',
+  general: '通用',
+}
+
 export default function Ledger() {
   const { profile } = useAuth()
   const { penalties, updatePenalty } = usePenalties(profile?.id)
   const { checkIns, upsertCheckIn } = useCheckIns(profile?.id)
-  const [waiverTarget, setWaiverTarget] = useState<Penalty | null>(null)
+  const { expenses: fundExpenses } = useFundExpenses()
+  const [waiverTargetId, setWaiverTargetId] = useState('')
   const [waiverReason, setWaiverReason] = useState('')
   const [submittingWaiver, setSubmittingWaiver] = useState(false)
-  const total = penalties.filter((item) => item.status === 'pending').reduce((sum, item) => sum + item.amount, 0)
+  const pendingTotal = penalties.filter((item) => item.status === 'pending').reduce((sum, item) => sum + item.amount, 0)
   const reported = penalties.filter((item) => item.status === 'payment_reported').length
   const settled = penalties.filter((item) => item.status === 'paid' || item.status === 'waived').length
+  const paidTotal = penalties.filter((item) => item.status === 'paid').reduce((sum, item) => sum + item.amount, 0)
+  const expenseTotal = fundExpenses.reduce((sum, item) => sum + item.amount, 0)
   const formatAmount = (amount: number) => (Number.isInteger(amount) ? `${amount}` : amount.toFixed(2))
   const checkInByDate = useMemo(() => new Map(checkIns.map((item) => [item.date, item])), [checkIns])
 
   const markPaid = async (penaltyId: string) => {
     try {
       await updatePenalty(penaltyId, 'payment_reported')
-      notifyApp({ tone: 'success', message: '已提交付款确认，等管理端核对后才会变成已支付。' })
+      notifyApp({ tone: 'success', message: '已提交付款确认，等管理端核对后会计入家庭基金。' })
     } catch {
       notifyApp({ tone: 'warning', message: '付款确认失败，请检查网络后再试。' })
     }
   }
 
   const openWaiverRequest = (penalty: Penalty) => {
-    setWaiverTarget(penalty)
+    setWaiverTargetId(penalty.id)
     setWaiverReason('')
   }
 
   const closeWaiverRequest = () => {
     if (submittingWaiver) return
-    setWaiverTarget(null)
+    setWaiverTargetId('')
     setWaiverReason('')
   }
 
   const submitWaiverRequest = async () => {
+    const waiverTarget = penalties.find((penalty) => penalty.id === waiverTargetId) ?? null
     if (!profile || !waiverTarget || submittingWaiver) return
     const reason = waiverReason.trim()
     if (!reason) {
@@ -58,8 +69,7 @@ export default function Ledger() {
     const existingCheckIn = checkInByDate.get(waiverTarget.date)
     if (existingCheckIn && existingCheckIn.status !== 'missed') {
       notifyApp({ tone: 'warning', message: '这天的记录状态已变化，请刷新账本后再申请。' })
-      setWaiverTarget(null)
-      setWaiverReason('')
+      closeWaiverRequest()
       return
     }
 
@@ -77,8 +87,7 @@ export default function Ledger() {
         leave_reason: `${WAIVER_PREFIX} ${reason}`,
       })
       notifyApp({ tone: 'success', message: '已提交免罚申请，等待管理端审核。' })
-      setWaiverTarget(null)
-      setWaiverReason('')
+      closeWaiverRequest()
     } catch {
       notifyApp({ tone: 'warning', message: '免罚申请提交失败，请检查网络后再试。' })
     } finally {
@@ -89,28 +98,41 @@ export default function Ledger() {
   return (
     <section className="screen with-nav">
       <div className="hero-panel">
-        <span className="hero-kicker">账本</span>
-        <h2>待支付 ¥{formatAmount(total)}</h2>
-        <p>v2 先保留账本，不做微信收款码付款页。</p>
+        <span className="hero-kicker">家庭基金</span>
+        <h2>待贡献 ¥{formatAmount(pendingTotal)}</h2>
+        <p>缺卡贡献会进入同一个家庭基金，用来买健身装备、AI TOKEN 和 AI 订阅。</p>
       </div>
-      <div className="status-card action-card">
-        <strong>{penalties.length} 条账款记录</strong>
-        <p>{reported} 笔付款待管理端确认，{settled} 条已处理；如已线下付款，可先点“我已付款”。</p>
+      <div className="status-card action-card ledger-fund-summary">
+        <strong>已入账 ¥{formatAmount(paidTotal)} · 已支出 ¥{formatAmount(expenseTotal)}</strong>
+        <p>{reported} 笔等待确认入账，{settled} 条已处理；如已线下付款，可点“我已付款”。</p>
       </div>
+      {fundExpenses.length > 0 && (
+        <div className="status-card ledger-expense-preview">
+          <strong>最近支出</strong>
+          <div className="ledger-expense-list">
+            {fundExpenses.slice(0, 3).map((expense) => (
+              <span key={expense.id}>
+                {expense.title} · {fundPurposeLabel[expense.purpose]} · ¥{formatAmount(expense.amount)}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="penalty-list">
-        {penalties.length === 0 && <p className="muted">暂无罚款记录。请假不会生成待支付罚款。</p>}
+        {penalties.length === 0 && <p className="muted">暂无待贡献记录。请假和今日休息不会生成家庭基金贡献。</p>}
         {penalties.map((penalty) => {
           const checkIn = checkInByDate.get(penalty.date)
           const isWaiverPending = penalty.status === 'pending' && checkIn?.status === 'pending_review'
           const canRequestWaiver = penalty.status === 'pending' && checkIn?.status === 'missed'
+          const isWaiverOpen = waiverTargetId === penalty.id
           return (
             <article className={`penalty-card${isWaiverPending ? ' waiver-under-review' : ''}`} key={penalty.id}>
               <div className="penalty-copy">
-                <strong>¥{formatAmount(penalty.amount)}</strong>
+                <strong>缺卡贡献 ¥{formatAmount(penalty.amount)}</strong>
                 <span className="penalty-meta">{formatDay(penalty.date)} · 连续第 {penalty.consecutive_count} 天</span>
-                {penalty.source_type === 'missed_checkin' && <span className="penalty-source-note">原因：缺卡自动生成</span>}
+                {penalty.source_type === 'missed_checkin' && <span className="penalty-source-note">原因：缺卡</span>}
                 {isWaiverPending && <span className="waiver-inline-note">免罚申请已提交，先等管理端审核。</span>}
-                {penalty.status === 'payment_reported' && <span className="waiver-inline-note">付款已上报，等待管理端确认。</span>}
+                {penalty.status === 'payment_reported' && <span className="waiver-inline-note">付款已上报，等待确认入账。</span>}
                 {checkIn?.review_comment && (
                   <div className="coach-comment-box ledger-comment-box">
                     <strong>教练留言</strong>
@@ -130,52 +152,46 @@ export default function Ledger() {
                   {isWaiverPending && <button type="button" disabled>免罚审核中</button>}
                 </div>
               )}
+              {isWaiverOpen && (
+                <div className="inline-confirm ledger-waiver-inline">
+                  <p>{formatDay(penalty.date)} 的免罚申请</p>
+                  <div className="waiver-template-grid">
+                    {waiverReasonTemplates.map((reason) => (
+                      <button
+                        key={reason}
+                        type="button"
+                        onClick={() => setWaiverReason(reason)}
+                        disabled={submittingWaiver}
+                      >
+                        {reason}
+                      </button>
+                    ))}
+                  </div>
+                  <label>
+                    申请理由
+                    <textarea
+                      maxLength={160}
+                      rows={4}
+                      value={waiverReason}
+                      onChange={(event) => setWaiverReason(event.target.value)}
+                      disabled={submittingWaiver}
+                      placeholder="比如：昨天练完忘记打卡了，请帮我审核一下。"
+                    />
+                  </label>
+                  <div>
+                    <button type="button" onClick={closeWaiverRequest} disabled={submittingWaiver}>
+                      取消
+                    </button>
+                    <button type="button" onClick={() => void submitWaiverRequest()} disabled={submittingWaiver}>
+                      {submittingWaiver ? '提交中' : '提交申请'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </article>
           )
         })}
       </div>
-      {waiverTarget && (
-        <div className="waiver-modal-backdrop" role="presentation">
-          <section className="waiver-modal" role="dialog" aria-modal="true" aria-labelledby="waiver-title">
-            <div>
-              <span className="hero-kicker">补卡免罚</span>
-              <h3 id="waiver-title">{formatDay(waiverTarget.date)} 的免罚申请</h3>
-              <p>选一个理由，或自己写一句。提交后会进入管理端审核，罚金不会被你自己直接免掉。</p>
-            </div>
-            <div className="waiver-template-grid">
-              {waiverReasonTemplates.map((reason) => (
-                <button
-                  key={reason}
-                  type="button"
-                  onClick={() => setWaiverReason(reason)}
-                  disabled={submittingWaiver}
-                >
-                  {reason}
-                </button>
-              ))}
-            </div>
-            <label>
-              申请理由
-              <textarea
-                maxLength={160}
-                rows={4}
-                value={waiverReason}
-                onChange={(event) => setWaiverReason(event.target.value)}
-                disabled={submittingWaiver}
-                placeholder="比如：昨天练完忘记打卡了，请帮我审核一下。"
-              />
-            </label>
-            <div className="waiver-modal-actions">
-              <button type="button" onClick={closeWaiverRequest} disabled={submittingWaiver}>
-                取消
-              </button>
-              <button type="button" onClick={() => void submitWaiverRequest()} disabled={submittingWaiver}>
-                {submittingWaiver ? '提交中' : '提交申请'}
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
     </section>
   )
 }

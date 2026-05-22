@@ -2,6 +2,7 @@ export type Role = 'student' | 'coach'
 export type CheckInStatus = 'completed' | 'excused' | 'missed' | 'pending_review'
 export type PenaltyStatus = 'pending' | 'payment_reported' | 'paid' | 'waived'
 export type PenaltySourceType = 'missed_checkin'
+export type FundExpensePurpose = 'fitness' | 'ai' | 'general'
 export type PlanSource = 'coach' | 'student'
 
 export type Profile = {
@@ -55,6 +56,18 @@ export type PenaltySettings = {
   max_amount: number
   updated_at?: string
   updated_by?: string | null
+}
+
+export type FundExpense = {
+  id: string
+  coach_id: string
+  spent_on: string
+  amount: number
+  purpose: FundExpensePurpose
+  title: string
+  note: string
+  created_at?: string
+  updated_at?: string
 }
 
 export type Exercise = {

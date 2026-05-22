@@ -1,6 +1,4 @@
-import { AlertTriangle, BarChart3, CalendarDays, ReceiptText, RefreshCw } from 'lucide-react'
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { AlertTriangle, BarChart3, CalendarDays, ReceiptText } from 'lucide-react'
 import MemberSelect from '../../components/MemberSelect'
 import Metric from '../../components/Metric'
 import StatusPill from '../../components/StatusPill'
@@ -37,9 +35,8 @@ export default function CoachDashboard() {
     selectedMemberId,
     setSelectedMemberId,
   } = useMembers(profile?.id)
-  const { checkIns, penalties, profiles, ready: coachDataReady, reload: reloadCoachData } = useCoachData()
-  const { plans, reload: reloadPlans } = usePlans(selectedMember?.id)
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  const { checkIns, penalties, profiles, ready: coachDataReady } = useCoachData()
+  const { plans } = usePlans(selectedMember?.id)
   const scopedCheckIns = selectedMember ? checkIns.filter((item) => item.user_id === selectedMember.id) : checkIns
   const scopedPenalties = selectedMember ? penalties.filter((item) => item.user_id === selectedMember.id) : penalties
   const pendingReview = scopedCheckIns.filter((item) => item.status === 'pending_review').length
@@ -70,28 +67,6 @@ export default function CoachDashboard() {
   ]
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 3)
-  const nextStep =
-    !membersReady
-      ? '正在同步成员列表。'
-      : pendingReview > 0
-      ? `有 ${pendingReview} 条记录需要审核。`
-      : paymentReported > 0
-        ? `有 ${paymentReported} 笔付款需要确认。`
-      : pendingTotal > 0
-        ? `还有 ¥${pendingTotal} 待确认账款。`
-        : selectedMember
-          ? '当前成员没有待办，可以继续安排下一次计划。'
-          : '先添加成员，再开始监督。'
-  const refresh = async () => {
-    if (isRefreshing) return
-    setIsRefreshing(true)
-    try {
-      await Promise.all([reloadCoachData(), selectedMember ? reloadPlans() : Promise.resolve()])
-    } finally {
-      setIsRefreshing(false)
-    }
-  }
-
   return (
     <section className="screen with-nav">
       <div className="hero-panel">
@@ -105,20 +80,6 @@ export default function CoachDashboard() {
         <Metric icon={<AlertTriangle />} label="待确认" value={coachDataReady ? `${pendingReview + paymentReported} 条` : '同步中'} />
         <Metric icon={<ReceiptText />} label="待支付" value={coachDataReady ? `¥${pendingTotal}` : '同步中'} />
         <Metric icon={<CalendarDays />} label="完成率" value={completionRate} />
-      </div>
-
-      <div className="status-card action-card">
-        <strong>{selectedMember ? `${selectedMemberLabel} 的下一步` : '管理端下一步'}</strong>
-        <p>{nextStep}</p>
-        <div className="row-actions">
-          <button type="button" disabled={isRefreshing} onClick={() => void refresh()}>
-            <RefreshCw className={isRefreshing ? 'spin-icon' : undefined} size={18} />
-            {isRefreshing ? '刷新中' : '刷新'}
-          </button>
-          <Link to="/admin/review">去审核</Link>
-          <Link to="/admin/payments">看账款</Link>
-          <Link to="/admin/members">排计划</Link>
-        </div>
       </div>
 
       {selectedMember && (

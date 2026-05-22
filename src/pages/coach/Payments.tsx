@@ -1,5 +1,5 @@
 import { CheckCircle2, CircleSlash, ReceiptText } from 'lucide-react'
-import type { FormEvent } from 'react'
+import type { FormEvent, MouseEvent } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import MemberSelect from '../../components/MemberSelect'
 import Metric from '../../components/Metric'
@@ -20,6 +20,13 @@ type PenaltyConfirmRequest = {
   status: 'paid' | 'waived'
   successMessage: string
   title: string
+}
+
+type PaymentReturnPoint = {
+  scrollContainer: HTMLElement | null
+  scrollTop: number
+  penaltyId: string
+  windowScrollY: number
 }
 
 export default function CoachPayments() {
@@ -46,6 +53,7 @@ export default function CoachPayments() {
   const [savingRule, setSavingRule] = useState(false)
   const modalRef = useRef<HTMLElement | null>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
+  const paymentReturnPointRef = useRef<PaymentReturnPoint | null>(null)
   const [updatingPenaltyId, setUpdatingPenaltyId] = useState('')
   const updatingPenaltyIdRef = useRef('')
   const scopedPenalties = useMemo(
@@ -84,6 +92,43 @@ export default function CoachPayments() {
     })
   }, [scopedPenalties, sortOrder, statusFilter])
   const formatAmount = (amount: number) => (Number.isInteger(amount) ? `${amount}` : amount.toFixed(2))
+  const focusWithoutScroll = (element: HTMLElement | null | undefined) => {
+    if (!element) return
+    try {
+      element.focus({ preventScroll: true })
+    } catch {
+      element.focus()
+    }
+  }
+  const findPaymentCard = (penaltyId: string) =>
+    Array.from(document.querySelectorAll<HTMLElement>('[data-penalty-id]')).find(
+      (element) => element.dataset.penaltyId === penaltyId,
+    )
+  const findPaymentScrollContainer = (element: HTMLElement | null | undefined) =>
+    element?.closest<HTMLElement>('.payments-screen') ?? document.querySelector<HTMLElement>('.payments-screen')
+  const restorePaymentPosition = () => {
+    const returnPoint = paymentReturnPointRef.current
+    if (!returnPoint) return
+    paymentReturnPointRef.current = null
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const paymentCard = findPaymentCard(returnPoint.penaltyId)
+        if (paymentCard) {
+          paymentCard.scrollIntoView({ behavior: 'auto', block: 'center' })
+          return
+        }
+        if (returnPoint.scrollContainer) {
+          returnPoint.scrollContainer.scrollTo({ behavior: 'auto', top: returnPoint.scrollTop })
+          return
+        }
+        window.scrollTo({ behavior: 'auto', top: returnPoint.windowScrollY })
+      })
+    })
+  }
+  const closeConfirmAndRestore = () => {
+    setConfirmRequest(null)
+    restorePaymentPosition()
+  }
 
   useEffect(() => {
     if (savingRule) return
@@ -106,13 +151,13 @@ export default function CoachPayments() {
 
     window.setTimeout(() => {
       const elements = focusable()
-      elements[elements.length - 1]?.focus()
+      focusWithoutScroll(elements[elements.length - 1])
     }, 0)
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
-        if (!updatingPenaltyIdRef.current) setConfirmRequest(null)
+        if (!updatingPenaltyIdRef.current) closeConfirmAndRestore()
         return
       }
       if (event.key !== 'Tab') return
@@ -122,23 +167,37 @@ export default function CoachPayments() {
       const last = elements[elements.length - 1]
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault()
-        last.focus()
+        focusWithoutScroll(last)
       } else if (!event.shiftKey && document.activeElement === last) {
         event.preventDefault()
-        first.focus()
+        focusWithoutScroll(first)
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
-      previousFocusRef.current?.focus()
+      focusWithoutScroll(previousFocusRef.current)
       previousFocusRef.current = null
     }
   }, [confirmRequest])
 
-  const requestPenaltyStatus = (penaltyId: string, status: 'paid' | 'waived', displayName: string, date: string) => {
+  const requestPenaltyStatus = (
+    event: MouseEvent<HTMLButtonElement>,
+    penaltyId: string,
+    status: 'paid' | 'waived',
+    displayName: string,
+    date: string,
+  ) => {
     if (updatingPenaltyIdRef.current || confirmRequest) return
+    const paymentCard = event.currentTarget.closest<HTMLElement>('[data-penalty-id]')
+    const scrollContainer = findPaymentScrollContainer(paymentCard)
+    paymentReturnPointRef.current = {
+      penaltyId: paymentCard?.dataset.penaltyId ?? penaltyId,
+      scrollContainer,
+      scrollTop: scrollContainer?.scrollTop ?? 0,
+      windowScrollY: window.scrollY,
+    }
     const actionCopy =
       status === 'paid'
         ? {
@@ -156,7 +215,7 @@ export default function CoachPayments() {
 
   const cancelPenaltyStatus = () => {
     if (updatingPenaltyIdRef.current) return
-    setConfirmRequest(null)
+    closeConfirmAndRestore()
   }
 
   const confirmPenaltyStatus = async () => {
@@ -167,7 +226,7 @@ export default function CoachPayments() {
     try {
       await updatePenalty(penaltyId, status)
       notifyApp({ tone: 'success', message: successMessage })
-      setConfirmRequest(null)
+      closeConfirmAndRestore()
     } catch {
       notifyApp({ tone: 'warning', message: '账款操作失败，请检查网络后再试。' })
     } finally {
@@ -299,7 +358,7 @@ export default function CoachPayments() {
         {visiblePenalties.map((penalty) => {
           const displayName = memberNameById.get(penalty.user_id) || '成员'
           return (
-            <article className="penalty-card payment-card" key={penalty.id}>
+            <article className="penalty-card payment-card" data-penalty-id={penalty.id} key={penalty.id}>
               <div className="payment-copy">
                 <strong>¥{formatAmount(penalty.amount)}</strong>
                 <span className="penalty-meta">{displayName} · {formatDay(penalty.date)} · 连续第 {penalty.consecutive_count} 天</span>
@@ -312,14 +371,14 @@ export default function CoachPayments() {
                 <button
                   type="button"
                   disabled={Boolean(updatingPenaltyId || confirmRequest)}
-                  onClick={() => requestPenaltyStatus(penalty.id, 'paid', displayName, penalty.date)}
+                  onClick={(event) => requestPenaltyStatus(event, penalty.id, 'paid', displayName, penalty.date)}
                 >
                   {updatingPenaltyId === penalty.id ? '处理中' : penalty.status === 'payment_reported' ? '确认已收' : '标记已付'}
                 </button>
                 <button
                   type="button"
                   disabled={Boolean(updatingPenaltyId || confirmRequest)}
-                  onClick={() => requestPenaltyStatus(penalty.id, 'waived', displayName, penalty.date)}
+                  onClick={(event) => requestPenaltyStatus(event, penalty.id, 'waived', displayName, penalty.date)}
                 >
                   豁免
                 </button>

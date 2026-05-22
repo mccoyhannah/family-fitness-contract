@@ -1,4 +1,4 @@
-import { Check, CalendarDays, Copy, Pencil, UserPlus, Users, X } from 'lucide-react'
+import { Check, CalendarDays, ChevronDown, Copy, Pencil, UserPlus, Users, X } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import ExerciseCard from '../../components/ExerciseCard'
 import Metric from '../../components/Metric'
@@ -65,6 +65,7 @@ export default function CoachMembers() {
   const [copiedDraft, setCopiedDraft] = useState<PlanDraft | null>(null)
   const [copyDraftToken, setCopyDraftToken] = useState(0)
   const [copyMessage, setCopyMessage] = useState('')
+  const [expandedPlanIds, setExpandedPlanIds] = useState<Set<string>>(() => new Set())
   const today = toISODate(new Date())
   const week = useMemo(() => buildPlan(new Date(`${selectedDate}T12:00:00`)), [selectedDate])
   const selectedPlan = plans.find((plan) => plan.date === selectedDate)
@@ -137,6 +138,7 @@ export default function CoachMembers() {
     setEditMessage('')
     setCopiedDraft(null)
     setCopyMessage('')
+    setExpandedPlanIds(new Set())
   }
 
   const copyPlanToToday = (plan: Plan) => {
@@ -148,6 +150,18 @@ export default function CoachMembers() {
     setCopyDraftToken((current) => current + 1)
     setCopyMessage(message)
     notifyApp({ tone: 'success', message: `已把 ${formatDay(plan.date)} 的计划填入今天编辑框。` })
+  }
+
+  const togglePlanExpanded = (planId: string) => {
+    setExpandedPlanIds((current) => {
+      const next = new Set(current)
+      if (next.has(planId)) {
+        next.delete(planId)
+      } else {
+        next.add(planId)
+      }
+      return next
+    })
   }
 
   const submitDisplayName = async () => {
@@ -280,33 +294,59 @@ export default function CoachMembers() {
               </div>
             ) : (
               <div className="week-list planned-week-list">
-                {orderedPlans.map((plan) => (
-                  <article
-                    className={plan.date === selectedDate ? 'day-card planned-plan-card active' : 'day-card planned-plan-card'}
-                    key={plan.id}
-                  >
-                    <div className="planned-plan-topline">
-                      <button
-                        aria-pressed={plan.date === selectedDate}
-                        className="planned-plan-main"
-                        type="button"
-                        onClick={() => selectPlanDate(plan.date)}
-                      >
-                        <strong>{formatDay(plan.date)} · {plan.title}</strong>
-                        <span className="planned-source-chip">{plan.source === 'coach' ? '教练制定' : '成员自定'}</span>
-                      </button>
-                      <button className="planned-copy-button" type="button" onClick={() => copyPlanToToday(plan)}>
-                        <Copy size={16} />
-                        复制到今天
-                      </button>
-                    </div>
-                    <div className="planned-plan-exercises">
-                      {planToExercises(plan).map((exercise) => (
-                        <ExerciseCard exercise={exercise} key={exercise.id} />
-                      ))}
-                    </div>
-                  </article>
-                ))}
+                {orderedPlans.map((plan) => {
+                  const isExpanded = expandedPlanIds.has(plan.id)
+                  const detailId = `planned-plan-exercises-${plan.id}`
+                  return (
+                    <article
+                      className={plan.date === selectedDate ? 'day-card planned-plan-card active' : 'day-card planned-plan-card'}
+                      key={plan.id}
+                    >
+                      <div className="planned-plan-topline">
+                        <div className="planned-plan-main">
+                          <strong>{formatDay(plan.date)} · {plan.title}</strong>
+                          <div className="planned-plan-meta" aria-label="计划摘要">
+                            <span className="planned-source-chip">{plan.source === 'coach' ? '教练制定' : '成员自定'}</span>
+                            <span className="planned-count-chip">{plan.is_training ? `${plan.items.length} 个动作` : '恢复日'}</span>
+                          </div>
+                        </div>
+                        <div className="planned-plan-actions">
+                          <button className="planned-copy-button" type="button" onClick={() => copyPlanToToday(plan)}>
+                            <Copy size={16} />
+                            复制到今天
+                          </button>
+                          <button
+                            aria-pressed={plan.date === selectedDate}
+                            className="planned-edit-button"
+                            type="button"
+                            onClick={() => selectPlanDate(plan.date)}
+                          >
+                            <Pencil size={16} />
+                            选择编辑
+                          </button>
+                          <button
+                            aria-controls={detailId}
+                            aria-expanded={isExpanded}
+                            aria-label={`${isExpanded ? '收起' : '展开'} ${formatDay(plan.date)} 的动作详情`}
+                            className="planned-expand-button"
+                            type="button"
+                            onClick={() => togglePlanExpanded(plan.id)}
+                          >
+                            <ChevronDown size={17} aria-hidden="true" />
+                            <span>{isExpanded ? '收起' : '展开'}</span>
+                          </button>
+                        </div>
+                      </div>
+                      {isExpanded && (
+                        <div className="planned-plan-exercises" id={detailId}>
+                          {planToExercises(plan).map((exercise) => (
+                            <ExerciseCard exercise={exercise} key={exercise.id} />
+                          ))}
+                        </div>
+                      )}
+                    </article>
+                  )
+                })}
               </div>
             )}
           </section>

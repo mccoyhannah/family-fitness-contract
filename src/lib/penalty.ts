@@ -13,14 +13,17 @@ export function computeConsecutiveMisses(
 ) {
   let count = 1
   let cursor = addDays(new Date(`${date}T00:00:00`), -1)
+  const planByDate = new Map(plan.map((item) => [item.date, item]))
+  const checkInByDate = new Map(checkIns.map((item) => [item.date, item]))
+  const penaltyByDate = new Map(penalties.map((item) => [item.date, item]))
 
   for (let index = 0; index < 30; index += 1) {
     const cursorDate = toISODate(cursor)
-    const day = plan.find((item) => item.date === cursorDate)
-    if (!day?.is_training) break
+    const day = planByDate.get(cursorDate)
+    if (day && !day.is_training) break
 
-    const checkIn = checkIns.find((item) => item.date === cursorDate)
-    const penalty = penalties.find((item) => item.date === cursorDate)
+    const checkIn = checkInByDate.get(cursorDate)
+    const penalty = penaltyByDate.get(cursorDate)
     if (checkIn?.status === 'missed' || (penalty && penalty.status !== 'waived')) {
       count += 1
       cursor = addDays(cursor, -1)

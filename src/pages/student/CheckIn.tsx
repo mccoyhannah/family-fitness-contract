@@ -29,10 +29,12 @@ export default function CheckIn() {
   const todayCheckIn = checkIns.find((checkIn) => checkIn.date === today)
   const todayPendingCheckIn = checkIns.find((checkIn) => checkIn.date === today && checkIn.status === 'pending_review')
   const todayMissedCheckIn = checkIns.find((checkIn) => checkIn.date === today && checkIn.status === 'missed')
+  const restDay = Boolean(todayPlan && !todayPlan.is_training)
   const submitting = !['idle', 'failed'].includes(submitStage)
 
   const submit = async () => {
     if (submitting || !profile || !todayPlan) return
+    if (restDay) return
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
     setSubmitStage('saving')
     setSubmitStatus(todayMissedCheckIn ? '正在提交补交记录。' : todayPendingCheckIn ? '正在更新打卡记录。' : '正在保存打卡记录。')
@@ -91,7 +93,9 @@ export default function CheckIn() {
       <div className="checkin-title-block">
         <h2>训练打卡</h2>
         <p>
-          {todayMissedCheckIn
+          {restDay
+            ? '今天已记为休息日，不需要提交训练打卡。'
+            : todayMissedCheckIn
             ? '今天已记缺卡，可以补交训练记录给教练审核。'
             : todayPendingCheckIn
               ? '今天已有待审核记录，可以更新身体状态和备注。'
@@ -125,6 +129,13 @@ export default function CheckIn() {
           </div>
         </div>
       )}
+      {restDay && (
+        <div className="status-card rest-day-card contract-clause-card">
+          <strong>今天是休息日</strong>
+          <p>今天不用提交训练打卡。需要改成训练时，先回到今日页或计划页调整当天计划。</p>
+        </div>
+      )}
+      {!restDay && (
       <div className="form-card checkin-panel">
         <div className="checkin-section-head">
           <span>01</span>
@@ -191,6 +202,7 @@ export default function CheckIn() {
                   : '提交打卡，等待审核'}
         </button>
       </div>
+      )}
     </section>
   )
 }

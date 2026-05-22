@@ -252,12 +252,15 @@ textarea:focus-visible,
 
 .ghost-button,
 .leave-card button,
+.today-choice-actions button,
 .row-actions button,
 .row-actions a,
 .preview-actions button,
 .admin-button,
 .icon-action,
 .planned-copy-button,
+.planned-edit-button,
+.planned-expand-button,
 .week-tabs button,
 .member-edit-button,
 .member-edit-actions button,
@@ -688,7 +691,7 @@ textarea:focus-visible,
 
 .planned-plan-topline {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, auto);
   gap: 12px;
   align-items: start;
 }
@@ -696,17 +699,8 @@ textarea:focus-visible,
 .planned-plan-main {
   width: 100%;
   min-width: 0;
-  min-height: 44px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
   gap: 10px;
-  padding: 0;
-  border: 0;
-  color: inherit;
-  background: transparent;
-  box-shadow: none;
-  cursor: pointer;
   text-align: left;
 }
 
@@ -715,19 +709,9 @@ textarea:focus-visible,
   overflow-wrap: anywhere;
 }
 
-.planned-plan-main:hover {
-  box-shadow: none;
-}
-
 .planned-plan-card.active {
   border-color: #9bcfac;
   box-shadow: inset 4px 0 0 var(--brand), var(--shadow-soft);
-}
-
-.planned-plan-main:focus-visible {
-  border-radius: calc(var(--radius) - 2px);
-  border-color: var(--brand);
-  box-shadow: var(--focus-ring);
 }
 
 .planned-plan-exercises {
@@ -735,7 +719,19 @@ textarea:focus-visible,
   gap: 10px;
 }
 
-.planned-source-chip {
+.planned-plan-meta,
+.planned-plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.planned-plan-actions {
+  justify-content: flex-end;
+}
+
+.planned-source-chip,
+.planned-count-chip {
   min-height: 34px;
   flex: 0 0 auto;
   display: inline-flex;
@@ -750,10 +746,33 @@ textarea:focus-visible,
   white-space: nowrap;
 }
 
-.planned-copy-button {
+.planned-count-chip {
+  color: var(--brand-2);
+  border-color: #aad4b9;
+  background: var(--brand-soft);
+}
+
+.planned-copy-button,
+.planned-edit-button,
+.planned-expand-button {
   justify-self: end;
+  min-width: 126px;
   white-space: nowrap;
   background: #fff;
+}
+
+.planned-edit-button {
+  color: var(--brand-2);
+  border-color: #aad4b9;
+  background: var(--brand-soft);
+}
+
+.planned-expand-button {
+  min-width: 104px;
+}
+
+.planned-expand-button[aria-expanded='true'] svg {
+  transform: rotate(180deg);
 }
 
 .return-review-button {
@@ -766,6 +785,39 @@ textarea:focus-visible,
   color: var(--brand-2);
   border-color: #aad4b9;
   background: var(--brand-soft);
+}
+
+.today-choice-card {
+  gap: 14px;
+}
+
+.today-choice-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.today-choice-actions button {
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.today-choice-actions button:first-child {
+  color: var(--brand-2);
+  border-color: #aad4b9;
+  background: var(--brand-soft);
+}
+
+.today-choice-actions button:nth-child(2) {
+  color: #446a9c;
+  border-color: #b8d3f0;
+  background: #edf6ff;
+}
+
+.today-choice-leave-field {
+  margin-top: 2px;
 }
 
 .plan-copy-note {
@@ -2496,6 +2548,7 @@ code {
   .primary-action:hover:not(:disabled),
   .ghost-button:hover,
   .leave-card button:hover:not(:disabled),
+  .today-choice-actions button:hover:not(:disabled),
   .row-actions button:hover:not(:disabled),
   .row-actions a:hover,
   .preview-actions button:hover:not(:disabled),
@@ -2504,6 +2557,8 @@ code {
   .admin-button:hover,
   .icon-action:hover,
   .planned-copy-button:hover,
+  .planned-edit-button:hover,
+  .planned-expand-button:hover,
   .week-tabs button:hover,
   .member-edit-button:hover,
   .member-edit-actions button:hover,
@@ -2693,8 +2748,13 @@ button:active,
     display: grid;
   }
 
-  .planned-plan-main {
-    flex-direction: column;
+  .planned-plan-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .today-choice-actions {
+    grid-template-columns: 1fr;
   }
 
   .current-member-edit-form {
@@ -2706,8 +2766,11 @@ button:active,
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .planned-copy-button {
+  .planned-copy-button,
+  .planned-edit-button,
+  .planned-expand-button {
     width: 100%;
+    min-width: 0;
   }
 
   .plan-day-title,

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { readCache, writeCache } from '../lib/cache'
 import { DEMO_STUDENT_ID, PREVIEW_ROLE_KEY, isLocalhostPreview } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
-import { buildMissedPenalty } from '../lib/sync'
+import { buildMissedPenalty, buildMissedSync } from '../lib/sync'
 import { notifySyncError } from '../lib/syncError'
 import type { CheckIn, Penalty, Plan, Profile } from '../lib/types'
 
@@ -25,6 +25,11 @@ const COACH_RECORD_LIMIT = 500
 let coachDataCache: Omit<CoachDataState, 'loading'> | null = null
 
 type CheckInReviewUpdate = Partial<Pick<CheckIn, 'review_comment' | 'reviewed_at' | 'reviewer_id'>>
+type CoachPlan = Pick<Plan, 'id' | 'user_id' | 'date' | 'deadline' | 'is_training'>
+type CoachMemberStart = {
+  student_id: string
+  created_at?: string | null
+}
 
 function shouldUseDemoCoachData() {
   return !isSupabaseConfigured || !supabase || (isLocalhostPreview() && localStorage.getItem(PREVIEW_ROLE_KEY) === 'coach')
@@ -59,16 +64,49 @@ function rememberCoachData(state: Omit<CoachDataState, 'loading'>) {
   coachDataCache = state
 }
 
+function buildCoachMissedSync(
+  profiles: Profile[],
+  plans: CoachPlan[],
+  checkIns: CheckIn[],
+  penalties: Penalty[],
+  memberStartByStudentId: Map<string, string | null>,
+) {
+  let nextCheckIns = checkIns
+  let nextPenalties = penalties
+  const now = new Date()
+
+  profiles.forEach((profile) => {
+    const userPlans = plans.filter((plan) => plan.user_id === profile.id)
+    const activeFrom = memberStartByStudentId.get(profile.id) ?? profile.created_at
+    const synced = buildMissedSync(profile.id, userPlans, nextCheckIns, nextPenalties, now, activeFrom)
+    nextCheckIns = synced.checkIns
+    nextPenalties = synced.penalties
+  })
+
+  return { checkIns: nextCheckIns, penalties: nextPenalties }
+}
+
+function findNewCheckIns(nextCheckIns: CheckIn[], currentCheckIns: CheckIn[]) {
+  return nextCheckIns.filter(
+    (checkIn) =>
+      !currentCheckIns.some((existing) => existing.user_id === checkIn.user_id && existing.date === checkIn.date),
+  )
+}
+
 export function useCoachData() {
   const [state, setState] = useState<CoachDataState>(() => initialCoachDataState())
 
   const load = useCallback(async () => {
     if (shouldUseDemoCoachData()) {
       const cache = readCache(demoStudent.id)
+      const synced = buildMissedSync(demoStudent.id, [], cache.checkIns, cache.penalties, new Date(), demoStudent.created_at)
+      if (synced.checkIns.length !== cache.checkIns.length || synced.penalties.length !== cache.penalties.length) {
+        writeCache({ ...cache, checkIns: synced.checkIns, penalties: synced.penalties }, demoStudent.id)
+      }
       const next = {
-        checkIns: cache.checkIns,
+        checkIns: synced.checkIns,
         loading: false,
-        penalties: cache.penalties,
+        penalties: synced.penalties,
         profiles: [demoStudent],
         ready: true,
       }
@@ -80,10 +118,12 @@ export function useCoachData() {
     if (!client) return
     try {
       setState((current) => ({ ...current, loading: true }))
-      const [profilesResult, checkInsResult, penaltiesResult] = await Promise.allSettled([
+      const [profilesResult, checkInsResult, penaltiesResult, plansResult, memberStartsResult] = await Promise.allSettled([
         client.from('profiles').select('*').eq('role', 'student').order('created_at', { ascending: true }),
         client.from('check_ins').select('*').order('date', { ascending: false }).limit(COACH_RECORD_LIMIT),
         client.from('penalties').select('*').order('date', { ascending: false }).limit(COACH_RECORD_LIMIT),
+        client.from('plans').select('id,user_id,date,deadline,is_training').order('date', { ascending: false }).limit(COACH_RECORD_LIMIT),
+        client.from('coach_members').select('student_id,created_at'),
       ])
       const profilesData =
         profilesResult.status === 'fulfilled' && !profilesResult.value.error
@@ -97,7 +137,15 @@ export function useCoachData() {
         penaltiesResult.status === 'fulfilled' && !penaltiesResult.value.error
           ? ((penaltiesResult.value.data ?? []) as Penalty[])
           : null
-      if (profilesData === null && checkInsData === null && penaltiesData === null) {
+      const plansData =
+        plansResult.status === 'fulfilled' && !plansResult.value.error
+          ? ((plansResult.value.data ?? []) as CoachPlan[])
+          : null
+      const memberStartsData =
+        memberStartsResult.status === 'fulfilled' && !memberStartsResult.value.error
+          ? ((memberStartsResult.value.data ?? []) as CoachMemberStart[])
+          : null
+      if (profilesData === null && checkInsData === null && penaltiesData === null && plansData === null && memberStartsData === null) {
         throw new Error('管理端数据同步失败')
       }
 
@@ -105,14 +153,39 @@ export function useCoachData() {
         profilesData === null ? '成员档案' : '',
         checkInsData === null ? '打卡记录' : '',
         penaltiesData === null ? '账款记录' : '',
+        plansData === null ? '训练计划' : '',
+        memberStartsData === null ? '成员绑定时间' : '',
       ].filter(Boolean)
 
+      let finalCheckInsData = checkInsData
+      let finalPenaltiesData = penaltiesData
+      if (profilesData !== null && checkInsData !== null && penaltiesData !== null && plansData !== null && memberStartsData !== null) {
+        const memberStartByStudentId = new Map(memberStartsData.map((binding) => [binding.student_id, binding.created_at ?? null]))
+        const synced = buildCoachMissedSync(profilesData, plansData, checkInsData, penaltiesData, memberStartByStudentId)
+        const newCheckIns = findNewCheckIns(synced.checkIns, checkInsData)
+
+        if (newCheckIns.length > 0) {
+          const rows = newCheckIns.map(({ id: _id, created_at: _createdAt, review_comment: _reviewComment, reviewed_at: _reviewedAt, reviewer_id: _reviewerId, ...row }) => row)
+          const { error: insertError } = await client.from('check_ins').insert(rows)
+          if (insertError && insertError.code !== '23505') {
+            notifySyncError('coach-missed-sync', '缺卡补记失败，请确认数据库权限已更新后刷新。')
+          } else {
+            const [refreshedCheckIns, refreshedPenalties] = await Promise.all([
+              client.from('check_ins').select('*').order('date', { ascending: false }).limit(COACH_RECORD_LIMIT),
+              client.from('penalties').select('*').order('date', { ascending: false }).limit(COACH_RECORD_LIMIT),
+            ])
+            if (!refreshedCheckIns.error) finalCheckInsData = (refreshedCheckIns.data ?? []) as CheckIn[]
+            if (!refreshedPenalties.error) finalPenaltiesData = (refreshedPenalties.data ?? []) as Penalty[]
+          }
+        }
+      }
+
       setState((current) => {
-        const fullySynced = profilesData !== null && checkInsData !== null && penaltiesData !== null
+        const fullySynced = profilesData !== null && finalCheckInsData !== null && finalPenaltiesData !== null
         const next = {
-          checkIns: checkInsData ?? current.checkIns,
+          checkIns: finalCheckInsData ?? current.checkIns,
           loading: false,
-          penalties: penaltiesData ?? current.penalties,
+          penalties: finalPenaltiesData ?? current.penalties,
           profiles: profilesData ?? current.profiles,
           ready: fullySynced || current.ready,
         }

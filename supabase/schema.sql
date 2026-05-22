@@ -259,9 +259,12 @@ create or replace function public.compute_penalty_amount(consecutive_days int)
 returns int
 language sql
 immutable
+set search_path = public
 as $$
   select least(10 * greatest(1, consecutive_days), 50);
 $$;
+
+revoke execute on function public.compute_penalty_amount(int) from public, anon, authenticated;
 
 create or replace function public.compute_consecutive_misses(student uuid, target_date date)
 returns int
@@ -273,17 +276,22 @@ as $$
 declare
   miss_count int := 1;
   cursor_date date := target_date - 1;
+  plan_is_training boolean;
   check_status text;
   penalty_status text;
 begin
   for _index in 0..29 loop
-    if not exists (
-      select 1
-      from public.plans
-      where user_id = student
-        and date = cursor_date
-        and is_training = true
-    ) then
+    plan_is_training := null;
+    check_status := null;
+    penalty_status := null;
+
+    select is_training into plan_is_training
+    from public.plans
+    where user_id = student
+      and date = cursor_date
+    limit 1;
+
+    if plan_is_training = false then
       exit;
     end if;
 
@@ -302,8 +310,6 @@ begin
     if check_status = 'missed' or (penalty_status is not null and penalty_status <> 'waived') then
       miss_count := miss_count + 1;
       cursor_date := cursor_date - 1;
-      check_status := null;
-      penalty_status := null;
     else
       exit;
     end if;
@@ -312,6 +318,8 @@ begin
   return miss_count;
 end;
 $$;
+
+revoke execute on function public.compute_consecutive_misses(uuid, date) from public, anon, authenticated;
 
 create or replace function public.ensure_penalty_for_missed_check_in()
 returns trigger
@@ -343,7 +351,10 @@ begin
       miss_amount,
       miss_count,
       'pending',
-      '训练日未打卡',
+      case
+        when new.plan_id is null then '无计划、未请假且未选择休息'
+        else '训练日未打卡'
+      end,
       'missed_checkin',
       new.id::text
     )
@@ -369,6 +380,8 @@ begin
 end;
 $$;
 
+revoke execute on function public.ensure_penalty_for_missed_check_in() from public, anon, authenticated;
+
 drop trigger if exists ensure_penalty_for_missed_check_in on public.check_ins;
 create trigger ensure_penalty_for_missed_check_in
 after insert or update on public.check_ins
@@ -392,7 +405,10 @@ select
   public.compute_penalty_amount(public.compute_consecutive_misses(c.user_id, c.date)),
   public.compute_consecutive_misses(c.user_id, c.date),
   'pending',
-  '训练日未打卡',
+  case
+    when c.plan_id is null then '无计划、未请假且未选择休息'
+    else '训练日未打卡'
+  end,
   'missed_checkin',
   c.id::text
 from public.check_ins c
@@ -604,17 +620,32 @@ using (public.can_read_student(user_id));
 
 drop policy if exists "students_upsert_own_check_ins" on public.check_ins;
 drop policy if exists "students_insert_own_check_ins" on public.check_ins;
-create policy "students_insert_own_check_ins"
+drop policy if exists "coach_insert_bound_missed_check_ins" on public.check_ins;
+drop policy if exists "check_ins_insert_student_or_coach_missed" on public.check_ins;
+create policy "check_ins_insert_student_or_coach_missed"
 on public.check_ins for insert
 to authenticated
 with check (
-  user_id = auth.uid()
-  and status in ('completed', 'missed', 'pending_review')
-  and (
-    plan_id is null
-    or exists (
-      select 1 from public.plans
-      where id = plan_id and user_id = auth.uid()
+  (
+    user_id = auth.uid()
+    and status in ('completed', 'missed', 'pending_review')
+    and (
+      plan_id is null
+      or exists (
+        select 1 from public.plans
+        where id = plan_id and user_id = auth.uid()
+      )
+    )
+  )
+  or (
+    public.is_member_coach(user_id)
+    and status = 'missed'
+    and (
+      plan_id is null
+      or exists (
+        select 1 from public.plans
+        where id = plan_id and user_id = check_ins.user_id
+      )
     )
   )
 );

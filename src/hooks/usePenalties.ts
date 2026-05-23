@@ -5,8 +5,14 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { notifySyncError } from '../lib/syncError'
 import type { Penalty } from '../lib/types'
 
+type PenaltyUpdate = Partial<Pick<Penalty, 'donation_note' | 'donation_reported_at' | 'status'>>
+
 function shouldUseLocalPenalties(scope?: string) {
   return !isSupabaseConfigured || !supabase || shouldUsePreviewLocalScope(scope)
+}
+
+function normalizePenaltyUpdate(update: Penalty['status'] | PenaltyUpdate): PenaltyUpdate {
+  return typeof update === 'string' ? { status: update } : update
 }
 
 export function usePenalties(userId?: string) {
@@ -84,10 +90,11 @@ export function usePenalties(userId?: string) {
     await load()
   }
 
-  const updatePenalty = async (id: string, status: Penalty['status']) => {
+  const updatePenalty = async (id: string, update: Penalty['status'] | PenaltyUpdate) => {
+    const patch = normalizePenaltyUpdate(update)
     if (shouldUseLocalPenalties(userId)) {
       const cache = readCache(cacheScope)
-      const penalties = cache.penalties.map((penalty) => (penalty.id === id ? { ...penalty, status } : penalty))
+      const penalties = cache.penalties.map((penalty) => (penalty.id === id ? { ...penalty, ...patch } : penalty))
       writeCache({ ...cache, penalties }, cacheScope)
       setPenalties(penalties.filter((item) => item.user_id === userId))
       if (userId) setLoadedUserId(userId)
@@ -95,7 +102,7 @@ export function usePenalties(userId?: string) {
     }
     const client = supabase
     if (!client) return
-    const { error } = await client.from('penalties').update({ status }).eq('id', id)
+    const { error } = await client.from('penalties').update(patch).eq('id', id)
     if (error) throw error
     await load()
   }

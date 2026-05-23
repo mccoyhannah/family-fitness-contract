@@ -44,9 +44,19 @@ export type Penalty = {
   consecutive_count: number
   status: PenaltyStatus
   reason: string
+  donation_note?: string | null
+  donation_reported_at?: string | null
   source_type?: PenaltySourceType | null
   source_id?: string | null
   created_at?: string
+}
+
+export type DonationSettings = {
+  id?: boolean
+  qr_image_url: string
+  payment_hint: string
+  updated_at?: string
+  updated_by?: string | null
 }
 
 export type PenaltySettings = {

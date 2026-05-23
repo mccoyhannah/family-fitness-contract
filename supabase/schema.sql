@@ -101,6 +101,8 @@ create table if not exists public.penalties (
 
 alter table public.penalties add column if not exists source_type text;
 alter table public.penalties add column if not exists source_id text;
+alter table public.penalties add column if not exists donation_note text;
+alter table public.penalties add column if not exists donation_reported_at timestamptz;
 alter table public.penalties drop constraint if exists penalties_status_check;
 alter table public.penalties add constraint penalties_status_check
 check (status in ('pending', 'payment_reported', 'paid', 'waived'));
@@ -124,6 +126,23 @@ create table if not exists public.penalty_settings (
 
 insert into public.penalty_settings (id, base_amount, daily_increment, max_amount)
 values (true, 10, 10, 50)
+on conflict (id) do nothing;
+
+create table if not exists public.donation_settings (
+  id boolean primary key default true,
+  qr_image_url text not null default '',
+  payment_hint text not null default '扫码或按约定转账后，在这里确认捐赠时间。管理端核对后，这笔贡献会计入家庭基金。',
+  updated_at timestamptz default now(),
+  updated_by uuid references public.profiles(id) on delete set null,
+  check (id)
+);
+
+insert into public.donation_settings (id, qr_image_url, payment_hint)
+values (
+  true,
+  '',
+  '扫码或按约定转账后，在这里确认捐赠时间。管理端核对后，这笔贡献会计入家庭基金。'
+)
 on conflict (id) do nothing;
 
 create table if not exists public.fund_expenses (
@@ -159,6 +178,7 @@ alter table public.plan_items enable row level security;
 alter table public.check_ins enable row level security;
 alter table public.penalties enable row level security;
 alter table public.penalty_settings enable row level security;
+alter table public.donation_settings enable row level security;
 alter table public.fund_expenses enable row level security;
 alter table public.check_in_evidence enable row level security;
 
@@ -338,6 +358,27 @@ drop trigger if exists touch_penalty_settings on public.penalty_settings;
 create trigger touch_penalty_settings
 before update on public.penalty_settings
 for each row execute function public.touch_penalty_settings();
+
+create or replace function public.touch_donation_settings()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  new.id := true;
+  new.updated_at := now();
+  new.updated_by := auth.uid();
+  return new;
+end;
+$$;
+
+revoke execute on function public.touch_donation_settings() from public, anon, authenticated;
+
+drop trigger if exists touch_donation_settings on public.donation_settings;
+create trigger touch_donation_settings
+before insert or update on public.donation_settings
+for each row execute function public.touch_donation_settings();
 
 create or replace function public.touch_fund_expenses()
 returns trigger
@@ -805,6 +846,25 @@ to authenticated
 using (public.is_coach() and id = true)
 with check (public.is_coach() and id = true);
 
+drop policy if exists "donation_settings_select_authenticated" on public.donation_settings;
+create policy "donation_settings_select_authenticated"
+on public.donation_settings for select
+to authenticated
+using (true);
+
+drop policy if exists "donation_settings_insert_coach" on public.donation_settings;
+create policy "donation_settings_insert_coach"
+on public.donation_settings for insert
+to authenticated
+with check (public.is_coach() and id = true);
+
+drop policy if exists "donation_settings_update_coach" on public.donation_settings;
+create policy "donation_settings_update_coach"
+on public.donation_settings for update
+to authenticated
+using (public.is_coach() and id = true)
+with check (public.is_coach() and id = true);
+
 drop policy if exists "fund_expenses_select_related" on public.fund_expenses;
 create policy "fund_expenses_select_related"
 on public.fund_expenses for select
@@ -876,7 +936,10 @@ drop policy if exists "students_report_own_penalties_paid" on public.penalties;
 create policy "students_report_own_penalties_paid"
 on public.penalties for update
 to authenticated
-using (user_id = auth.uid())
+using (
+  user_id = auth.uid()
+  and status = 'pending'
+)
 with check (
   user_id = auth.uid()
   and status = 'payment_reported'
@@ -1014,9 +1077,10 @@ grant insert (user_id, plan_id, date, status, fatigue, issues, note, leave_reaso
 grant update (plan_id, status, fatigue, issues, note, leave_reason, review_comment, reviewed_at, reviewer_id) on public.check_ins to authenticated;
 grant select, insert, delete on public.penalties to authenticated;
 revoke update on public.penalties from authenticated;
-grant update (status) on public.penalties to authenticated;
+grant update (status, donation_note, donation_reported_at) on public.penalties to authenticated;
 grant select on public.penalty_settings to authenticated;
 grant update (base_amount, daily_increment, max_amount, updated_at, updated_by) on public.penalty_settings to authenticated;
+grant select, insert, update on public.donation_settings to authenticated;
 grant select, insert, update, delete on public.fund_expenses to authenticated;
 grant select, insert, delete on public.check_in_evidence to authenticated;
 

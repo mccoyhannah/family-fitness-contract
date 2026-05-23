@@ -6,6 +6,7 @@ import Metric from '../../components/Metric'
 import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
 import { useCoachData } from '../../hooks/useCoachData'
+import { useDonationSettings } from '../../hooks/useDonationSettings'
 import { useFundExpenses } from '../../hooks/useFundExpenses'
 import { useMembers } from '../../hooks/useMembers'
 import { usePenaltySettings } from '../../hooks/usePenaltySettings'
@@ -49,6 +50,19 @@ function emptyExpenseDraft(): ExpenseDraft {
   }
 }
 
+function formatDonationTime(value?: string | null) {
+  if (!value) return '未填写'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('zh-CN', {
+    day: '2-digit',
+    hour: '2-digit',
+    hour12: false,
+    minute: '2-digit',
+    month: '2-digit',
+  })
+}
+
 export default function CoachPayments() {
   const { profile } = useAuth()
   const {
@@ -60,6 +74,11 @@ export default function CoachPayments() {
     setSelectedMemberId,
   } = useMembers(profile?.id)
   const { penalties, updatePenalty } = useCoachData()
+  const {
+    loading: donationSettingsLoading,
+    saveSettings: saveDonationSettings,
+    settings: donationSettings,
+  } = useDonationSettings()
   const { addExpense, deleteExpense, expenses: fundExpenses, loading: fundExpensesLoading, updateExpense } = useFundExpenses(profile?.id)
   const { loading: penaltySettingsLoading, saveSettings, settings: penaltySettings } = usePenaltySettings()
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'payment_reported' | 'paid' | 'waived'>('all')
@@ -72,6 +91,12 @@ export default function CoachPayments() {
   }))
   const [ruleMessage, setRuleMessage] = useState('')
   const [savingRule, setSavingRule] = useState(false)
+  const [donationDraft, setDonationDraft] = useState(() => ({
+    payment_hint: donationSettings.payment_hint,
+    qr_image_url: donationSettings.qr_image_url,
+  }))
+  const [donationSettingsMessage, setDonationSettingsMessage] = useState('')
+  const [savingDonationSettings, setSavingDonationSettings] = useState(false)
   const [expenseDraft, setExpenseDraft] = useState<ExpenseDraft>(() => emptyExpenseDraft())
   const [editingExpenseId, setEditingExpenseId] = useState('')
   const [expenseHistoryOpen, setExpenseHistoryOpen] = useState(false)
@@ -124,7 +149,7 @@ export default function CoachPayments() {
   const ledgerStats = [
     { label: '全部', value: membersReady ? scopedPenalties.length : '-' },
     { label: '待贡献', value: membersReady ? penaltySummary.pendingCount : '-' },
-    { label: '待确认', value: membersReady ? penaltySummary.reportedCount : '-' },
+    { label: '待核对', value: membersReady ? penaltySummary.reportedCount : '-' },
     { label: '已处理', value: membersReady ? penaltySummary.settledCount : '-' },
   ]
 
@@ -136,6 +161,14 @@ export default function CoachPayments() {
       max_amount: penaltySettings.max_amount,
     })
   }, [penaltySettings, savingRule])
+
+  useEffect(() => {
+    if (savingDonationSettings) return
+    setDonationDraft({
+      payment_hint: donationSettings.payment_hint,
+      qr_image_url: donationSettings.qr_image_url,
+    })
+  }, [donationSettings, savingDonationSettings])
 
   const findPaymentCard = (penaltyId: string) =>
     Array.from(document.querySelectorAll<HTMLElement>('[data-penalty-id]')).find(
@@ -228,6 +261,34 @@ export default function CoachPayments() {
     }
   }
 
+  const changeDonationDraft = (key: keyof typeof donationDraft, value: string) => {
+    setDonationDraft((current) => ({ ...current, [key]: value }))
+    setDonationSettingsMessage('')
+  }
+
+  const submitDonationSettings = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (savingDonationSettings) return
+    setSavingDonationSettings(true)
+    try {
+      const saved = await saveDonationSettings({
+        payment_hint: donationDraft.payment_hint,
+        qr_image_url: donationDraft.qr_image_url,
+      })
+      setDonationDraft({
+        payment_hint: saved.payment_hint,
+        qr_image_url: saved.qr_image_url,
+      })
+      setDonationSettingsMessage('收款码配置已保存，学生端会同步显示。')
+      notifyApp({ tone: 'success', message: '收款码配置已保存。' })
+    } catch {
+      setDonationSettingsMessage('收款码配置保存失败，请检查网络后再试。')
+      notifyApp({ tone: 'warning', message: '收款码配置保存失败。' })
+    } finally {
+      setSavingDonationSettings(false)
+    }
+  }
+
   const changeExpenseDraft = (key: keyof ExpenseDraft, value: string) => {
     setExpenseDraft((current) => ({ ...current, [key]: value }))
   }
@@ -311,7 +372,7 @@ export default function CoachPayments() {
       <div className="metric-row four-col fund-metric-row">
         <Metric icon={<WalletCards />} label="基金余额" value={`¥${formatAmount(fundSummary.balance)}`} />
         <Metric icon={<ReceiptText />} label="待贡献" value={`¥${formatAmount(penaltySummary.pendingTotal)}`} />
-        <Metric icon={<CheckCircle2 />} label="待确认" value={`${penaltySummary.reportedCount} 笔`} />
+        <Metric icon={<CheckCircle2 />} label="待核对" value={`${penaltySummary.reportedCount} 笔`} />
         <Metric icon={<CircleSlash />} label="已豁免" value={`¥${formatAmount(penaltySummary.waivedTotal)}`} />
       </div>
 
@@ -365,7 +426,52 @@ export default function CoachPayments() {
         </p>
       </section>
 
-      <section className="status-card fund-expense-card" aria-label="家庭基金记账">
+      <section className="status-card donation-settings-card" aria-label="收款码配置">
+        <div className="fund-section-head">
+          <div>
+            <strong>收款码配置</strong>
+            <span>学生确认捐赠前会看到这里配置的收款码和提示。</span>
+          </div>
+          {donationSettingsLoading && <span className="mini-chip">同步中</span>}
+        </div>
+        <form className="donation-settings-form" onSubmit={(event) => void submitDonationSettings(event)}>
+          <label>
+            收款码图片地址
+            <input
+              value={donationDraft.qr_image_url}
+              onChange={(event) => changeDonationDraft('qr_image_url', event.currentTarget.value)}
+              placeholder="https://..."
+              disabled={savingDonationSettings}
+            />
+          </label>
+          <label className="donation-settings-hint">
+            学生端提示
+            <textarea
+              maxLength={180}
+              rows={3}
+              value={donationDraft.payment_hint}
+              onChange={(event) => changeDonationDraft('payment_hint', event.currentTarget.value)}
+              disabled={savingDonationSettings}
+            />
+          </label>
+          <button type="submit" disabled={savingDonationSettings}>
+            {savingDonationSettings ? '保存中' : '保存配置'}
+          </button>
+        </form>
+        {donationDraft.qr_image_url ? (
+          <div className="donation-settings-preview">
+            <img src={donationDraft.qr_image_url} alt="收款码预览" />
+            <span>学生端会展示这张收款码图片。</span>
+          </div>
+        ) : (
+          <p className="muted">还没有配置收款码图片地址；学生端会显示“收款码待配置”。</p>
+        )}
+        <p className={donationSettingsMessage ? donationSettingsMessage.includes('失败') ? 'form-error donation-settings-message' : 'form-success donation-settings-message' : 'donation-settings-message'} aria-live="polite">
+          {donationSettingsMessage || '建议使用可公开访问的收款码图片地址。'}
+        </p>
+      </section>
+
+      <section className="status-card fund-expense-card" aria-label="家庭基金支出">
         <div className="fund-section-head">
           <div>
             <strong>基金流水</strong>
@@ -469,7 +575,7 @@ export default function CoachPayments() {
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
               <option value="all">全部</option>
               <option value="pending">待贡献</option>
-              <option value="payment_reported">等待入账</option>
+              <option value="payment_reported">待核对</option>
               <option value="paid">已入账</option>
               <option value="waived">已豁免</option>
             </select>
@@ -497,6 +603,13 @@ export default function CoachPayments() {
                 <strong>缺卡贡献 ¥{formatAmount(penalty.amount)}</strong>
                 <span className="penalty-meta">{displayName} · {formatDay(penalty.date)} · 连续第 {penalty.consecutive_count} 天</span>
                 {penalty.source_type === 'missed_checkin' && <span className="penalty-source-note">原因：缺卡</span>}
+                {penalty.status === 'payment_reported' && (
+                  <div className="donation-report-note">
+                    <strong>学生已确认捐赠</strong>
+                    <span>捐赠时间：{formatDonationTime(penalty.donation_reported_at)}</span>
+                    {penalty.donation_note ? <p>备注：{penalty.donation_note}</p> : <p>未填写备注。</p>}
+                  </div>
+                )}
               </div>
               <div className="payment-status">
                 <StatusPill status={penalty.status} />

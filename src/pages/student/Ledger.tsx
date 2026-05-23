@@ -1,7 +1,9 @@
+import type { FormEvent } from 'react'
 import { useMemo, useState } from 'react'
 import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
 import { useCheckIns } from '../../hooks/useCheckIns'
+import { useDonationSettings } from '../../hooks/useDonationSettings'
 import { useFundExpenses } from '../../hooks/useFundExpenses'
 import { usePenalties } from '../../hooks/usePenalties'
 import { formatDay } from '../../lib/date'
@@ -21,11 +23,39 @@ const fundPurposeLabel: Record<FundExpensePurpose, string> = {
   general: '通用',
 }
 
+function toDateTimeLocalValue(date = new Date()) {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return localDate.toISOString().slice(0, 16)
+}
+
+function toDonationIso(value: string) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString()
+}
+
+function formatDonationTime(value?: string | null) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('zh-CN', {
+    day: '2-digit',
+    hour: '2-digit',
+    hour12: false,
+    minute: '2-digit',
+    month: '2-digit',
+  })
+}
+
 export default function Ledger() {
   const { profile } = useAuth()
   const { penalties, updatePenalty } = usePenalties(profile?.id)
   const { checkIns, upsertCheckIn } = useCheckIns(profile?.id)
+  const { settings: donationSettings } = useDonationSettings()
   const { expenses: fundExpenses } = useFundExpenses()
+  const [donationTargetId, setDonationTargetId] = useState('')
+  const [donationTime, setDonationTime] = useState(() => toDateTimeLocalValue())
+  const [donationNote, setDonationNote] = useState('')
+  const [submittingDonation, setSubmittingDonation] = useState(false)
   const [waiverTargetId, setWaiverTargetId] = useState('')
   const [waiverReason, setWaiverReason] = useState('')
   const [submittingWaiver, setSubmittingWaiver] = useState(false)
@@ -37,18 +67,51 @@ export default function Ledger() {
   const formatAmount = (amount: number) => (Number.isInteger(amount) ? `${amount}` : amount.toFixed(2))
   const checkInByDate = useMemo(() => new Map(checkIns.map((item) => [item.date, item])), [checkIns])
 
-  const markPaid = async (penaltyId: string) => {
+  const openDonationConfirm = (penalty: Penalty) => {
+    setDonationTargetId(penalty.id)
+    setDonationTime(toDateTimeLocalValue())
+    setDonationNote('')
+    setWaiverTargetId('')
+    setWaiverReason('')
+  }
+
+  const closeDonationConfirm = () => {
+    if (submittingDonation) return
+    setDonationTargetId('')
+    setDonationTime(toDateTimeLocalValue())
+    setDonationNote('')
+  }
+
+  const submitDonationConfirm = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const donationTarget = penalties.find((penalty) => penalty.id === donationTargetId) ?? null
+    if (!donationTarget || submittingDonation) return
+    const donationReportedAt = toDonationIso(donationTime)
+    if (!donationReportedAt) {
+      notifyApp({ tone: 'warning', message: '请填写有效的捐赠时间。' })
+      return
+    }
+    setSubmittingDonation(true)
     try {
-      await updatePenalty(penaltyId, 'payment_reported')
-      notifyApp({ tone: 'success', message: '已提交付款确认，等管理端核对后会计入家庭基金。' })
+      await updatePenalty(donationTarget.id, {
+        donation_note: donationNote.trim() || null,
+        donation_reported_at: donationReportedAt,
+        status: 'payment_reported',
+      })
+      notifyApp({ tone: 'success', message: '已确认捐赠，等待管理端核对入账。' })
+      closeDonationConfirm()
     } catch {
-      notifyApp({ tone: 'warning', message: '付款确认失败，请检查网络后再试。' })
+      notifyApp({ tone: 'warning', message: '捐赠确认失败，请检查网络后再试。' })
+    } finally {
+      setSubmittingDonation(false)
     }
   }
 
   const openWaiverRequest = (penalty: Penalty) => {
     setWaiverTargetId(penalty.id)
     setWaiverReason('')
+    setDonationTargetId('')
+    setDonationNote('')
   }
 
   const closeWaiverRequest = () => {
@@ -104,7 +167,7 @@ export default function Ledger() {
       </div>
       <div className="status-card action-card ledger-fund-summary">
         <strong>已入账 ¥{formatAmount(paidTotal)} · 已用于 ¥{formatAmount(expenseTotal)}</strong>
-        <p>{reported} 笔等待确认入账，{settled} 条已处理；如已线下付款，可点“我已付款”。</p>
+        <p>{reported} 笔等待核对，{settled} 条已处理；捐赠后点“确认已捐赠”，管理端会马上看到。</p>
       </div>
       {fundExpenses.length > 0 && (
         <div className="status-card ledger-expense-preview">
@@ -124,6 +187,7 @@ export default function Ledger() {
           const checkIn = checkInByDate.get(penalty.date)
           const isWaiverPending = penalty.status === 'pending' && checkIn?.status === 'pending_review'
           const canRequestWaiver = penalty.status === 'pending' && checkIn?.status === 'missed'
+          const isDonationOpen = donationTargetId === penalty.id
           const isWaiverOpen = waiverTargetId === penalty.id
           return (
             <article className={`penalty-card${isWaiverPending ? ' waiver-under-review' : ''}`} key={penalty.id}>
@@ -132,7 +196,11 @@ export default function Ledger() {
                 <span className="penalty-meta">{formatDay(penalty.date)} · 连续第 {penalty.consecutive_count} 天</span>
                 {penalty.source_type === 'missed_checkin' && <span className="penalty-source-note">原因：缺卡</span>}
                 {isWaiverPending && <span className="waiver-inline-note">免罚申请已提交，先等管理端审核。</span>}
-                {penalty.status === 'payment_reported' && <span className="waiver-inline-note">付款已上报，等待确认入账。</span>}
+                {penalty.status === 'payment_reported' && <span className="waiver-inline-note">已确认捐赠，等待管理端核对。</span>}
+                {penalty.donation_reported_at && (
+                  <span className="waiver-inline-note">捐赠时间：{formatDonationTime(penalty.donation_reported_at)}</span>
+                )}
+                {penalty.donation_note && <span className="waiver-inline-note">备注：{penalty.donation_note}</span>}
                 {checkIn?.review_comment && (
                   <div className="coach-comment-box ledger-comment-box">
                     <strong>教练留言</strong>
@@ -143,7 +211,9 @@ export default function Ledger() {
               <StatusPill status={penalty.status} />
               {penalty.status === 'pending' && (
                 <div className="row-actions">
-                  <button type="button" onClick={() => void markPaid(penalty.id)}>我已付款</button>
+                  <button type="button" onClick={() => openDonationConfirm(penalty)} disabled={submittingDonation}>
+                    确认已捐赠
+                  </button>
                   {canRequestWaiver && (
                     <button type="button" onClick={() => openWaiverRequest(penalty)}>
                       申请免罚
@@ -151,6 +221,50 @@ export default function Ledger() {
                   )}
                   {isWaiverPending && <button type="button" disabled>免罚审核中</button>}
                 </div>
+              )}
+              {isDonationOpen && (
+                <form className="inline-confirm ledger-donation-inline" onSubmit={(event) => void submitDonationConfirm(event)}>
+                  <div className="ledger-donation-paybox">
+                    {donationSettings.qr_image_url ? (
+                      <img src={donationSettings.qr_image_url} alt="家庭基金收款码" />
+                    ) : (
+                      <div className="ledger-donation-qr-placeholder">收款码待配置</div>
+                    )}
+                    <div>
+                      <strong>本次捐赠 ¥{formatAmount(penalty.amount)}</strong>
+                      <p>{donationSettings.payment_hint}</p>
+                    </div>
+                  </div>
+                  <label>
+                    捐赠时间
+                    <input
+                      type="datetime-local"
+                      value={donationTime}
+                      onChange={(event) => setDonationTime(event.currentTarget.value)}
+                      disabled={submittingDonation}
+                      required
+                    />
+                  </label>
+                  <label>
+                    简单备注
+                    <textarea
+                      maxLength={120}
+                      rows={3}
+                      value={donationNote}
+                      onChange={(event) => setDonationNote(event.currentTarget.value)}
+                      disabled={submittingDonation}
+                      placeholder="比如：刚扫了微信，时间是现在。"
+                    />
+                  </label>
+                  <div>
+                    <button type="button" onClick={closeDonationConfirm} disabled={submittingDonation}>
+                      取消
+                    </button>
+                    <button type="submit" disabled={submittingDonation}>
+                      {submittingDonation ? '提交中' : '提交核对'}
+                    </button>
+                  </div>
+                </form>
               )}
               {isWaiverOpen && (
                 <div className="inline-confirm ledger-waiver-inline">

@@ -1,28 +1,106 @@
 import { AlertTriangle, BarChart3, CalendarDays, ReceiptText } from 'lucide-react'
+import { useMemo } from 'react'
 import MemberSelect from '../../components/MemberSelect'
 import Metric from '../../components/Metric'
-import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
 import { useCoachData } from '../../hooks/useCoachData'
 import { useMembers } from '../../hooks/useMembers'
 import { usePlans } from '../../hooks/usePlans'
-import { formatDay, isPastDeadline } from '../../lib/date'
-import { displayMemberLabel } from '../../lib/memberLabels'
-import type { CheckInStatus } from '../../lib/types'
+import { formatDay, isPastDeadline, toISODate } from '../../lib/date'
+import type { CheckIn, CheckInStatus, Plan } from '../../lib/types'
 
 type RecentRecord = {
-  id: string
   date: string
   detail: string
-  status: CheckInStatus
+  id: string
+  statusLabel: string
+  tone: CheckInStatus | 'rest' | 'scheduled' | 'today_due'
+}
+
+const checkInStatusLabel: Record<CheckInStatus, string> = {
+  completed: '已完成',
+  excused: '已请假',
+  missed: '缺卡',
+  pending_review: '待审核',
+}
+
+const toneClass: Record<RecentRecord['tone'], string> = {
+  completed: 'completed',
+  excused: 'excused',
+  missed: 'missed',
+  pending_review: 'pending_review',
+  rest: 'rest',
+  scheduled: 'scheduled',
+  today_due: 'today_due',
 }
 
 function cleanRecentRecordDetail(detail: string) {
   return detail
-    .replace('最近 7 天无计划且未打卡，自动判定缺卡', '最近 7 天无计划且未打卡')
+    .replace('最近 7 天无计划且未打卡，自动判定缺卡', '无计划且未打卡')
+    .replace('最近 7 天无计划且未打卡', '无计划且未打卡')
     .replace('过了截止时间自动判定缺卡', '过了截止时间未打卡')
     .replace(/^.+ · 过了截止时间未打卡$/, '过了截止时间未打卡')
     .replace('自动判定缺卡', '缺卡')
+}
+
+function checkInDetail(checkIn: CheckIn) {
+  if (checkIn.status === 'completed') return checkIn.note || '训练已完成'
+  if (checkIn.status === 'excused') return checkIn.leave_reason || checkIn.note || '已请假'
+  if (checkIn.status === 'pending_review') return checkIn.note || '等待审核'
+  return cleanRecentRecordDetail(checkIn.note || checkIn.leave_reason || '训练日未打卡')
+}
+
+function planDetail(plan: Plan) {
+  return plan.items.length > 0 ? `${plan.title} · ${plan.items.length} 个动作` : plan.title
+}
+
+function recordFromCheckIn(checkIn: CheckIn): RecentRecord {
+  return {
+    date: checkIn.date,
+    detail: checkInDetail(checkIn),
+    id: checkIn.id,
+    statusLabel: checkInStatusLabel[checkIn.status],
+    tone: checkIn.status,
+  }
+}
+
+function recordFromPlan(plan: Plan, today: string): RecentRecord {
+  if (!plan.is_training) {
+    return {
+      date: plan.date,
+      detail: plan.date === today ? '今天安排为恢复休息' : '安排为恢复休息',
+      id: `rest-plan-${plan.id}`,
+      statusLabel: plan.date === today ? '今日休息' : '休息日',
+      tone: 'rest',
+    }
+  }
+
+  if (isPastDeadline(plan.date, plan.deadline)) {
+    return {
+      date: plan.date,
+      detail: '训练日未打卡',
+      id: `missed-plan-${plan.id}`,
+      statusLabel: '缺卡',
+      tone: 'missed',
+    }
+  }
+
+  return {
+    date: plan.date,
+    detail: planDetail(plan),
+    id: `scheduled-plan-${plan.id}`,
+    statusLabel: plan.date === today ? '今日待打卡' : '已安排',
+    tone: plan.date === today ? 'today_due' : 'scheduled',
+  }
+}
+
+function sortRecentRecords(today: string) {
+  return (a: RecentRecord, b: RecentRecord) => {
+    const aFuture = a.date > today
+    const bFuture = b.date > today
+    if (aFuture !== bFuture) return aFuture ? 1 : -1
+    return aFuture ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)
+  }
 }
 
 export default function CoachDashboard() {
@@ -47,32 +125,23 @@ export default function CoachDashboard() {
   const missed = scopedCheckIns.filter((item) => item.status === 'missed').length
   const finishedTotal = completed + missed
   const completionRate = finishedTotal > 0 ? `${Math.round((completed / finishedTotal) * 100)}%` : '0%'
-  const selectedMemberLabel = selectedMember ? displayMemberLabel(selectedMember) : ''
-  const checkInDateSet = new Set(scopedCheckIns.map((item) => item.date))
-  const recentRecords: RecentRecord[] = [
-    ...scopedCheckIns.map((item) => ({
-      id: item.id,
-      date: item.date,
-      detail: item.note || item.leave_reason || '训练记录',
-      status: item.status,
-    })),
-    ...plans
-      .filter((plan) => plan.is_training && isPastDeadline(plan.date, plan.deadline) && !checkInDateSet.has(plan.date))
-      .map((plan) => ({
-        id: `missed-plan-${plan.id}`,
-        date: plan.date,
-        detail: '过了截止时间未打卡',
-        status: 'missed' as CheckInStatus,
-      })),
-  ]
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 3)
+  const today = toISODate(new Date())
+  const recentRecords = useMemo<RecentRecord[]>(() => {
+    const recordsByDate = new Map<string, RecentRecord>()
+    scopedCheckIns.forEach((checkIn) => {
+      recordsByDate.set(checkIn.date, recordFromCheckIn(checkIn))
+    })
+    plans.forEach((plan) => {
+      if (!recordsByDate.has(plan.date)) recordsByDate.set(plan.date, recordFromPlan(plan, today))
+    })
+    return Array.from(recordsByDate.values()).sort(sortRecentRecords(today)).slice(0, 5)
+  }, [plans, scopedCheckIns, today])
+
   return (
     <section className="screen with-nav">
       <div className="hero-panel">
         <span className="hero-kicker">Coach Console</span>
         <h2>远程监督台</h2>
-        <p>{!membersReady ? '正在同步成员、计划和账款。' : selectedMember ? `当前正在看 ${selectedMemberLabel} 的计划、打卡和账款。` : '先添加成员，再制定计划。'}</p>
       </div>
       <MemberSelect loading={membersLoading} members={members} ready={membersReady} selectedMemberId={selectedMemberId} onChange={setSelectedMemberId} />
       <div className="metric-row">
@@ -89,14 +158,17 @@ export default function CoachDashboard() {
             <span>{recentRecords.length} 条记录</span>
           </div>
           <div className="review-list">
-            {recentRecords.length === 0 && <p className="muted">这个成员还没有已完成或已过截止时间的计划记录。</p>}
+            {recentRecords.length === 0 && <p className="muted">这个成员还没有计划、请假或打卡记录。</p>}
             {recentRecords.map((item) => (
               <article className="review-card dashboard-row" key={item.id}>
                 <div className="dashboard-record-copy">
                   <strong className="dashboard-record-date">{formatDay(item.date)}</strong>
                   <span className="dashboard-record-detail">{cleanRecentRecordDetail(item.detail)}</span>
                 </div>
-                <StatusPill status={item.status} />
+                <span className={`status-pill ${toneClass[item.tone]}`}>
+                  <span className="status-dot" aria-hidden="true" />
+                  {item.statusLabel}
+                </span>
               </article>
             ))}
           </div>

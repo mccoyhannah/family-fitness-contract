@@ -1609,6 +1609,24 @@ label {
   border-color: #bdd6e3;
 }
 
+.status-pill.rest {
+  color: #1d5f82;
+  background: #e7f1f6;
+  border-color: #bdd6e3;
+}
+
+.status-pill.scheduled {
+  color: #047857;
+  background: #e7f6ee;
+  border-color: #aad4b9;
+}
+
+.status-pill.today_due {
+  color: #9a640f;
+  background: #fff5df;
+  border-color: #efd7a8;
+}
+
 .status-pill.missed {
   color: #b91c1c;
   background: #faecea;

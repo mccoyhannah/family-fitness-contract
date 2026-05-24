@@ -206,7 +206,6 @@ export default function CoachMembers() {
     <section className="screen with-nav members-screen">
       <div className="page-title">
         <h2>成员计划</h2>
-        <p>先选成员，再给他安排今天或本周的训练。添加新成员是低频管理项，放在页面后面。</p>
       </div>
 
       <div className="metric-row">
@@ -309,6 +308,7 @@ export default function CoachMembers() {
               <div className="week-list planned-week-list">
                 {orderedPlans.map((plan) => {
                   const isExpanded = expandedPlanIds.has(plan.id)
+                  const hasTrainingDetails = plan.is_training && plan.items.length > 0
                   const detailId = `planned-plan-exercises-${plan.id}`
                   return (
                     <article
@@ -320,14 +320,16 @@ export default function CoachMembers() {
                           <strong>{formatDay(plan.date)} · {plan.title}</strong>
                           <div className="planned-plan-meta" aria-label="计划摘要">
                             <span className="planned-source-chip">{plan.source === 'coach' ? '教练制定' : '成员自定'}</span>
-                            <span className="planned-count-chip">{plan.is_training ? `${plan.items.length} 个动作` : '恢复日'}</span>
+                            <span className="planned-count-chip">{hasTrainingDetails ? `${plan.items.length} 个动作` : plan.date === today ? '今日休息' : '休息日'}</span>
                           </div>
                         </div>
                         <div className="planned-plan-actions">
-                          <button className="planned-copy-button" type="button" onClick={() => copyPlanToToday(plan)}>
-                            <Copy size={16} />
-                            复制到今天
-                          </button>
+                          {hasTrainingDetails && plan.date !== today && (
+                            <button className="planned-copy-button" type="button" onClick={() => copyPlanToToday(plan)}>
+                              <Copy size={16} />
+                              复制到今天
+                            </button>
+                          )}
                           <button
                             aria-pressed={plan.date === selectedDate}
                             className="planned-edit-button"
@@ -335,22 +337,24 @@ export default function CoachMembers() {
                             onClick={() => editPlanDate(plan.date)}
                           >
                             <Pencil size={16} />
-                            编辑
+                            {hasTrainingDetails ? '编辑' : '调整'}
                           </button>
-                          <button
-                            aria-controls={detailId}
-                            aria-expanded={isExpanded}
-                            aria-label={`${isExpanded ? '收起' : '展开'} ${formatDay(plan.date)} 的动作详情`}
-                            className="planned-expand-button"
-                            type="button"
-                            onClick={() => togglePlanExpanded(plan.id)}
-                          >
-                            <ChevronDown size={17} aria-hidden="true" />
-                            <span>{isExpanded ? '收起' : '展开'}</span>
-                          </button>
+                          {hasTrainingDetails && (
+                            <button
+                              aria-controls={detailId}
+                              aria-expanded={isExpanded}
+                              aria-label={`${isExpanded ? '收起' : '展开'} ${formatDay(plan.date)} 的动作详情`}
+                              className="planned-expand-button"
+                              type="button"
+                              onClick={() => togglePlanExpanded(plan.id)}
+                            >
+                              <ChevronDown size={17} aria-hidden="true" />
+                              <span>{isExpanded ? '收起' : '展开'}</span>
+                            </button>
+                          )}
                         </div>
                       </div>
-                      {isExpanded && (
+                      {hasTrainingDetails && isExpanded && (
                         <div className="planned-plan-exercises" id={detailId}>
                           {planToExercises(plan).map((exercise) => (
                             <ExerciseCard exercise={exercise} key={exercise.id} />

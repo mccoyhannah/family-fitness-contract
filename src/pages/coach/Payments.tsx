@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, ChevronUp, CircleSlash, ReceiptText, WalletCards } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronUp, CircleSlash, ReceiptText, Settings2, WalletCards } from 'lucide-react'
 import type { FormEvent, MouseEvent } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import MemberSelect from '../../components/MemberSelect'
@@ -13,12 +13,14 @@ import { usePenaltySettings } from '../../hooks/usePenaltySettings'
 import { formatDay, toISODate } from '../../lib/date'
 import { displayMemberLabel } from '../../lib/memberLabels'
 import { notifyApp } from '../../lib/notice'
-import type { FundExpense, FundExpensePurpose } from '../../lib/types'
+import type { FundExpense, FundExpensePurpose, Penalty, PenaltyStatus } from '../../lib/types'
 
 type PenaltyAction = {
   penaltyId: string
   status: 'paid' | 'waived'
 }
+
+type PaymentSortOrder = 'priority' | 'newest' | 'oldest' | 'amount-desc'
 
 type PaymentReturnPoint = {
   penaltyId: string
@@ -63,6 +65,19 @@ function formatDonationTime(value?: string | null) {
   })
 }
 
+function formatPenaltyReason(penalty: Pick<Penalty, 'reason' | 'source_type'>) {
+  const reason = penalty.reason?.trim()
+  if (!reason || reason === 'missed_checkin') return penalty.source_type === 'missed_checkin' ? '缺卡' : '未填写'
+  return reason
+}
+
+const penaltySortRank: Record<PenaltyStatus, number> = {
+  payment_reported: 0,
+  pending: 1,
+  paid: 2,
+  waived: 2,
+}
+
 export default function CoachPayments() {
   const { profile } = useAuth()
   const {
@@ -82,7 +97,7 @@ export default function CoachPayments() {
   const { addExpense, deleteExpense, expenses: fundExpenses, loading: fundExpensesLoading, updateExpense } = useFundExpenses(profile?.id)
   const { loading: penaltySettingsLoading, saveSettings, settings: penaltySettings } = usePenaltySettings()
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'payment_reported' | 'paid' | 'waived'>('all')
-  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'amount-desc'>('newest')
+  const [sortOrder, setSortOrder] = useState<PaymentSortOrder>('priority')
   const [activePaymentAction, setActivePaymentAction] = useState<PenaltyAction | null>(null)
   const [ruleDraft, setRuleDraft] = useState(() => ({
     base_amount: penaltySettings.base_amount,
@@ -100,6 +115,7 @@ export default function CoachPayments() {
   const [expenseDraft, setExpenseDraft] = useState<ExpenseDraft>(() => emptyExpenseDraft())
   const [editingExpenseId, setEditingExpenseId] = useState('')
   const [expenseHistoryOpen, setExpenseHistoryOpen] = useState(false)
+  const [fundSettingsOpen, setFundSettingsOpen] = useState(false)
   const [savingExpense, setSavingExpense] = useState(false)
   const [updatingPenaltyId, setUpdatingPenaltyId] = useState('')
   const paymentReturnPointRef = useRef<PaymentReturnPoint | null>(null)
@@ -110,6 +126,11 @@ export default function CoachPayments() {
   const visiblePenalties = useMemo(() => {
     const filtered = statusFilter === 'all' ? scopedPenalties : scopedPenalties.filter((penalty) => penalty.status === statusFilter)
     return filtered.slice().sort((a, b) => {
+      if (sortOrder === 'priority') {
+        const priority = penaltySortRank[a.status] - penaltySortRank[b.status]
+        if (priority !== 0) return priority
+        return b.date.localeCompare(a.date)
+      }
       if (sortOrder === 'oldest') return a.date.localeCompare(b.date)
       if (sortOrder === 'amount-desc') return b.amount - a.amount || b.date.localeCompare(a.date)
       return b.date.localeCompare(a.date)
@@ -366,7 +387,6 @@ export default function CoachPayments() {
     <section className="screen with-nav payments-screen">
       <div className="page-title">
         <h2>家庭基金</h2>
-        <p>缺卡贡献进入同一个家庭基金，用来买健身装备、AI TOKEN 和订阅。</p>
       </div>
       <MemberSelect loading={membersLoading} members={members} ready={membersReady} selectedMemberId={selectedMemberId} onChange={setSelectedMemberId} />
       <div className="metric-row four-col fund-metric-row">
@@ -375,190 +395,6 @@ export default function CoachPayments() {
         <Metric icon={<CheckCircle2 />} label="待核对" value={`${penaltySummary.reportedCount} 笔`} />
         <Metric icon={<CircleSlash />} label="已豁免" value={`¥${formatAmount(penaltySummary.waivedTotal)}`} />
       </div>
-
-      <section className="status-card penalty-rule-card" aria-label="贡献规则设置">
-        <div className="penalty-rule-head">
-          <div>
-            <strong>贡献规则</strong>
-            <span>只影响之后新生成的缺卡贡献</span>
-          </div>
-        </div>
-        <form className="penalty-rule-grid" onSubmit={(event) => void submitPenaltyRule(event)}>
-          <label>
-            首日金额
-            <input
-              max={9999}
-              min={0}
-              step={1}
-              type="number"
-              value={ruleDraft.base_amount}
-              onChange={(event) => changeRuleDraft('base_amount', event.currentTarget.valueAsNumber)}
-            />
-          </label>
-          <label>
-            每天递增
-            <input
-              max={9999}
-              min={0}
-              step={1}
-              type="number"
-              value={ruleDraft.daily_increment}
-              onChange={(event) => changeRuleDraft('daily_increment', event.currentTarget.valueAsNumber)}
-            />
-          </label>
-          <label>
-            单笔封顶
-            <input
-              max={9999}
-              min={0}
-              step={1}
-              type="number"
-              value={ruleDraft.max_amount}
-              onChange={(event) => changeRuleDraft('max_amount', event.currentTarget.valueAsNumber)}
-            />
-          </label>
-          <button type="submit" disabled={penaltySettingsLoading || savingRule}>
-            {savingRule ? '保存中' : '保存规则'}
-          </button>
-        </form>
-        <p className={ruleMessage ? ruleMessage.includes('失败') || ruleMessage.includes('不能') ? 'form-error penalty-rule-message' : 'form-success penalty-rule-message' : 'penalty-rule-message'} aria-live="polite">
-          {ruleMessage || `当前：第 1 天 ¥${formatAmount(ruleDraft.base_amount)}，之后每天加 ¥${formatAmount(ruleDraft.daily_increment)}，最高 ¥${formatAmount(ruleDraft.max_amount)}。`}
-        </p>
-      </section>
-
-      <section className="status-card donation-settings-card" aria-label="收款码配置">
-        <div className="fund-section-head">
-          <div>
-            <strong>收款码配置</strong>
-            <span>学生确认捐赠前会看到这里配置的收款码和提示。</span>
-          </div>
-          {donationSettingsLoading && <span className="mini-chip">同步中</span>}
-        </div>
-        <form className="donation-settings-form" onSubmit={(event) => void submitDonationSettings(event)}>
-          <label>
-            收款码图片地址
-            <input
-              value={donationDraft.qr_image_url}
-              onChange={(event) => changeDonationDraft('qr_image_url', event.currentTarget.value)}
-              placeholder="https://..."
-              disabled={savingDonationSettings}
-            />
-          </label>
-          <label className="donation-settings-hint">
-            学生端提示
-            <textarea
-              maxLength={180}
-              rows={3}
-              value={donationDraft.payment_hint}
-              onChange={(event) => changeDonationDraft('payment_hint', event.currentTarget.value)}
-              disabled={savingDonationSettings}
-            />
-          </label>
-          <button type="submit" disabled={savingDonationSettings}>
-            {savingDonationSettings ? '保存中' : '保存配置'}
-          </button>
-        </form>
-        {donationDraft.qr_image_url ? (
-          <div className="donation-settings-preview">
-            <img src={donationDraft.qr_image_url} alt="收款码预览" />
-            <span>学生端会展示这张收款码图片。</span>
-          </div>
-        ) : (
-          <p className="muted">还没有配置收款码图片地址；学生端会显示“收款码待配置”。</p>
-        )}
-        <p className={donationSettingsMessage ? donationSettingsMessage.includes('失败') ? 'form-error donation-settings-message' : 'form-success donation-settings-message' : 'donation-settings-message'} aria-live="polite">
-          {donationSettingsMessage || '建议使用可公开访问的收款码图片地址。'}
-        </p>
-      </section>
-
-      <section className="status-card fund-expense-card" aria-label="家庭基金支出">
-        <div className="fund-section-head">
-          <div>
-            <strong>基金流水</strong>
-            <span>累计入账 ¥{formatAmount(fundSummary.paidTotal)} · 已用于 ¥{formatAmount(fundSummary.expenseTotal)} · 当前余额 ¥{formatAmount(fundSummary.balance)}</span>
-          </div>
-          {fundExpensesLoading && <span className="mini-chip">同步中</span>}
-        </div>
-        <form className="fund-expense-form" onSubmit={(event) => void submitExpense(event)}>
-          <label>
-            金额
-            <input
-              min={1}
-              step={1}
-              type="number"
-              value={expenseDraft.amount}
-              onChange={(event) => changeExpenseDraft('amount', event.currentTarget.value)}
-              placeholder="128"
-            />
-          </label>
-          <label>
-            用途
-            <select value={expenseDraft.purpose} onChange={(event) => changeExpenseDraft('purpose', event.currentTarget.value)}>
-              <option value="fitness">健身装备</option>
-              <option value="ai">AI TOKEN / 订阅</option>
-              <option value="general">通用</option>
-            </select>
-          </label>
-          <label>
-            日期
-            <input type="date" value={expenseDraft.spent_on} onChange={(event) => changeExpenseDraft('spent_on', event.currentTarget.value)} />
-          </label>
-          <label>
-            标题
-            <input value={expenseDraft.title} onChange={(event) => changeExpenseDraft('title', event.currentTarget.value)} placeholder="例如：AI 订阅 / 弹力带 / 蛋白粉" maxLength={40} />
-          </label>
-          <label className="fund-expense-note">
-            备注
-            <input value={expenseDraft.note} onChange={(event) => changeExpenseDraft('note', event.currentTarget.value)} placeholder="可不填" maxLength={120} />
-          </label>
-          <div className="fund-expense-actions">
-            {editingExpenseId && (
-              <button type="button" onClick={resetExpenseForm} disabled={savingExpense}>
-                取消编辑
-              </button>
-            )}
-            <button type="submit" disabled={savingExpense}>
-              {savingExpense ? '保存中' : editingExpenseId ? '更新支出' : '记一笔支出'}
-            </button>
-          </div>
-        </form>
-        <div className="fund-expense-history">
-          <div className="fund-expense-history-summary">
-            <div>
-              <strong>支出记录</strong>
-              <span>{fundExpenses.length} 笔 · 合计 ¥{formatAmount(fundSummary.expenseTotal)}</span>
-            </div>
-            <button
-              aria-expanded={expenseHistoryOpen}
-              type="button"
-              className="fund-expense-toggle"
-              disabled={fundExpenses.length === 0}
-              onClick={() => setExpenseHistoryOpen((open) => !open)}
-            >
-              {expenseHistoryOpen ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
-              {expenseHistoryOpen ? '收起' : '展开'}
-            </button>
-          </div>
-          {fundExpenses.length === 0 && <p className="muted">还没有支出记录。家庭基金可以用于健身装备、AI TOKEN 和订阅。</p>}
-          {expenseHistoryOpen && fundExpenses.length > 0 && (
-            <div className="fund-expense-list">
-              {fundExpenses.map((expense) => (
-                <article className="fund-expense-item" key={expense.id}>
-                  <div>
-                    <strong>{expense.title}</strong>
-                    <span>{fundPurposeLabel[expense.purpose]} · ¥{formatAmount(expense.amount)} · {expense.spent_on}</span>
-                    {expense.note && <p>{expense.note}</p>}
-                  </div>
-                  <div className="fund-expense-item-actions">
-                    <button type="button" onClick={() => startEditExpense(expense)} disabled={savingExpense}>编辑</button>
-                    <button type="button" onClick={() => void removeExpense(expense.id)} disabled={savingExpense}>删除</button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
 
       <div className="payments-controls compact-payments-controls">
         <div className="payments-stat-grid" aria-label="家庭基金记录统计" aria-live="polite">
@@ -582,7 +418,8 @@ export default function CoachPayments() {
           </label>
           <label>
             排序
-            <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value as typeof sortOrder)}>
+            <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value as PaymentSortOrder)}>
+              <option value="priority">待处理优先</option>
               <option value="newest">最新优先</option>
               <option value="oldest">最早优先</option>
               <option value="amount-desc">金额降序</option>
@@ -600,14 +437,21 @@ export default function CoachPayments() {
           return (
             <article className="penalty-card payment-card" data-penalty-id={penalty.id} key={penalty.id}>
               <div className="payment-copy">
-                <strong>缺卡贡献 ¥{formatAmount(penalty.amount)}</strong>
-                <span className="penalty-meta">{displayName} · {formatDay(penalty.date)} · 连续第 {penalty.consecutive_count} 天</span>
-                {penalty.source_type === 'missed_checkin' && <span className="penalty-source-note">原因：缺卡</span>}
+                <div className="payment-amount-row">
+                  <strong>¥{formatAmount(penalty.amount)}</strong>
+                  <span>缺卡贡献</span>
+                </div>
+                <div className="payment-meta-row" aria-label="账款摘要">
+                  <span className="payment-meta-chip">{displayName}</span>
+                  <span className="payment-meta-chip">{formatDay(penalty.date)}</span>
+                  <span className="payment-meta-chip">连续第 {penalty.consecutive_count} 天</span>
+                  <span className="payment-meta-chip reason">原因：{formatPenaltyReason(penalty)}</span>
+                </div>
                 {penalty.status === 'payment_reported' && (
-                  <div className="donation-report-note">
-                    <strong>学生已确认捐赠</strong>
-                    <span>捐赠时间：{formatDonationTime(penalty.donation_reported_at)}</span>
-                    {penalty.donation_note ? <p>备注：{penalty.donation_note}</p> : <p>未填写备注。</p>}
+                  <div className="payment-report-note">
+                    <strong>已报备</strong>
+                    <span>{formatDonationTime(penalty.donation_reported_at)}</span>
+                    {penalty.donation_note && <p>{penalty.donation_note}</p>}
                   </div>
                 )}
               </div>
@@ -634,13 +478,13 @@ export default function CoachPayments() {
               )}
               {action && (
                 <div className="inline-confirm payment-inline-confirm">
-                  <p>{action.status === 'paid' ? `确认把这笔 ¥${formatAmount(penalty.amount)} 计入家庭基金？` : '确认本次豁免，不计入家庭基金？'}</p>
+                  <p>{action.status === 'paid' ? `确认入账 ¥${formatAmount(penalty.amount)}？` : '确认豁免？'}</p>
                   <div>
                     <button type="button" onClick={cancelPenaltyStatus} disabled={Boolean(updatingPenaltyId)}>
                       取消
                     </button>
                     <button type="button" onClick={() => void confirmPenaltyStatus()} disabled={Boolean(updatingPenaltyId)}>
-                      {updatingPenaltyId ? '处理中' : action.status === 'paid' ? '确认入账' : '确认豁免'}
+                      {updatingPenaltyId ? '处理中' : '确认'}
                     </button>
                   </div>
                 </div>
@@ -649,6 +493,213 @@ export default function CoachPayments() {
           )
         })}
       </div>
+
+      <section className="fund-settings-panel" aria-label="基金设置">
+        <button
+          aria-expanded={fundSettingsOpen}
+          className="fund-settings-toggle"
+          type="button"
+          onClick={() => setFundSettingsOpen((open) => !open)}
+        >
+          <span className="fund-settings-toggle-copy">
+            <Settings2 aria-hidden="true" size={18} />
+            <span>
+              <strong>基金设置</strong>
+              <small>贡献规则 / 收款码 / 支出记录</small>
+            </span>
+          </span>
+          {fundSettingsOpen ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+        </button>
+        {fundSettingsOpen && (
+          <div className="fund-settings-body">
+            <section className="status-card penalty-rule-card" aria-label="贡献规则设置">
+              <div className="penalty-rule-head">
+                <div>
+                  <strong>贡献规则</strong>
+                  <span>之后新缺卡生效</span>
+                </div>
+              </div>
+              <form className="penalty-rule-grid" onSubmit={(event) => void submitPenaltyRule(event)}>
+                <label>
+                  首日金额
+                  <input
+                    max={9999}
+                    min={0}
+                    step={1}
+                    type="number"
+                    value={ruleDraft.base_amount}
+                    onChange={(event) => changeRuleDraft('base_amount', event.currentTarget.valueAsNumber)}
+                  />
+                </label>
+                <label>
+                  每天递增
+                  <input
+                    max={9999}
+                    min={0}
+                    step={1}
+                    type="number"
+                    value={ruleDraft.daily_increment}
+                    onChange={(event) => changeRuleDraft('daily_increment', event.currentTarget.valueAsNumber)}
+                  />
+                </label>
+                <label>
+                  单笔封顶
+                  <input
+                    max={9999}
+                    min={0}
+                    step={1}
+                    type="number"
+                    value={ruleDraft.max_amount}
+                    onChange={(event) => changeRuleDraft('max_amount', event.currentTarget.valueAsNumber)}
+                  />
+                </label>
+                <button type="submit" disabled={penaltySettingsLoading || savingRule}>
+                  {savingRule ? '保存中' : '保存规则'}
+                </button>
+              </form>
+              <p className={ruleMessage ? ruleMessage.includes('失败') || ruleMessage.includes('不能') ? 'form-error penalty-rule-message' : 'form-success penalty-rule-message' : 'penalty-rule-message'} aria-live="polite">
+                {ruleMessage || `第 1 天 ¥${formatAmount(ruleDraft.base_amount)} · 每天 +¥${formatAmount(ruleDraft.daily_increment)} · 封顶 ¥${formatAmount(ruleDraft.max_amount)}`}
+              </p>
+            </section>
+
+            <section className="status-card donation-settings-card" aria-label="收款码配置">
+              <div className="fund-section-head">
+                <div>
+                  <strong>收款码配置</strong>
+                  <span>{donationDraft.qr_image_url ? '已配置' : '待配置'}</span>
+                </div>
+                {donationSettingsLoading && <span className="mini-chip">同步中</span>}
+              </div>
+              <form className="donation-settings-form" onSubmit={(event) => void submitDonationSettings(event)}>
+                <label>
+                  收款码图片地址
+                  <input
+                    value={donationDraft.qr_image_url}
+                    onChange={(event) => changeDonationDraft('qr_image_url', event.currentTarget.value)}
+                    placeholder="https://..."
+                    disabled={savingDonationSettings}
+                  />
+                </label>
+                <label className="donation-settings-hint">
+                  学生端提示
+                  <textarea
+                    maxLength={180}
+                    rows={3}
+                    value={donationDraft.payment_hint}
+                    onChange={(event) => changeDonationDraft('payment_hint', event.currentTarget.value)}
+                    disabled={savingDonationSettings}
+                  />
+                </label>
+                <button type="submit" disabled={savingDonationSettings}>
+                  {savingDonationSettings ? '保存中' : '保存配置'}
+                </button>
+              </form>
+              {donationDraft.qr_image_url ? (
+                <div className="donation-settings-preview">
+                  <img src={donationDraft.qr_image_url} alt="收款码预览" />
+                  <span>收款码预览</span>
+                </div>
+              ) : (
+                <p className="muted">收款码待配置。</p>
+              )}
+              {donationSettingsMessage && (
+                <p className={donationSettingsMessage.includes('失败') ? 'form-error donation-settings-message' : 'form-success donation-settings-message'} aria-live="polite">
+                  {donationSettingsMessage}
+                </p>
+              )}
+            </section>
+
+            <section className="status-card fund-expense-card" aria-label="家庭基金支出">
+              <div className="fund-section-head">
+                <div>
+                  <strong>支出记录</strong>
+                  <span>入账 ¥{formatAmount(fundSummary.paidTotal)} · 支出 ¥{formatAmount(fundSummary.expenseTotal)} · 余额 ¥{formatAmount(fundSummary.balance)}</span>
+                </div>
+                {fundExpensesLoading && <span className="mini-chip">同步中</span>}
+              </div>
+              <form className="fund-expense-form" onSubmit={(event) => void submitExpense(event)}>
+                <label>
+                  金额
+                  <input
+                    min={1}
+                    step={1}
+                    type="number"
+                    value={expenseDraft.amount}
+                    onChange={(event) => changeExpenseDraft('amount', event.currentTarget.value)}
+                    placeholder="128"
+                  />
+                </label>
+                <label>
+                  用途
+                  <select value={expenseDraft.purpose} onChange={(event) => changeExpenseDraft('purpose', event.currentTarget.value)}>
+                    <option value="fitness">健身装备</option>
+                    <option value="ai">AI TOKEN / 订阅</option>
+                    <option value="general">通用</option>
+                  </select>
+                </label>
+                <label>
+                  日期
+                  <input type="date" value={expenseDraft.spent_on} onChange={(event) => changeExpenseDraft('spent_on', event.currentTarget.value)} />
+                </label>
+                <label>
+                  标题
+                  <input value={expenseDraft.title} onChange={(event) => changeExpenseDraft('title', event.currentTarget.value)} placeholder="例如：AI 订阅" maxLength={40} />
+                </label>
+                <label className="fund-expense-note">
+                  备注
+                  <input value={expenseDraft.note} onChange={(event) => changeExpenseDraft('note', event.currentTarget.value)} placeholder="可不填" maxLength={120} />
+                </label>
+                <div className="fund-expense-actions">
+                  {editingExpenseId && (
+                    <button type="button" onClick={resetExpenseForm} disabled={savingExpense}>
+                      取消编辑
+                    </button>
+                  )}
+                  <button type="submit" disabled={savingExpense}>
+                    {savingExpense ? '保存中' : editingExpenseId ? '更新支出' : '记支出'}
+                  </button>
+                </div>
+              </form>
+              <div className="fund-expense-history">
+                <div className="fund-expense-history-summary">
+                  <div>
+                    <strong>支出明细</strong>
+                    <span>{fundExpenses.length} 笔 · ¥{formatAmount(fundSummary.expenseTotal)}</span>
+                  </div>
+                  <button
+                    aria-expanded={expenseHistoryOpen}
+                    type="button"
+                    className="fund-expense-toggle"
+                    disabled={fundExpenses.length === 0}
+                    onClick={() => setExpenseHistoryOpen((open) => !open)}
+                  >
+                    {expenseHistoryOpen ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+                    {expenseHistoryOpen ? '收起' : '展开'}
+                  </button>
+                </div>
+                {fundExpenses.length === 0 && <p className="muted">暂无支出。</p>}
+                {expenseHistoryOpen && fundExpenses.length > 0 && (
+                  <div className="fund-expense-list">
+                    {fundExpenses.map((expense) => (
+                      <article className="fund-expense-item" key={expense.id}>
+                        <div>
+                          <strong>{expense.title}</strong>
+                          <span>{fundPurposeLabel[expense.purpose]} · ¥{formatAmount(expense.amount)} · {expense.spent_on}</span>
+                          {expense.note && <p>{expense.note}</p>}
+                        </div>
+                        <div className="fund-expense-item-actions">
+                          <button type="button" onClick={() => startEditExpense(expense)} disabled={savingExpense}>编辑</button>
+                          <button type="button" onClick={() => void removeExpense(expense.id)} disabled={savingExpense}>删除</button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        )}
+      </section>
     </section>
   )
 }

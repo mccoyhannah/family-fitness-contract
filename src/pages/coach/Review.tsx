@@ -122,18 +122,17 @@ export default function CoachReview() {
   }
 
   return (
-    <section className="screen with-nav">
+    <section className="screen with-nav review-screen">
       <div className="page-title">
         <h2>异常待确认</h2>
-        <p>按成员审核打卡、请假和备注。</p>
       </div>
       <MemberSelect loading={membersLoading} members={members} ready={membersReady} selectedMemberId={selectedMemberId} onChange={setSelectedMemberId} />
-      <div className="status-card action-card">
+      <div className="review-summary-bar" aria-live="polite">
         <strong>{membersReady ? `${pending.length} 条待确认` : '正在同步成员'}</strong>
-        <p>{membersReady ? '重点看训练备注、疲劳度、异常标记和计划内容。' : '成员列表稳定后再显示待确认记录。'}</p>
+        <span>{selectedMember ? displayMemberLabel(selectedMember) : '全部成员'}</span>
       </div>
       <div className="review-list">
-        {pending.length === 0 && <p className="muted">当前没有待确认打卡。</p>}
+        {pending.length === 0 && <p className="muted review-empty-state">暂无待确认</p>}
         {pending.map((item) => {
           const displayName = coachMemberLabel(item.user_id)
           const memberPlans = plans.filter((row) => row.user_id === item.user_id)
@@ -141,23 +140,23 @@ export default function CoachReview() {
           const hasWaiverRequest = isWaiverRequest(item.leave_reason)
           const waiverReason = cleanWaiverReason(item.leave_reason)
           const isExpanded = expandedCheckInIds.has(item.id)
+          const reviewKind = hasWaiverRequest ? '补卡免罚' : item.leave_reason ? '请假' : '打卡'
+          const planSummary = plan ? `${plan.title} · ${plan.source === 'coach' ? '教练' : '成员'}` : '计划未同步'
           const reviewComment = reviewCommentById[item.id] ?? item.review_comment ?? ''
           return (
             <article className={`review-card review-detail-card${hasWaiverRequest ? ' waiver-review-card' : ''}`} key={item.id}>
               <div className="review-card-summary">
                 <div className="review-card-copy">
-                  <strong>{displayName} · {formatDay(item.date)}</strong>
-                  <span>{plan ? `${plan.title} · ${plan.source === 'coach' ? '教练制定' : '成员自定'}` : '旧打卡或计划未同步'}</span>
-                  {hasWaiverRequest && <span className="waiver-review-badge">补卡免罚申请</span>}
-                  {hasWaiverRequest ? (
-                    <>
-                      <span className="waiver-review-reason">申请理由：{waiverReason}</span>
-                      {item.note && <span>记录备注：{item.note}</span>}
-                    </>
-                  ) : (
-                    <span>{item.leave_reason ? `理由：${item.leave_reason}` : item.note || '等待确认'}</span>
-                  )}
-                  {item.issues.length > 0 && <span>异常：{item.issues.join('、')}</span>}
+                  <div className="review-card-title-row">
+                    <strong>{displayName}</strong>
+                    <span className="review-date-chip">{formatDay(item.date)}</span>
+                  </div>
+                  <div className="review-card-meta">
+                    <span className={hasWaiverRequest ? 'review-meta-chip review-type-chip waiver' : 'review-meta-chip review-type-chip'}>{reviewKind}</span>
+                    <span className="review-meta-chip">疲劳 {fatigueLabel(item.fatigue)}</span>
+                    <span className={item.issues.length > 0 ? 'review-meta-chip warning' : 'review-meta-chip'}>{item.issues.length > 0 ? `异常 ${item.issues.length}` : '无异常'}</span>
+                    <span className="review-meta-chip review-plan-chip">{planSummary}</span>
+                  </div>
                 </div>
                 <div className="review-status-column">
                   <StatusPill status={item.status} />
@@ -168,45 +167,47 @@ export default function CoachReview() {
                     onClick={() => toggleExpanded(item.id)}
                   >
                     {isExpanded ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
-                    {isExpanded ? '收起详情' : '查看详情'}
+                    {isExpanded ? '收起' : '详情/留言'}
                   </button>
                 </div>
               </div>
               {isExpanded && (
-                <ReviewExpandedDetails
-                  checkIn={item}
-                  hasWaiverRequest={hasWaiverRequest}
-                  plan={plan}
-                  waiverReason={waiverReason}
-                />
+                <div className="review-expanded-stack">
+                  <ReviewExpandedDetails
+                    checkIn={item}
+                    hasWaiverRequest={hasWaiverRequest}
+                    plan={plan}
+                    waiverReason={waiverReason}
+                  />
+                  <label className="review-comment-field review-inline-comment">
+                    <span className="review-comment-label-row">
+                      <strong>留言</strong>
+                    </span>
+                    <textarea
+                      disabled={Boolean(reviewingCheckInId || confirmRequest)}
+                      maxLength={220}
+                      rows={3}
+                      value={reviewComment}
+                      onChange={(event) =>
+                        setReviewCommentById((current) => ({ ...current, [item.id]: event.target.value }))
+                      }
+                      placeholder="可写留言"
+                    />
+                  </label>
+                </div>
               )}
-              <label className="review-comment-field review-inline-comment">
-                <span className="review-comment-label-row">
-                  <strong>给学员留言</strong>
-                  <small>审核后学生端可见，可空</small>
-                </span>
-                <textarea
-                  disabled={Boolean(reviewingCheckInId || confirmRequest)}
-                  maxLength={220}
-                  rows={3}
-                  value={reviewComment}
-                  onChange={(event) =>
-                    setReviewCommentById((current) => ({ ...current, [item.id]: event.target.value }))
-                  }
-                  placeholder="例如：动作完成得不错，下次深蹲注意膝盖方向。"
-                />
-              </label>
-              <div className="row-actions">
+              <div className="row-actions review-actions">
                 <button
+                  className="review-action-primary"
                   type="button"
                   onClick={() =>
                     requestReviewAction(
                       item.id,
                       () => approveCheckIn(item.id, item.user_id, item.date, reviewComment),
-                      hasWaiverRequest ? '已通过补卡，并处理当天罚款。' : '已通过这条打卡，并处理当天罚款。',
+                      hasWaiverRequest ? '已通过补卡。' : '已通过打卡。',
                       hasWaiverRequest
-                        ? `确认通过 ${displayName} 在 ${formatDay(item.date)} 的补卡申请，并免除当天罚款？`
-                        : `确认通过 ${displayName} 在 ${formatDay(item.date)} 的打卡？`,
+                        ? `确认通过补卡 · ${displayName} · ${formatDay(item.date)}？`
+                        : `确认通过 · ${displayName} · ${formatDay(item.date)}？`,
                     )
                   }
                   disabled={Boolean(reviewingCheckInId || confirmRequest)}
@@ -215,13 +216,14 @@ export default function CoachReview() {
                 </button>
                 {item.leave_reason && (
                   <button
+                    className="review-action-secondary"
                     type="button"
                     onClick={() =>
                       requestReviewAction(
                         item.id,
                         () => approveLeave(item.id, item.user_id, item.date, reviewComment),
-                        '已准假，并处理当天罚款。',
-                        `确认准假 ${displayName} 在 ${formatDay(item.date)} 的记录？`,
+                        '已准假。',
+                        `确认准假 · ${displayName} · ${formatDay(item.date)}？`,
                       )
                     }
                     disabled={Boolean(reviewingCheckInId || confirmRequest)}
@@ -236,23 +238,24 @@ export default function CoachReview() {
                     requestReviewAction(
                       item.id,
                       () => returnForResubmission(item),
-                      '已退回，学员可以重新提交打卡。',
-                      `确认退回 ${displayName} 在 ${formatDay(item.date)} 的打卡，让学员重新提交？`,
+                      '已退回。',
+                      `确认退回 · ${displayName} · ${formatDay(item.date)}？`,
                     )
                   }
                   disabled={Boolean(reviewingCheckInId || confirmRequest)}
                 >
                   <RotateCcw size={17} />
-                  退回重交
+                  退回
                 </button>
                 <button
+                  className="review-action-danger"
                   type="button"
                   onClick={() =>
                     requestReviewAction(
                       item.id,
                       () => markCheckInMissedWithPenalty(item, memberPlans, buildReviewUpdate(reviewComment)),
-                      '已记录为缺卡，并同步当天罚款。',
-                      `确认把 ${displayName} 在 ${formatDay(item.date)} 的记录改为缺卡，并同步当天罚款？`,
+                      '已记为缺卡。',
+                      `确认记缺卡 · ${displayName} · ${formatDay(item.date)}？`,
                     )
                   }
                   disabled={Boolean(reviewingCheckInId || confirmRequest)}
@@ -268,8 +271,7 @@ export default function CoachReview() {
         <div className="waiver-modal-backdrop" role="presentation">
           <section className="waiver-modal review-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="review-confirm-title">
             <div>
-              <span className="hero-kicker">审核确认</span>
-              <h3 id="review-confirm-title">确认这次操作？</h3>
+              <h3 id="review-confirm-title">确认</h3>
               <p>{confirmRequest.message}</p>
             </div>
             <div className="waiver-modal-actions">
@@ -277,7 +279,7 @@ export default function CoachReview() {
                 取消
               </button>
               <button type="button" onClick={() => void confirmReviewAction()} disabled={Boolean(reviewingCheckInId)}>
-                {reviewingCheckInId ? '处理中' : '确认操作'}
+                {reviewingCheckInId ? '处理中' : '确认'}
               </button>
             </div>
           </section>
@@ -308,7 +310,7 @@ function ReviewExpandedDetails({
           <span>疲劳度 {fatigueLabel(checkIn.fatigue)}</span>
         </div>
         {hasWaiverRequest && <p className="review-note-box">免罚申请：{waiverReason}</p>}
-        {note ? <p className="review-note-box">{note}</p> : <p className="review-empty-detail">成员没有填写额外备注。</p>}
+        {note ? <p className="review-note-box">{note}</p> : <p className="review-empty-detail">暂无备注。</p>}
         {checkIn.issues.length > 0 ? (
           <div className="review-chip-row">
             {checkIn.issues.map((issue) => (
@@ -316,7 +318,7 @@ function ReviewExpandedDetails({
             ))}
           </div>
         ) : (
-          <p className="review-empty-detail">没有勾选异常标记。</p>
+          <p className="review-empty-detail">无异常标记。</p>
         )}
       </section>
 
@@ -339,11 +341,11 @@ function ReviewExpandedDetails({
                 ))}
               </div>
             ) : (
-              <p className="review-empty-detail">{plan.is_training ? '这份计划还没有动作明细。' : '这是恢复日，没有训练动作。'}</p>
+              <p className="review-empty-detail">{plan.is_training ? '暂无动作明细。' : '恢复日。'}</p>
             )}
           </>
         ) : (
-          <p className="review-empty-detail">没有找到关联计划，可能是旧记录，或当前成员计划还未同步完成。</p>
+          <p className="review-empty-detail">计划未同步。</p>
         )}
       </section>
 

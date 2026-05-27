@@ -820,6 +820,21 @@ textarea:focus-visible,
   background: #edf6ff;
 }
 
+.today-choice-actions .rest-blocked-choice-button {
+  color: var(--warning);
+  border-color: #f0c781;
+  background: var(--warning-soft);
+  box-shadow: inset 0 -4px 0 rgba(174, 101, 28, 0.12), var(--shadow-soft);
+}
+
+.today-choice-actions .rest-blocked-choice-button[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+.self-plan-editor-scroll-target {
+  scroll-margin-top: 18px;
+}
+
 .today-choice-leave-field {
   margin-top: 2px;
 }
@@ -2278,6 +2293,37 @@ label {
   color: #fff;
   border-color: var(--brand-2);
   background: var(--brand);
+}
+
+.contribution-modal {
+  gap: 14px;
+}
+
+.contribution-modal-mark {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  color: var(--warning);
+  border: 1px solid #f0c781;
+  border-radius: 50%;
+  background: var(--warning-soft);
+}
+
+.contribution-modal-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 12px;
+  color: var(--warning);
+  border: 1px solid #f0c781;
+  border-radius: calc(var(--radius) - 4px);
+  background: var(--warning-soft);
+  font-weight: 760;
+}
+
+.contribution-modal-actions {
+  margin-top: 2px;
 }
 
 .login-card,

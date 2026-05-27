@@ -4,6 +4,7 @@ import { computeConsecutiveMisses } from '../src/lib/penalty.ts'
 import { buildMissedSync } from '../src/lib/sync.ts'
 import { buildLeaveRequestReason, validateLeaveRequest } from '../src/lib/leaveRequest.ts'
 import { getRestConflict } from '../src/lib/restRules.ts'
+import { getContributionPromptState, getRestChoiceActionState } from '../src/lib/todayPrompts.ts'
 import type { CheckIn, Penalty, Plan } from '../src/lib/types.ts'
 
 const userId = 'student-1'
@@ -110,4 +111,44 @@ test('leave request requires off-work time and fatigue, then formats them for re
     buildLeaveRequestReason({ offWorkTime: '21:30', fatigue: 4, reason: '加班太晚' }),
     '下班时间 21:30；疲劳度 4/5；理由：加班太晚',
   )
+})
+
+test('contribution prompt appears once per login run when pending penalties exist', () => {
+  const prompt = getContributionPromptState(
+    userId,
+    'login-1',
+    [penalty('2026-05-26', 1, 100)],
+    null,
+    null,
+  )
+
+  assert.equal(prompt?.key, `${userId}:login-1`)
+  assert.equal(prompt?.pendingTotal, 100)
+  assert.equal(prompt?.latestDate, '2026-05-26')
+  assert.equal(
+    getContributionPromptState(userId, 'login-1', [penalty('2026-05-26', 1, 100)], null, prompt?.key ?? null),
+    null,
+  )
+})
+
+test('contribution prompt stays hidden without pending penalties and includes rest warning on conflict', () => {
+  assert.equal(
+    getContributionPromptState(userId, 'login-1', [penalty('2026-05-26', 1, 100, 'paid')], null, null),
+    null,
+  )
+
+  const conflict = getRestConflict('2026-05-27', [], [missedCheckIn('2026-05-26')], [])
+  const prompt = getContributionPromptState(userId, 'login-2', [penalty('2026-05-26', 1, 100)], conflict, null)
+  assert.match(prompt?.restWarning ?? '', /今天不能休息，只能训练或申请请假/)
+})
+
+test('blocked rest action uses business feedback and does not allow rest save', () => {
+  const blocked = getRestChoiceActionState('昨天已缺卡，今天只能训练或申请请假，不能再记休息。')
+  assert.equal(blocked.canSubmit, false)
+  assert.equal(blocked.label, '今天不能休息')
+  assert.match(blocked.notice ?? '', /昨天已缺卡/)
+
+  const allowed = getRestChoiceActionState(null)
+  assert.equal(allowed.canSubmit, true)
+  assert.equal(allowed.label, '今日休息')
 })

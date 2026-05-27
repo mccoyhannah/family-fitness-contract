@@ -1,5 +1,5 @@
 import { AlertTriangle, CalendarCheck, ChevronDown, ChevronUp, Flame, RotateCcw, Umbrella } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type RefObject, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ExerciseCard from '../../components/ExerciseCard'
 import FatigueCards from '../../components/FatigueCards'
@@ -11,18 +11,41 @@ import { useCheckIns } from '../../hooks/useCheckIns'
 import { usePenalties } from '../../hooks/usePenalties'
 import { usePenaltySettings } from '../../hooks/usePenaltySettings'
 import { usePlans } from '../../hooks/usePlans'
-import { toISODate } from '../../lib/date'
+import { formatDay, toISODate } from '../../lib/date'
 import { buildLeaveRequestReason, validateLeaveRequest } from '../../lib/leaveRequest'
 import { notifyApp } from '../../lib/notice'
 import { buildPlan, planFromTemplate, planToExercises } from '../../lib/plan'
 import { formatPlanFocusText, formatPlanSourceLabel } from '../../lib/planDisplay'
-import { getRestConflict, type RestConflict } from '../../lib/restRules'
+import { getRestConflict } from '../../lib/restRules'
 import { buildMissedSync } from '../../lib/sync'
 import { rawErrorMessage } from '../../lib/supabaseErrors'
+import { getContributionPromptState, getRestChoiceActionState, type ContributionPromptState } from '../../lib/todayPrompts'
 import type { CheckIn, Exercise, Plan, PlanDraft } from '../../lib/types'
 
+const CONTRIBUTION_PROMPT_SHOWN_KEY = 'family-fitness-contract:contribution-prompt-shown-key'
+
+function readShownContributionPromptKey() {
+  try {
+    return sessionStorage.getItem(CONTRIBUTION_PROMPT_SHOWN_KEY)
+  } catch {
+    return null
+  }
+}
+
+function writeShownContributionPromptKey(value: string) {
+  try {
+    sessionStorage.setItem(CONTRIBUTION_PROMPT_SHOWN_KEY, value)
+  } catch {
+    // In private modes the modal still works for the current React session.
+  }
+}
+
+function formatAmount(amount: number) {
+  return new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 0 }).format(amount)
+}
+
 export default function Today() {
-  const { profile } = useAuth()
+  const { loginRunId, profile } = useAuth()
   const { checkIns, loading: checkInsLoading, reload: reloadCheckIns, setCheckIns, upsertCheckIn, withdrawCheckIn } = useCheckIns(profile?.id)
   const { penalties, loading: penaltiesLoading, reload: reloadPenalties, setPenalties, upsertPenalty } = usePenalties(profile?.id)
   const { ready: penaltySettingsReady, settings: penaltySettings } = usePenaltySettings()
@@ -34,9 +57,12 @@ export default function Today() {
   const [restSaving, setRestSaving] = useState(false)
   const [requestingLeave, setRequestingLeave] = useState(false)
   const [selfPlanOpen, setSelfPlanOpen] = useState(false)
+  const [shownContributionPromptKey, setShownContributionPromptKey] = useState(readShownContributionPromptKey)
+  const [activeContributionPrompt, setActiveContributionPrompt] = useState<ContributionPromptState | null>(null)
   const [withdrawing, setWithdrawing] = useState(false)
   const navigate = useNavigate()
   const completedSyncKeyRef = useRef<string | null>(null)
+  const selfPlanEditorRef = useRef<HTMLDivElement | null>(null)
   const syncingKeyRef = useRef<string | null>(null)
   const today = toISODate(new Date())
   const templatePlan = useMemo(() => buildPlan(new Date()), [today])
@@ -52,6 +78,14 @@ export default function Today() {
   const pendingTotal = penalties
     .filter((penalty) => penalty.status === 'pending')
     .reduce((sum, penalty) => sum + penalty.amount, 0)
+  const dataReady = !checkInsLoading && !penaltiesLoading && !plansLoading
+  const contributionPrompt = useMemo(
+    () =>
+      dataReady
+        ? getContributionPromptState(profile?.id, loginRunId, penalties, restConflict, shownContributionPromptKey)
+        : null,
+    [dataReady, loginRunId, penalties, profile?.id, restConflict, shownContributionPromptKey],
+  )
   const showLoadingSkeleton =
     (checkInsLoading || penaltiesLoading || plansLoading) &&
     plans.length === 0 &&
@@ -120,6 +154,13 @@ export default function Today() {
     upsertPenalty,
   ])
 
+  useEffect(() => {
+    if (!contributionPrompt || activeContributionPrompt) return
+    setActiveContributionPrompt(contributionPrompt)
+    setShownContributionPromptKey(contributionPrompt.key)
+    writeShownContributionPromptKey(contributionPrompt.key)
+  }, [activeContributionPrompt, contributionPrompt])
+
   const startCheckIn = () => {
     navigate('/checkin')
   }
@@ -173,11 +214,32 @@ export default function Today() {
         items: [],
       })
       notifyApp({ tone: 'success', message: '今天已记为休息日，不会按缺卡处理。' })
-    } catch {
-      notifyApp({ tone: 'warning', message: '今日休息保存失败，请稍后重试。' })
+    } catch (err) {
+      notifyApp({ tone: 'warning', message: rawErrorMessage(err, restBlockedMessage ?? '今日休息保存失败，请稍后重试。') })
     } finally {
       setRestSaving(false)
     }
+  }
+
+  const toggleSelfPlan = () => {
+    if (selfPlanOpen) {
+      setSelfPlanOpen(false)
+      return
+    }
+
+    setSelfPlanOpen(true)
+    window.requestAnimationFrame(() => {
+      selfPlanEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
+
+  const closeContributionPrompt = () => {
+    setActiveContributionPrompt(null)
+  }
+
+  const openLedgerFromContributionPrompt = () => {
+    closeContributionPrompt()
+    navigate('/ledger')
   }
 
   const withdrawTodayCheckIn = async () => {
@@ -217,12 +279,6 @@ export default function Today() {
 
   return (
     <section className="screen with-nav contract-home-screen">
-      {restConflict && !todayCheckIn && (
-        <RestRestrictionNotice
-          conflict={restConflict}
-          onPlanEdit={() => navigate('/plan')}
-        />
-      )}
       <TodayHeroSection
         checkIn={todayCheckIn}
         pendingTotal={pendingTotal}
@@ -261,6 +317,7 @@ export default function Today() {
           <TodayOpenPlanSection
             checkIn={todayCheckIn}
             draft={selfPlanDraft}
+            editorRef={selfPlanEditorRef}
             leaveFatigue={leaveFatigue}
             leaveOffWorkTime={leaveOffWorkTime}
             leaveReason={leaveReason}
@@ -273,10 +330,19 @@ export default function Today() {
             onLeaveOffWorkTimeChange={setLeaveOffWorkTime}
             onLeaveReasonChange={setLeaveReason}
             onMarkRest={markTodayRest}
+            onRestBlockedNotice={(message) => notifyApp({ tone: 'warning', message })}
             onSave={savePlan}
-            onTogglePlan={() => setSelfPlanOpen((current) => !current)}
+            onTogglePlan={toggleSelfPlan}
           />
         )
+      )}
+
+      {activeContributionPrompt && (
+        <ContributionPromptModal
+          prompt={activeContributionPrompt}
+          onClose={closeContributionPrompt}
+          onOpenLedger={openLedgerFromContributionPrompt}
+        />
       )}
 
       {profile?.member_code && (
@@ -290,17 +356,43 @@ export default function Today() {
   )
 }
 
-function RestRestrictionNotice({ conflict, onPlanEdit }: { conflict: RestConflict; onPlanEdit: () => void }) {
+function ContributionPromptModal({
+  onClose,
+  onOpenLedger,
+  prompt,
+}: {
+  onClose: () => void
+  onOpenLedger: () => void
+  prompt: ContributionPromptState
+}) {
   return (
-    <div className="status-card rest-conflict-notice contract-clause-card" role="alert">
-      <div className="rest-conflict-head">
-        <AlertTriangle size={22} />
-        <strong>{conflict.kind === 'rest' ? '今天不能继续休息' : '今天必须处理缺卡后的安排'}</strong>
-      </div>
-      <p>{conflict.message}</p>
-      <button className="ghost-button rest-conflict-edit-button" type="button" onClick={onPlanEdit}>
-        改成训练计划
-      </button>
+    <div className="waiver-modal-backdrop contribution-modal-backdrop" role="presentation">
+      <section className="waiver-modal contribution-modal" role="dialog" aria-modal="true" aria-labelledby="contribution-modal-title">
+        <div className="contribution-modal-mark">
+          <Flame size={24} />
+        </div>
+        <div>
+          <h3 id="contribution-modal-title">有待贡献需要处理</h3>
+          <p>
+            当前待贡献 ¥{formatAmount(prompt.pendingTotal)}，最近一笔是 {formatDay(prompt.latestDate)}
+            的缺卡贡献。
+          </p>
+        </div>
+        {prompt.restWarning && (
+          <div className="contribution-modal-warning">
+            <AlertTriangle size={18} />
+            <span>{prompt.restWarning}</span>
+          </div>
+        )}
+        <div className="waiver-modal-actions contribution-modal-actions">
+          <button type="button" onClick={onClose}>
+            先处理今天
+          </button>
+          <button type="button" onClick={onOpenLedger}>
+            去贡献账本
+          </button>
+        </div>
+      </section>
     </div>
   )
 }
@@ -492,6 +584,7 @@ function TodayTrainingSection({
 function TodayOpenPlanSection({
   checkIn,
   draft,
+  editorRef,
   leaveFatigue,
   leaveOffWorkTime,
   leaveReason,
@@ -500,6 +593,7 @@ function TodayOpenPlanSection({
   onLeaveOffWorkTimeChange,
   onLeaveReasonChange,
   onMarkRest,
+  onRestBlockedNotice,
   onSave,
   onTogglePlan,
   open,
@@ -509,6 +603,7 @@ function TodayOpenPlanSection({
 }: {
   checkIn?: CheckIn
   draft: PlanDraft
+  editorRef: RefObject<HTMLDivElement | null>
   leaveFatigue: number | null
   leaveOffWorkTime: string
   leaveReason: string
@@ -517,6 +612,7 @@ function TodayOpenPlanSection({
   onLeaveOffWorkTimeChange: (value: string) => void
   onLeaveReasonChange: (value: string) => void
   onMarkRest: () => Promise<void>
+  onRestBlockedNotice: (message: string) => void
   onSave: (draft: PlanDraft) => Promise<Plan>
   onTogglePlan: () => void
   open: boolean
@@ -525,6 +621,11 @@ function TodayOpenPlanSection({
   restSaving: boolean
 }) {
   const disabled = Boolean(checkIn)
+  const restAction = getRestChoiceActionState(restBlockedMessage, restSaving)
+  const showRestBlockedNotice = () => {
+    if (restAction.notice) onRestBlockedNotice(restAction.notice)
+  }
+
   return (
     <section className="contract-section self-plan-clause-section open-plan-section">
       <div className="section-heading contract-section-heading">
@@ -535,10 +636,24 @@ function TodayOpenPlanSection({
         <strong>今天还没有计划</strong>
         <p>可以休息、请假，或者自己定一个训练计划。只要做了选择，就不会被当成“什么都没做”。</p>
         <div className="today-choice-actions">
-          {restBlockedMessage && <p className="form-warning">{restBlockedMessage}</p>}
-          <button disabled={disabled || restSaving || Boolean(restBlockedMessage)} type="button" onClick={() => void onMarkRest()}>
+          <button
+            aria-disabled={restAction.ariaDisabled}
+            aria-label={restAction.notice ? `今天不能休息：${restAction.notice}` : undefined}
+            className={restAction.notice ? 'rest-choice-button rest-blocked-choice-button' : 'rest-choice-button'}
+            disabled={disabled || restSaving}
+            title={restAction.notice ?? undefined}
+            type="button"
+            onClick={() => {
+              if (!restAction.canSubmit) {
+                showRestBlockedNotice()
+                return
+              }
+              void onMarkRest()
+            }}
+            onFocus={showRestBlockedNotice}
+          >
             <CalendarCheck size={18} />
-            {restSaving ? '保存中' : '今日休息'}
+            {restAction.label}
           </button>
           <button disabled={disabled || requestingLeave} type="button" onClick={() => void onAskLeave()}>
             <Umbrella size={18} />
@@ -560,12 +675,14 @@ function TodayOpenPlanSection({
         />
       </div>
       {open && (
-        <PlanEditor
-          initial={draft}
-          restBlockedMessage={restBlockedMessage}
-          submitLabel="保存今日自定计划"
-          onSubmit={async (nextDraft) => void (await onSave(nextDraft))}
-        />
+        <div className="self-plan-editor-scroll-target" ref={editorRef}>
+          <PlanEditor
+            initial={draft}
+            restBlockedMessage={restBlockedMessage}
+            submitLabel="保存今日自定计划"
+            onSubmit={async (nextDraft) => void (await onSave(nextDraft))}
+          />
+        </div>
       )}
     </section>
   )

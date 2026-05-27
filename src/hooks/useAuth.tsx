@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js'
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { clearCache } from '../lib/cache'
 import { DEMO_COACH_ID, DEMO_STUDENT_ID, PREVIEW_ROLE_KEY, isLocalhostPreview, readPreviewRole } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
@@ -9,6 +9,7 @@ import { clearCoachDataCache } from './useCoachData'
 type AuthContextValue = {
   loading: boolean
   authError: string | null
+  loginRunId: string | null
   session: Session | null
   profile: Profile | null
   signIn: (email: string, password: string) => Promise<string | null>
@@ -17,6 +18,7 @@ type AuthContextValue = {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
+const LOGIN_RUN_ID_KEY = 'family-fitness-contract:login-run-id'
 
 const demoProfiles: Record<Role, Profile> = {
   student: {
@@ -35,11 +37,78 @@ const demoProfiles: Record<Role, Profile> = {
   },
 }
 
+function createLoginRunId() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+function readStoredLoginRunId() {
+  try {
+    return sessionStorage.getItem(LOGIN_RUN_ID_KEY)
+  } catch {
+    return null
+  }
+}
+
+function writeStoredLoginRunId(value: string) {
+  try {
+    sessionStorage.setItem(LOGIN_RUN_ID_KEY, value)
+  } catch {
+    // Storage can be unavailable in privacy modes; in-memory state still works.
+  }
+}
+
+function clearStoredLoginRunId() {
+  try {
+    sessionStorage.removeItem(LOGIN_RUN_ID_KEY)
+  } catch {
+    // Ignore storage failures; logout still clears React state below.
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [authError, setAuthError] = useState<string | null>(null)
+  const [loginRunId, setLoginRunId] = useState<string | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
+  const activeUserIdRef = useRef<string | null>(null)
+
+  const ensureLoginRunId = useCallback(() => {
+    const next = readStoredLoginRunId() ?? createLoginRunId()
+    writeStoredLoginRunId(next)
+    setLoginRunId(next)
+    return next
+  }, [])
+
+  const startLoginRunId = useCallback(() => {
+    const next = createLoginRunId()
+    writeStoredLoginRunId(next)
+    setLoginRunId(next)
+    return next
+  }, [])
+
+  const clearLoginRunId = useCallback(() => {
+    clearStoredLoginRunId()
+    setLoginRunId(null)
+    activeUserIdRef.current = null
+  }, [])
+
+  const attachSessionRun = useCallback((nextSession: Session | null, forceNew = false) => {
+    const userId = nextSession?.user.id
+    if (!userId) {
+      clearLoginRunId()
+      return
+    }
+
+    if (forceNew || activeUserIdRef.current !== userId) {
+      activeUserIdRef.current = userId
+      if (forceNew) startLoginRunId()
+      else ensureLoginRunId()
+      return
+    }
+
+    ensureLoginRunId()
+  }, [clearLoginRunId, ensureLoginRunId, startLoginRunId])
 
   const loadProfile = useCallback(async (userId: string, email?: string | null) => {
     if (!supabase) {
@@ -81,6 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!previewRole) return false
       setSession(null)
       setProfile(demoProfiles[previewRole])
+      ensureLoginRunId()
       setAuthError(null)
       setLoading(false)
       return true
@@ -103,6 +173,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return
         }
         setSession(data.session)
+        attachSessionRun(data.session)
         if (data.session?.user.id) void loadProfile(data.session.user.id, data.session.user.email ?? null)
         else setLoading(false)
       })
@@ -111,9 +182,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false)
       })
 
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (loadPreview()) return
       setSession(nextSession)
+      attachSessionRun(nextSession, event === 'SIGNED_IN' && activeUserIdRef.current !== nextSession?.user.id)
       if (nextSession?.user.id) void loadProfile(nextSession.user.id, nextSession.user.email ?? null)
       else {
         setProfile(null)
@@ -122,12 +194,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
 
     return () => data.subscription.unsubscribe()
-  }, [loadProfile])
+  }, [attachSessionRun, ensureLoginRunId, loadProfile])
 
   const value = useMemo<AuthContextValue>(
     () => ({
       loading,
       authError,
+      loginRunId,
       session,
       profile,
       signIn: async (email, password) => {
@@ -144,6 +217,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearCache('demo')
         clearCoachDataCache()
         localStorage.removeItem(PREVIEW_ROLE_KEY)
+        clearLoginRunId()
         setSession(null)
         setProfile(null)
         setAuthError(null)
@@ -151,12 +225,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       previewAs: (role) => {
         if (isSupabaseConfigured && !isLocalhostPreview()) return
         localStorage.setItem(PREVIEW_ROLE_KEY, role)
+        startLoginRunId()
         setProfile(demoProfiles[role])
         setSession(null)
         setAuthError(null)
       },
     }),
-    [authError, loading, profile, session],
+    [authError, clearLoginRunId, loading, loginRunId, profile, session, startLoginRunId],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

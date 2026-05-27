@@ -1,5 +1,5 @@
 import { addDays, isPastDeadline, toISODate } from './date'
-import { computeConsecutiveMisses, computePenaltyAmount } from './penalty'
+import { computeConsecutiveMisses, computePenaltyAmount, recalculateMissedPenalties } from './penalty'
 import type { CheckIn, Penalty, PenaltySettings, Plan } from './types'
 
 const MISSED_SYNC_LOOKBACK_DAYS = 7
@@ -108,5 +108,8 @@ export function buildMissedSync(
       nextPenalties.push(buildMissedPenalty(userId, day.date, sortedPlan, nextCheckIns, nextPenalties, null, day.reason, settings))
     })
 
-  return { checkIns: nextCheckIns, penalties: nextPenalties }
+  return {
+    checkIns: nextCheckIns,
+    penalties: recalculateMissedPenalties(userId, sortedPlan, nextCheckIns, nextPenalties, settings),
+  }
 }

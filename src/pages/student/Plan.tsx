@@ -3,15 +3,20 @@ import { useMemo, useState } from 'react'
 import ExerciseCard from '../../components/ExerciseCard'
 import PlanEditor from '../../components/PlanEditor'
 import { useAuth } from '../../hooks/useAuth'
+import { useCheckIns } from '../../hooks/useCheckIns'
+import { usePenalties } from '../../hooks/usePenalties'
 import { usePlans } from '../../hooks/usePlans'
 import { formatDay } from '../../lib/date'
 import { notifyApp } from '../../lib/notice'
 import { buildPlan, planFromTemplate, planToExercises } from '../../lib/plan'
 import { formatPlanFocusText, formatPlanSourceLabel } from '../../lib/planDisplay'
-import type { Plan, PlanDay, PlanDraft } from '../../lib/types'
+import { getRestConflict } from '../../lib/restRules'
+import type { CheckIn, Penalty, Plan, PlanDay, PlanDraft } from '../../lib/types'
 
 export default function Plan() {
   const { profile } = useAuth()
+  const { checkIns } = useCheckIns(profile?.id)
+  const { penalties } = usePenalties(profile?.id)
   const { plans, savePlan } = usePlans(profile?.id)
   const [expandedDates, setExpandedDates] = useState<Set<string>>(() => new Set())
   const [editingDate, setEditingDate] = useState<string | null>(null)
@@ -28,6 +33,13 @@ export default function Plan() {
   }
 
   const saveStudentPlan = async (draft: PlanDraft) => {
+    if (!draft.is_training) {
+      const conflict = getRestConflict(draft.date, plans, checkIns, penalties)
+      if (conflict) {
+        notifyApp({ tone: 'warning', message: conflict.message })
+        throw new Error(conflict.message)
+      }
+    }
     await savePlan(draft)
     setEditingDate(null)
     setExpandedDates((current) => new Set(current).add(draft.date))
@@ -51,10 +63,13 @@ export default function Plan() {
           return (
             <PlanDayCard
               day={day}
+              checkIns={checkIns}
               editing={editing}
               expanded={expandedDates.has(day.date)}
               key={day.date}
               plan={plan}
+              plans={plans}
+              penalties={penalties}
               studentId={profile?.id}
               onCancelEdit={() => setEditingDate(null)}
               onEdit={() => {
@@ -72,6 +87,7 @@ export default function Plan() {
 }
 
 function PlanDayCard({
+  checkIns,
   day,
   editing,
   expanded,
@@ -79,9 +95,12 @@ function PlanDayCard({
   onEdit,
   onSave,
   onToggle,
+  penalties,
   plan,
+  plans,
   studentId,
 }: {
+  checkIns: CheckIn[]
   day: PlanDay
   editing: boolean
   expanded: boolean
@@ -89,7 +108,9 @@ function PlanDayCard({
   onEdit: () => void
   onSave: (draft: PlanDraft) => Promise<void>
   onToggle: () => void
+  penalties: Penalty[]
   plan?: Plan
+  plans: Plan[]
   studentId?: string
 }) {
   const exercises = plan ? planToExercises(plan) : []
@@ -99,6 +120,7 @@ function PlanDayCard({
     if (plan) return planToDraft(plan)
     return planFromTemplate(studentId, day, 'student')
   }, [day, plan, studentId])
+  const restBlockedMessage = draft ? getRestConflict(draft.date, plans, checkIns, penalties)?.message ?? null : null
 
   return (
     <article className={`day-card plan-day-card${expanded ? ' expanded' : ''}${editing ? ' editing' : ''}`}>
@@ -153,7 +175,12 @@ function PlanDayCard({
               取消
             </button>
           </div>
-          <PlanEditor initial={draft} submitLabel={plan ? '保存自定计划' : '保存这天计划'} onSubmit={onSave} />
+          <PlanEditor
+            initial={draft}
+            restBlockedMessage={restBlockedMessage}
+            submitLabel={plan ? '保存自定计划' : '保存这天计划'}
+            onSubmit={onSave}
+          />
         </div>
       )}
     </article>

@@ -36,3 +36,32 @@ export function computeConsecutiveMisses(
 
   return count
 }
+
+export function recalculateMissedPenalties(
+  userId: string,
+  plan: Array<Pick<Plan, 'date' | 'is_training'>>,
+  checkIns: CheckIn[],
+  penalties: Penalty[],
+  settings?: PenaltySettings,
+) {
+  const sortedPlan = plan.slice().sort((a, b) => a.date.localeCompare(b.date))
+  const userCheckIns = checkIns.filter((checkIn) => checkIn.user_id === userId)
+  const userPenalties = penalties.filter((penalty) => penalty.user_id === userId)
+  const missedCheckInByDate = new Map(
+    userCheckIns
+      .filter((checkIn) => checkIn.status === 'missed')
+      .map((checkIn) => [checkIn.date, checkIn]),
+  )
+
+  return penalties.map((penalty) => {
+    if (penalty.user_id !== userId) return penalty
+    if (penalty.source_type !== 'missed_checkin' && !missedCheckInByDate.has(penalty.date)) return penalty
+
+    const consecutive = computeConsecutiveMisses(penalty.date, sortedPlan, userCheckIns, userPenalties)
+    return {
+      ...penalty,
+      amount: computePenaltyAmount(consecutive, settings),
+      consecutive_count: consecutive,
+    }
+  })
+}

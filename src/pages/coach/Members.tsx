@@ -4,12 +4,14 @@ import ExerciseCard from '../../components/ExerciseCard'
 import Metric from '../../components/Metric'
 import PlanEditor from '../../components/PlanEditor'
 import { useAuth } from '../../hooks/useAuth'
+import { useCoachData } from '../../hooks/useCoachData'
 import { useMembers } from '../../hooks/useMembers'
 import { usePlans } from '../../hooks/usePlans'
 import { formatDay, toISODate } from '../../lib/date'
 import { displayMemberLabel } from '../../lib/memberLabels'
 import { notifyApp } from '../../lib/notice'
 import { buildPlan, planFromTemplate, planToExercises } from '../../lib/plan'
+import { getRestConflict } from '../../lib/restRules'
 import type { Plan, PlanDraft } from '../../lib/types'
 
 function todayDraft(userId: string, date: string): PlanDraft {
@@ -52,6 +54,7 @@ export default function CoachMembers() {
     setSelectedMemberId,
     updateMemberDisplayName,
   } = useMembers(profile?.id)
+  const { checkIns, penalties } = useCoachData()
   const { plans, savePlan } = usePlans(selectedMember?.id)
   const [displayName, setDisplayName] = useState('')
   const [identifier, setIdentifier] = useState('')
@@ -103,6 +106,9 @@ export default function CoachMembers() {
     : `${draft?.id ?? 'new'}:${draft?.user_id ?? 'none'}:${draft?.date ?? 'none'}:${draft?.source ?? 'none'}`
   const isEditingCurrentMember = Boolean(selectedMember && editingMemberId === selectedMember.id)
   const savingCurrentMember = Boolean(selectedMember && savingMemberId === selectedMember.id)
+  const selectedCheckIns = selectedMember ? checkIns.filter((item) => item.user_id === selectedMember.id) : []
+  const selectedPenalties = selectedMember ? penalties.filter((item) => item.user_id === selectedMember.id) : []
+  const restBlockedMessage = draft ? getRestConflict(draft.date, plans, selectedCheckIns, selectedPenalties)?.message ?? null : null
 
   const submitAdd = async () => {
     const result = await addMember(identifier, displayName)
@@ -195,6 +201,13 @@ export default function CoachMembers() {
   }
 
   const submitPlan = async (nextDraft: PlanDraft) => {
+    if (!nextDraft.is_training) {
+      const conflict = getRestConflict(nextDraft.date, plans, selectedCheckIns, selectedPenalties)
+      if (conflict) {
+        notifyApp({ tone: 'warning', message: conflict.message })
+        throw new Error(conflict.message)
+      }
+    }
     await savePlan(nextDraft)
     if (copiedDraft?.user_id === nextDraft.user_id && copiedDraft.date === nextDraft.date) {
       setCopiedDraft(null)
@@ -390,7 +403,13 @@ export default function CoachMembers() {
               ))}
             </div>
             {copyMessage && <p className="form-success plan-copy-note" role="status" aria-live="polite">{copyMessage}</p>}
-            <PlanEditor key={draftKey} initial={draft} submitLabel="保存教练计划" onSubmit={submitPlan} />
+            <PlanEditor
+              key={draftKey}
+              initial={draft}
+              restBlockedMessage={restBlockedMessage}
+              submitLabel="保存教练计划"
+              onSubmit={submitPlan}
+            />
           </section>
         </>
       )}

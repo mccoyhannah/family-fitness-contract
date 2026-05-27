@@ -6,11 +6,12 @@ import type { PlanDraft } from '../lib/types'
 
 type PlanEditorProps = {
   initial: PlanDraft
+  restBlockedMessage?: string | null
   submitLabel: string
   onSubmit: (draft: PlanDraft) => Promise<void>
 }
 
-export default function PlanEditor({ initial, onSubmit, submitLabel }: PlanEditorProps) {
+export default function PlanEditor({ initial, onSubmit, restBlockedMessage, submitLabel }: PlanEditorProps) {
   const initialKey = useMemo(
     () => `${initial.id ?? 'new'}:${initial.user_id}:${initial.date}:${initial.source}`,
     [initial.date, initial.id, initial.source, initial.user_id],
@@ -29,6 +30,7 @@ export default function PlanEditor({ initial, onSubmit, submitLabel }: PlanEdito
     setSaving(true)
     setError('')
     try {
+      if (!draft.is_training && restBlockedMessage) throw new Error(restBlockedMessage)
       const items = draft.items
         .map((item, index) => ({ ...item, sort_order: index }))
         .filter((item) => item.name.trim())
@@ -48,6 +50,14 @@ export default function PlanEditor({ initial, onSubmit, submitLabel }: PlanEdito
     } finally {
       setSaving(false)
     }
+  }
+
+  const changeTrainingMode = (isTraining: boolean) => {
+    if (!isTraining && restBlockedMessage) {
+      setError(restBlockedMessage)
+      return
+    }
+    setDraft({ ...draft, is_training: isTraining })
   }
 
   const updateItem = (index: number, key: 'name' | 'sets' | 'reps' | 'note', value: string) => {
@@ -94,11 +104,12 @@ export default function PlanEditor({ initial, onSubmit, submitLabel }: PlanEdito
           <input
             type="checkbox"
             checked={draft.is_training}
-            onChange={(event) => setDraft({ ...draft, is_training: event.target.checked })}
+            onChange={(event) => changeTrainingMode(event.target.checked)}
           />
           训练日
         </label>
       </div>
+      {restBlockedMessage && <p className="form-warning">{restBlockedMessage}</p>}
 
       <div className="section-heading compact-heading contract-section-heading">
         <h3>动作</h3>

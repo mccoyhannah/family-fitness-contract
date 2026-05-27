@@ -14,11 +14,12 @@ const options: FatigueOption[] = [
 ]
 
 type FatigueCardsProps = {
-  value: number
+  disabled?: boolean
+  value: number | null
   onChange: (value: number) => void
 }
 
-export default function FatigueCards({ onChange, value }: FatigueCardsProps) {
+export default function FatigueCards({ disabled = false, onChange, value }: FatigueCardsProps) {
   return (
     <div className="fatigue-field" aria-label="疲劳程度">
       <div className="field-label">疲劳程度</div>
@@ -27,6 +28,7 @@ export default function FatigueCards({ onChange, value }: FatigueCardsProps) {
           <button
             aria-pressed={option.value === value}
             className={option.value === value ? 'fatigue-card active' : 'fatigue-card'}
+            disabled={disabled}
             key={option.value}
             type="button"
             onClick={() => onChange(option.value)}

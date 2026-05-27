@@ -1,7 +1,8 @@
-import { CalendarCheck, ChevronDown, ChevronUp, Flame, RotateCcw, Umbrella } from 'lucide-react'
+import { AlertTriangle, CalendarCheck, ChevronDown, ChevronUp, Flame, RotateCcw, Umbrella } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ExerciseCard from '../../components/ExerciseCard'
+import FatigueCards from '../../components/FatigueCards'
 import Metric from '../../components/Metric'
 import PlanEditor from '../../components/PlanEditor'
 import StatusPill from '../../components/StatusPill'
@@ -11,9 +12,11 @@ import { usePenalties } from '../../hooks/usePenalties'
 import { usePenaltySettings } from '../../hooks/usePenaltySettings'
 import { usePlans } from '../../hooks/usePlans'
 import { toISODate } from '../../lib/date'
+import { buildLeaveRequestReason, validateLeaveRequest } from '../../lib/leaveRequest'
 import { notifyApp } from '../../lib/notice'
 import { buildPlan, planFromTemplate, planToExercises } from '../../lib/plan'
 import { formatPlanFocusText, formatPlanSourceLabel } from '../../lib/planDisplay'
+import { getRestConflict, type RestConflict } from '../../lib/restRules'
 import { buildMissedSync } from '../../lib/sync'
 import { rawErrorMessage } from '../../lib/supabaseErrors'
 import type { CheckIn, Exercise, Plan, PlanDraft } from '../../lib/types'
@@ -24,6 +27,8 @@ export default function Today() {
   const { penalties, loading: penaltiesLoading, reload: reloadPenalties, setPenalties, upsertPenalty } = usePenalties(profile?.id)
   const { ready: penaltySettingsReady, settings: penaltySettings } = usePenaltySettings()
   const { loading: plansLoading, plans, savePlan } = usePlans(profile?.id)
+  const [leaveFatigue, setLeaveFatigue] = useState<number | null>(null)
+  const [leaveOffWorkTime, setLeaveOffWorkTime] = useState('')
   const [leaveReason, setLeaveReason] = useState('')
   const [memberCodeOpen, setMemberCodeOpen] = useState(false)
   const [restSaving, setRestSaving] = useState(false)
@@ -39,6 +44,11 @@ export default function Today() {
   const todayPlan = plans.find((plan) => plan.date === today)
   const todayExercises = todayPlan ? planToExercises(todayPlan) : []
   const todayCheckIn = checkIns.find((checkIn) => checkIn.date === today)
+  const restConflict = useMemo(
+    () => getRestConflict(today, plans, checkIns, penalties),
+    [checkIns, penalties, plans, today],
+  )
+  const restBlockedMessage = restConflict?.message ?? null
   const pendingTotal = penalties
     .filter((penalty) => penalty.status === 'pending')
     .reduce((sum, penalty) => sum + penalty.amount, 0)
@@ -116,9 +126,25 @@ export default function Today() {
 
   const askLeave = async () => {
     if (!profile || todayCheckIn || requestingLeave) return
+    const leaveDraft = { fatigue: leaveFatigue, offWorkTime: leaveOffWorkTime, reason: leaveReason }
+    const validationMessage = validateLeaveRequest(leaveDraft)
+    if (validationMessage) {
+      notifyApp({ tone: 'warning', message: validationMessage })
+      return
+    }
     setRequestingLeave(true)
     try {
-      await upsertCheckIn(buildCheckIn(profile.id, todayPlan?.id ?? null, today, 'pending_review', '请假申请，等待教练确认', leaveReason))
+      await upsertCheckIn(buildCheckIn(
+        profile.id,
+        todayPlan?.id ?? null,
+        today,
+        'pending_review',
+        '请假申请，等待教练确认',
+        buildLeaveRequestReason(leaveDraft),
+        leaveFatigue,
+      ))
+      setLeaveFatigue(null)
+      setLeaveOffWorkTime('')
       setLeaveReason('')
       notifyApp({ tone: 'success', message: '请假申请已提交，等待管理端确认。' })
     } catch {
@@ -130,6 +156,10 @@ export default function Today() {
 
   const markTodayRest = async () => {
     if (!profile || !todayTemplate || todayCheckIn || restSaving) return
+    if (restBlockedMessage) {
+      notifyApp({ tone: 'warning', message: restBlockedMessage })
+      return
+    }
     setRestSaving(true)
     try {
       await savePlan({
@@ -187,6 +217,12 @@ export default function Today() {
 
   return (
     <section className="screen with-nav contract-home-screen">
+      {restConflict && !todayCheckIn && (
+        <RestRestrictionNotice
+          conflict={restConflict}
+          onPlanEdit={() => navigate('/plan')}
+        />
+      )}
       <TodayHeroSection
         checkIn={todayCheckIn}
         pendingTotal={pendingTotal}
@@ -207,23 +243,34 @@ export default function Today() {
         <TodayTrainingSection
           checkIn={todayCheckIn}
           exercises={todayExercises}
+          leaveFatigue={leaveFatigue}
+          leaveOffWorkTime={leaveOffWorkTime}
           leaveReason={leaveReason}
           plan={todayPlan}
           requestingLeave={requestingLeave}
+          restBlockedMessage={restBlockedMessage}
           onAskLeave={askLeave}
+          onLeaveFatigueChange={setLeaveFatigue}
+          onLeaveOffWorkTimeChange={setLeaveOffWorkTime}
           onStartCheckIn={startCheckIn}
           onLeaveReasonChange={setLeaveReason}
+          onPlanEdit={() => navigate('/plan')}
         />
       ) : (
         selfPlanDraft && (
           <TodayOpenPlanSection
             checkIn={todayCheckIn}
             draft={selfPlanDraft}
+            leaveFatigue={leaveFatigue}
+            leaveOffWorkTime={leaveOffWorkTime}
             leaveReason={leaveReason}
             open={selfPlanOpen}
             requestingLeave={requestingLeave}
+            restBlockedMessage={restBlockedMessage}
             restSaving={restSaving}
             onAskLeave={askLeave}
+            onLeaveFatigueChange={setLeaveFatigue}
+            onLeaveOffWorkTimeChange={setLeaveOffWorkTime}
             onLeaveReasonChange={setLeaveReason}
             onMarkRest={markTodayRest}
             onSave={savePlan}
@@ -240,6 +287,21 @@ export default function Today() {
         />
       )}
     </section>
+  )
+}
+
+function RestRestrictionNotice({ conflict, onPlanEdit }: { conflict: RestConflict; onPlanEdit: () => void }) {
+  return (
+    <div className="status-card rest-conflict-notice contract-clause-card" role="alert">
+      <div className="rest-conflict-head">
+        <AlertTriangle size={22} />
+        <strong>{conflict.kind === 'rest' ? '今天不能继续休息' : '今天必须处理缺卡后的安排'}</strong>
+      </div>
+      <p>{conflict.message}</p>
+      <button className="ghost-button rest-conflict-edit-button" type="button" onClick={onPlanEdit}>
+        改成训练计划
+      </button>
+    </div>
   )
 }
 
@@ -348,21 +410,33 @@ function TodayCheckInSummary({
 function TodayTrainingSection({
   checkIn,
   exercises,
+  leaveFatigue,
+  leaveOffWorkTime,
   leaveReason,
   onAskLeave,
+  onLeaveFatigueChange,
+  onLeaveOffWorkTimeChange,
   onStartCheckIn,
   onLeaveReasonChange,
+  onPlanEdit,
   plan,
   requestingLeave,
+  restBlockedMessage,
 }: {
   checkIn?: CheckIn
   exercises: Exercise[]
+  leaveFatigue: number | null
+  leaveOffWorkTime: string
   leaveReason: string
   onAskLeave: () => Promise<void>
+  onLeaveFatigueChange: (value: number | null) => void
+  onLeaveOffWorkTimeChange: (value: string) => void
   onStartCheckIn: () => void
   onLeaveReasonChange: (value: string) => void
+  onPlanEdit: () => void
   plan: Plan
   requestingLeave: boolean
+  restBlockedMessage?: string | null
 }) {
   return (
     <section className="contract-section training-clause-section">
@@ -384,22 +458,27 @@ function TodayTrainingSection({
         </>
       ) : (
         <div className="status-card rest-day-card contract-clause-card">
-          <strong>今天已记为休息日</strong>
-          <p>不需要提交训练打卡。明天如果没有计划、请假或休息选择，就会按缺卡处理。</p>
+          <strong>{restBlockedMessage ? '今天不能继续休息' : '今天已记为休息日'}</strong>
+          <p>{restBlockedMessage || '不需要提交训练打卡。明天如果没有计划、请假或休息选择，就会按缺卡处理。'}</p>
+          {restBlockedMessage && (
+            <button className="ghost-button rest-conflict-edit-button" type="button" onClick={onPlanEdit}>
+              改成训练计划
+            </button>
+          )}
         </div>
       )}
 
-      {plan.is_training && (
+      {(plan.is_training || restBlockedMessage) && (
         <div className="leave-card contract-clause-card">
-          <label>
-            请假理由，可空
-            <input
-              maxLength={120}
-              value={leaveReason}
-              onChange={(event) => onLeaveReasonChange(event.target.value)}
-              placeholder="出差 / 身体不适 / 今天休息"
-            />
-          </label>
+          <LeaveRequestFields
+            disabled={Boolean(checkIn) || requestingLeave}
+            fatigue={leaveFatigue}
+            offWorkTime={leaveOffWorkTime}
+            reason={leaveReason}
+            onFatigueChange={onLeaveFatigueChange}
+            onOffWorkTimeChange={onLeaveOffWorkTimeChange}
+            onReasonChange={onLeaveReasonChange}
+          />
           <button disabled={Boolean(checkIn) || requestingLeave} type="button" onClick={() => void onAskLeave()}>
             <Umbrella size={20} />
             {requestingLeave ? '提交中' : '申请请假，待教练确认'}
@@ -413,26 +492,36 @@ function TodayTrainingSection({
 function TodayOpenPlanSection({
   checkIn,
   draft,
+  leaveFatigue,
+  leaveOffWorkTime,
   leaveReason,
   onAskLeave,
+  onLeaveFatigueChange,
+  onLeaveOffWorkTimeChange,
   onLeaveReasonChange,
   onMarkRest,
   onSave,
   onTogglePlan,
   open,
   requestingLeave,
+  restBlockedMessage,
   restSaving,
 }: {
   checkIn?: CheckIn
   draft: PlanDraft
+  leaveFatigue: number | null
+  leaveOffWorkTime: string
   leaveReason: string
   onAskLeave: () => Promise<void>
+  onLeaveFatigueChange: (value: number | null) => void
+  onLeaveOffWorkTimeChange: (value: string) => void
   onLeaveReasonChange: (value: string) => void
   onMarkRest: () => Promise<void>
   onSave: (draft: PlanDraft) => Promise<Plan>
   onTogglePlan: () => void
   open: boolean
   requestingLeave: boolean
+  restBlockedMessage?: string | null
   restSaving: boolean
 }) {
   const disabled = Boolean(checkIn)
@@ -446,7 +535,8 @@ function TodayOpenPlanSection({
         <strong>今天还没有计划</strong>
         <p>可以休息、请假，或者自己定一个训练计划。只要做了选择，就不会被当成“什么都没做”。</p>
         <div className="today-choice-actions">
-          <button disabled={disabled || restSaving} type="button" onClick={() => void onMarkRest()}>
+          {restBlockedMessage && <p className="form-warning">{restBlockedMessage}</p>}
+          <button disabled={disabled || restSaving || Boolean(restBlockedMessage)} type="button" onClick={() => void onMarkRest()}>
             <CalendarCheck size={18} />
             {restSaving ? '保存中' : '今日休息'}
           </button>
@@ -459,21 +549,72 @@ function TodayOpenPlanSection({
             {open ? '收起自定计划' : '自己制定计划'}
           </button>
         </div>
-        <label className="today-choice-leave-field">
+        <LeaveRequestFields
+          disabled={disabled || requestingLeave}
+          fatigue={leaveFatigue}
+          offWorkTime={leaveOffWorkTime}
+          reason={leaveReason}
+          onFatigueChange={onLeaveFatigueChange}
+          onOffWorkTimeChange={onLeaveOffWorkTimeChange}
+          onReasonChange={onLeaveReasonChange}
+        />
+      </div>
+      {open && (
+        <PlanEditor
+          initial={draft}
+          restBlockedMessage={restBlockedMessage}
+          submitLabel="保存今日自定计划"
+          onSubmit={async (nextDraft) => void (await onSave(nextDraft))}
+        />
+      )}
+    </section>
+  )
+}
+
+function LeaveRequestFields({
+  disabled,
+  fatigue,
+  offWorkTime,
+  onFatigueChange,
+  onOffWorkTimeChange,
+  onReasonChange,
+  reason,
+}: {
+  disabled: boolean
+  fatigue: number | null
+  offWorkTime: string
+  onFatigueChange: (value: number | null) => void
+  onOffWorkTimeChange: (value: string) => void
+  onReasonChange: (value: string) => void
+  reason: string
+}) {
+  return (
+    <div className="leave-request-fields">
+      <div className="leave-details-grid">
+        <label>
+          下班时间
+          <input
+            disabled={disabled}
+            type="time"
+            value={offWorkTime}
+            onChange={(event) => onOffWorkTimeChange(event.target.value)}
+          />
+        </label>
+        <label>
           请假理由，可空
           <input
-            disabled={disabled || requestingLeave}
-            maxLength={120}
-            value={leaveReason}
-            onChange={(event) => onLeaveReasonChange(event.target.value)}
-            placeholder="出差 / 身体不适 / 家庭安排"
+            disabled={disabled}
+            maxLength={80}
+            value={reason}
+            onChange={(event) => onReasonChange(event.target.value)}
+            placeholder="加班太晚 / 身体不适 / 家庭安排"
           />
         </label>
       </div>
-      {open && (
-        <PlanEditor initial={draft} submitLabel="保存今日自定计划" onSubmit={async (nextDraft) => void (await onSave(nextDraft))} />
-      )}
-    </section>
+      <div className={disabled ? 'leave-fatigue-field disabled' : 'leave-fatigue-field'}>
+        <FatigueCards disabled={disabled} value={fatigue} onChange={onFatigueChange} />
+      </div>
+    </div>
   )
 }
 
@@ -510,6 +651,7 @@ function buildCheckIn(
   status: CheckIn['status'],
   note: string,
   leaveReason: string | null = null,
+  fatigue: number | null = null,
 ): CheckIn {
   return {
     id: `local-${date}-${planId ?? 'no-plan'}`,
@@ -517,7 +659,7 @@ function buildCheckIn(
     plan_id: planId,
     date,
     status,
-    fatigue: status === 'completed' ? 3 : null,
+    fatigue: fatigue ?? (status === 'completed' ? 3 : null),
     issues: [],
     note,
     leave_reason: leaveReason,

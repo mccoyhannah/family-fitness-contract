@@ -3,6 +3,7 @@ import test from 'node:test'
 import { computeConsecutiveMisses } from '../src/lib/penalty.ts'
 import { buildMissedSync } from '../src/lib/sync.ts'
 import { buildLeaveRequestReason, validateLeaveRequest } from '../src/lib/leaveRequest.ts'
+import { getMonthCalendarDays, getPlansInWeek, getStudentPlanCardAction, getWeekDates } from '../src/lib/planCalendar.ts'
 import { getRestConflict } from '../src/lib/restRules.ts'
 import { getContributionPromptState, getRestChoiceActionState } from '../src/lib/todayPrompts.ts'
 import type { CheckIn, Penalty, Plan } from '../src/lib/types.ts'
@@ -151,4 +152,67 @@ test('blocked rest action uses business feedback and does not allow rest save', 
   const allowed = getRestChoiceActionState(null)
   assert.equal(allowed.canSubmit, true)
   assert.equal(allowed.label, '今日休息')
+})
+
+test('plan calendar helpers build monday-first weeks and month grids', () => {
+  assert.deepEqual(
+    getWeekDates('2026-05-27'),
+    ['2026-05-25', '2026-05-26', '2026-05-27', '2026-05-28', '2026-05-29', '2026-05-30', '2026-05-31'],
+  )
+
+  const month = getMonthCalendarDays('2026-05-27', '2026-05-27')
+  assert.deepEqual(
+    month.slice(0, 7).map((day) => day.date),
+    ['2026-04-27', '2026-04-28', '2026-04-29', '2026-04-30', '2026-05-01', '2026-05-02', '2026-05-03'],
+  )
+  assert.equal(month[0].inCurrentMonth, false)
+  assert.equal(month.find((day) => day.date === '2026-05-27')?.isToday, true)
+})
+
+test('weekly arranged plans only include the selected week sorted monday to sunday', () => {
+  const plans = [
+    plan('2026-05-20', true),
+    plan('2026-05-31', false),
+    plan('2026-05-25', true),
+    plan('2026-06-01', true),
+    plan('2026-05-27', true),
+  ]
+
+  assert.deepEqual(
+    getPlansInWeek(plans, '2026-05-27').map((item) => item.date),
+    ['2026-05-25', '2026-05-27', '2026-05-31'],
+  )
+})
+
+test('student plan card actions hide rest details and keep training actions', () => {
+  assert.deepEqual(getStudentPlanCardAction(), {
+    canConvertRestToTraining: false,
+    canEdit: true,
+    canView: false,
+    editLabel: '制定计划',
+  })
+  assert.deepEqual(getStudentPlanCardAction({ is_training: true, source: 'coach' }), {
+    canConvertRestToTraining: false,
+    canEdit: false,
+    canView: true,
+    editLabel: null,
+  })
+  assert.deepEqual(getStudentPlanCardAction({ is_training: true, source: 'student' }), {
+    canConvertRestToTraining: false,
+    canEdit: true,
+    canView: true,
+    editLabel: '编辑计划',
+  })
+  assert.deepEqual(getStudentPlanCardAction({ is_training: false, source: 'student' }), {
+    canConvertRestToTraining: true,
+    canEdit: false,
+    canView: false,
+    editLabel: '改成训练',
+  })
+  assert.deepEqual(getStudentPlanCardAction({ is_training: false, source: 'coach' }), {
+    canConvertRestToTraining: false,
+    canEdit: false,
+    canView: false,
+    editLabel: null,
+  })
 })

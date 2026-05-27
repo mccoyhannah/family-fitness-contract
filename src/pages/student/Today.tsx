@@ -271,7 +271,6 @@ export default function Today() {
       <section className="screen with-nav contract-home-screen">
         <div className="status-card action-card contract-clause-card">
           <strong>今天还没有默认训练模板</strong>
-          <p>可以先等管理端下发计划，或稍后刷新页面。</p>
         </div>
       </section>
     )
@@ -418,7 +417,9 @@ function TodayHeroSection({
         <span>{plan?.title ?? '今天还没有计划'}</span>
         {plan && <span className={`plan-source-tag ${plan.source}`}>{formatPlanSourceLabel(plan.source)}</span>}
       </h2>
-      <p>{plan ? `${formatPlanFocusText(plan.focus, plan.source)} · 截止 ${plan.deadline}` : '可以等教练制定，也可以自己先定今天的训练。'}</p>
+      {plan && (
+        <p>{plan.is_training ? `${formatPlanFocusText(plan.focus, plan.source)} · 截止 ${plan.deadline}` : '恢复日'}</p>
+      )}
       <div className="metric-row three-col">
         <Metric icon={<CalendarCheck />} label="今日状态" value={plan && !plan.is_training ? '已休息' : checkIn ? '已记录' : '待完成'} />
         <Metric icon={<Flame />} label="待付罚款" value={`¥${pendingTotal}`} />
@@ -550,8 +551,8 @@ function TodayTrainingSection({
         </>
       ) : (
         <div className="status-card rest-day-card contract-clause-card">
-          <strong>{restBlockedMessage ? '今天不能继续休息' : '今天已记为休息日'}</strong>
-          <p>{restBlockedMessage || '不需要提交训练打卡。明天如果没有计划、请假或休息选择，就会按缺卡处理。'}</p>
+          <strong>{restBlockedMessage ? '今天不能继续休息' : '今日休息'}</strong>
+          {restBlockedMessage && <p>{restBlockedMessage}</p>}
           {restBlockedMessage && (
             <button className="ghost-button rest-conflict-edit-button" type="button" onClick={onPlanEdit}>
               改成训练计划
@@ -630,11 +631,10 @@ function TodayOpenPlanSection({
     <section className="contract-section self-plan-clause-section open-plan-section">
       <div className="section-heading contract-section-heading">
         <h3>今天怎么安排</h3>
-        <span>{disabled ? '已提交记录' : '三选一'}</span>
+        <span>{disabled ? '已提交记录' : '待选择'}</span>
       </div>
       <div className="status-card action-card today-choice-card contract-clause-card">
         <strong>今天还没有计划</strong>
-        <p>可以休息、请假，或者自己定一个训练计划。只要做了选择，就不会被当成“什么都没做”。</p>
         <div className="today-choice-actions">
           <button
             aria-disabled={restAction.ariaDisabled}

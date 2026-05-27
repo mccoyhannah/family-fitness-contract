@@ -9,6 +9,7 @@ import { usePlans } from '../../hooks/usePlans'
 import { formatDay } from '../../lib/date'
 import { notifyApp } from '../../lib/notice'
 import { buildPlan, planFromTemplate, planToExercises } from '../../lib/plan'
+import { getStudentPlanCardAction } from '../../lib/planCalendar'
 import { formatPlanFocusText, formatPlanSourceLabel } from '../../lib/planDisplay'
 import { getRestConflict } from '../../lib/restRules'
 import type { CheckIn, Penalty, Plan, PlanDay, PlanDraft } from '../../lib/types'
@@ -21,7 +22,9 @@ export default function Plan() {
   const [expandedDates, setExpandedDates] = useState<Set<string>>(() => new Set())
   const [editingDate, setEditingDate] = useState<string | null>(null)
   const week = useMemo(() => buildPlan(new Date()), [])
-  const trainingDays = plans.filter((plan) => plan.is_training).length
+  const weekDates = useMemo(() => new Set(week.map((day) => day.date)), [week])
+  const weekPlans = plans.filter((plan) => weekDates.has(plan.date))
+  const trainingDays = weekPlans.filter((plan) => plan.is_training).length
 
   const toggleExpanded = (date: string) => {
     setExpandedDates((current) => {
@@ -50,11 +53,10 @@ export default function Plan() {
     <section className="screen with-nav plan-screen">
       <div className="page-title">
         <h2>本周计划</h2>
-        <p>优先显示教练制定计划；未制定的日期，可以直接在卡片里制定自己的计划。</p>
       </div>
       <div className="status-card action-card">
-        <strong>已安排 {plans.length} 天</strong>
-        <p>{trainingDays} 天训练，{Math.max(0, plans.length - trainingDays)} 天恢复或复盘。</p>
+        <strong>本周已安排 {weekPlans.length} 天</strong>
+        <p>{trainingDays} 天训练，{Math.max(0, weekPlans.length - trainingDays)} 天恢复。</p>
       </div>
       <div className="week-list">
         {week.map((day) => {
@@ -114,13 +116,16 @@ function PlanDayCard({
   studentId?: string
 }) {
   const exercises = plan ? planToExercises(plan) : []
-  const canEdit = !plan || plan.source === 'student'
+  const action = getStudentPlanCardAction(plan)
   const draft = useMemo(() => {
     if (!studentId) return null
+    if (plan && action.canConvertRestToTraining) return planToTrainingDraft(plan, day, studentId)
     if (plan) return planToDraft(plan)
     return planFromTemplate(studentId, day, 'student')
-  }, [day, plan, studentId])
+  }, [action.canConvertRestToTraining, day, plan, studentId])
   const restBlockedMessage = draft ? getRestConflict(draft.date, plans, checkIns, penalties)?.message ?? null : null
+  const editorTitle = action.canConvertRestToTraining ? '改成训练计划' : plan ? '编辑自定计划' : '制定这一天的计划'
+  const submitLabel = action.canConvertRestToTraining ? '保存训练计划' : plan ? '保存自定计划' : '保存这天计划'
 
   return (
     <article className={`day-card plan-day-card${expanded ? ' expanded' : ''}${editing ? ' editing' : ''}`}>
@@ -132,11 +137,13 @@ function PlanDayCard({
             {plan?.source === 'coach' && <small>只读</small>}
           </span>
         </div>
-        <p className="muted">
-          {plan
-            ? `${plan.title} · ${formatPlanFocusText(plan.focus, plan.source)} · 截止 ${plan.deadline}`
-            : '当天还没有明确计划。'}
-        </p>
+        {plan && (
+          <p className="muted">
+            {plan.is_training
+              ? `${plan.title} · ${formatPlanFocusText(plan.focus, plan.source)} · 截止 ${plan.deadline}`
+              : plan.title}
+          </p>
+        )}
         {plan && (
           <div className="plan-day-meta">
             <span>{plan.is_training ? `${plan.items.length} 个动作` : '恢复日'}</span>
@@ -145,21 +152,21 @@ function PlanDayCard({
       </div>
 
       <div className="plan-card-actions">
-        {plan && (
+        {action.canView && plan && (
           <button className="ghost-button" type="button" onClick={onToggle}>
             {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
             {expanded ? '收起计划' : '查看计划'}
           </button>
         )}
-        {canEdit && (
+        {action.editLabel && (action.canEdit || action.canConvertRestToTraining) && (
           <button className="ghost-button plan-edit-trigger" disabled={!draft} type="button" onClick={onEdit}>
             <PencilLine size={18} />
-            {plan ? '编辑计划' : '制定计划'}
+            {action.editLabel}
           </button>
         )}
       </div>
 
-      {expanded && plan && !editing && (
+      {expanded && action.canView && plan && !editing && (
         <div className="plan-day-detail">
           {exercises.map((exercise) => (
             <ExerciseCard exercise={exercise} key={exercise.id} />
@@ -170,7 +177,7 @@ function PlanDayCard({
       {editing && draft && (
         <div className="plan-day-editor">
           <div className="plan-editor-strip">
-            <strong>{plan ? '编辑自定计划' : '制定这一天的计划'}</strong>
+            <strong>{editorTitle}</strong>
             <button className="ghost-button" type="button" onClick={onCancelEdit}>
               取消
             </button>
@@ -178,13 +185,18 @@ function PlanDayCard({
           <PlanEditor
             initial={draft}
             restBlockedMessage={restBlockedMessage}
-            submitLabel={plan ? '保存自定计划' : '保存这天计划'}
+            submitLabel={submitLabel}
             onSubmit={onSave}
           />
         </div>
       )}
     </article>
   )
+}
+
+function planToTrainingDraft(plan: Plan, day: PlanDay, userId: string): PlanDraft {
+  const draft = planFromTemplate(userId, day, 'student')
+  return { ...draft, id: plan.id }
 }
 
 function planToDraft(plan: Plan): PlanDraft {

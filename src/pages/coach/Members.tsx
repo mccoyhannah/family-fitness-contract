@@ -1,4 +1,4 @@
-import { Check, CalendarDays, ChevronDown, Copy, Pencil, UserPlus, Users, X } from 'lucide-react'
+import { Check, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Copy, Pencil, UserPlus, Users, X } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import ExerciseCard from '../../components/ExerciseCard'
 import Metric from '../../components/Metric'
@@ -7,9 +7,10 @@ import { useAuth } from '../../hooks/useAuth'
 import { useCoachData } from '../../hooks/useCoachData'
 import { useMembers } from '../../hooks/useMembers'
 import { usePlans } from '../../hooks/usePlans'
-import { formatDay, toISODate } from '../../lib/date'
+import { formatDay, fromISODate, toISODate } from '../../lib/date'
 import { displayMemberLabel } from '../../lib/memberLabels'
 import { notifyApp } from '../../lib/notice'
+import { getMonthCalendarDays, getMonthStartDate, getPlansInWeek, shiftMonth, type MonthCalendarDay } from '../../lib/planCalendar'
 import { buildPlan, planFromTemplate, planToExercises } from '../../lib/plan'
 import { getRestConflict } from '../../lib/restRules'
 import type { Plan, PlanDraft } from '../../lib/types'
@@ -41,6 +42,24 @@ function planToTodayDraft(userId: string, plan: Plan, date: string): PlanDraft {
   }
 }
 
+function formatMonthTitle(date: string) {
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: 'long',
+  }).format(fromISODate(date))
+}
+
+function calendarPlanStatus(plan?: Plan) {
+  if (!plan) return '未定'
+  if (!plan.is_training) return '休息'
+  return `${plan.items.length}个`
+}
+
+function calendarPlanSource(plan?: Plan) {
+  if (!plan) return null
+  return plan.source === 'coach' ? '教练' : '成员'
+}
+
 export default function CoachMembers() {
   const { profile } = useAuth()
   const {
@@ -65,6 +84,7 @@ export default function CoachMembers() {
   const [savingMemberId, setSavingMemberId] = useState('')
   const savingMemberIdRef = useRef('')
   const [selectedDate, setSelectedDate] = useState(toISODate(new Date()))
+  const [calendarMonthDate, setCalendarMonthDate] = useState(() => getMonthStartDate(toISODate(new Date())))
   const [copiedDraft, setCopiedDraft] = useState<PlanDraft | null>(null)
   const [copyDraftToken, setCopyDraftToken] = useState(0)
   const [copyMessage, setCopyMessage] = useState('')
@@ -72,22 +92,15 @@ export default function CoachMembers() {
   const planWorkspaceRef = useRef<HTMLElement | null>(null)
   const today = toISODate(new Date())
   const week = useMemo(() => buildPlan(new Date(`${selectedDate}T12:00:00`)), [selectedDate])
+  const calendarDays = useMemo(() => getMonthCalendarDays(calendarMonthDate, today), [calendarMonthDate, today])
+  const calendarMonthLabel = useMemo(() => formatMonthTitle(calendarMonthDate), [calendarMonthDate])
   const selectedPlan = plans.find((plan) => plan.date === selectedDate)
+  const plansByDate = useMemo(() => new Map(plans.map((plan) => [plan.date, plan])), [plans])
+  const weekPlans = useMemo(() => getPlansInWeek(plans, selectedDate), [plans, selectedDate])
   const selectableMembers = useMemo(
     () => selectedMemberId ? members.filter((member) => member.id !== selectedMemberId) : members,
     [members, selectedMemberId],
   )
-  const orderedPlans = useMemo(
-    () =>
-      plans.slice().sort((a, b) => {
-        const aUpcoming = a.date >= today
-        const bUpcoming = b.date >= today
-        if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1
-        return aUpcoming ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)
-      }),
-    [plans, today],
-  )
-
   const draft = useMemo<PlanDraft | null>(() => {
     if (!selectedMember) return null
     if (copiedDraft?.user_id === selectedMember.id && copiedDraft.date === selectedDate) return copiedDraft
@@ -134,8 +147,14 @@ export default function CoachMembers() {
 
   const selectPlanDate = (date: string) => {
     setSelectedDate(date)
+    const nextCalendarMonth = getMonthStartDate(date)
+    if (nextCalendarMonth !== calendarMonthDate) setCalendarMonthDate(nextCalendarMonth)
     setCopiedDraft(null)
     setCopyMessage('')
+  }
+
+  const changeCalendarMonth = (amount: number) => {
+    setCalendarMonthDate((current) => shiftMonth(current, amount))
   }
 
   const scrollToPlanWorkspace = () => {
@@ -158,6 +177,7 @@ export default function CoachMembers() {
     setCopiedDraft(null)
     setCopyMessage('')
     setExpandedPlanIds(new Set())
+    setCalendarMonthDate(getMonthStartDate(today))
   }
 
   const copyPlanToToday = (plan: Plan) => {
@@ -307,19 +327,27 @@ export default function CoachMembers() {
 
       {selectedMember && draft && (
         <>
+          <PlanCalendarIndex
+            days={calendarDays}
+            monthLabel={calendarMonthLabel}
+            plansByDate={plansByDate}
+            selectedDate={selectedDate}
+            onSelectDate={selectPlanDate}
+            onShiftMonth={changeCalendarMonth}
+          />
+
           <section className="planned-list-section" aria-label={`${displayMemberLabel(selectedMember)} 已安排的计划`}>
             <div className="section-heading compact-heading">
-              <h3>已安排计划</h3>
-              <span>{plans.length} 天</span>
+              <h3>本周已安排计划</h3>
+              <span>{formatDay(week[0].date)} - {formatDay(week[6].date)}</span>
             </div>
-            {plans.length === 0 ? (
+            {weekPlans.length === 0 ? (
               <div className="status-card action-card planned-empty-card">
-                <strong>还没有安排计划</strong>
-                <p>可在下方制定，保存后会出现在这里。</p>
+                <strong>本周还没有安排计划</strong>
               </div>
             ) : (
               <div className="week-list planned-week-list">
-                {orderedPlans.map((plan) => {
+                {weekPlans.map((plan) => {
                   const isExpanded = expandedPlanIds.has(plan.id)
                   const hasTrainingDetails = plan.is_training && plan.items.length > 0
                   const detailId = `planned-plan-exercises-${plan.id}`
@@ -454,6 +482,75 @@ export default function CoachMembers() {
           {!addMessage && message && <p className="form-error">{message}</p>}
         </div>
       </section>
+    </section>
+  )
+}
+
+function PlanCalendarIndex({
+  days,
+  monthLabel,
+  onSelectDate,
+  onShiftMonth,
+  plansByDate,
+  selectedDate,
+}: {
+  days: MonthCalendarDay[]
+  monthLabel: string
+  onSelectDate: (date: string) => void
+  onShiftMonth: (amount: number) => void
+  plansByDate: Map<string, Plan>
+  selectedDate: string
+}) {
+  return (
+    <section className="plan-calendar-section" aria-label="计划日历索引">
+      <div className="section-heading compact-heading">
+        <h3>计划日历</h3>
+        <span>周一到周日</span>
+      </div>
+      <div className="plan-calendar-card">
+        <div className="plan-calendar-toolbar">
+          <button className="month-nav-button" type="button" onClick={() => onShiftMonth(-1)} aria-label="上个月">
+            <ChevronLeft size={18} />
+          </button>
+          <strong>{monthLabel}</strong>
+          <button className="month-nav-button" type="button" onClick={() => onShiftMonth(1)} aria-label="下个月">
+            <ChevronRight size={18} />
+          </button>
+        </div>
+        <div className="plan-calendar-weekdays" aria-hidden="true">
+          {['一', '二', '三', '四', '五', '六', '日'].map((label) => (
+            <span key={label}>{label}</span>
+          ))}
+        </div>
+        <div className="plan-calendar-grid">
+          {days.map((day) => {
+            const plan = plansByDate.get(day.date)
+            const source = calendarPlanSource(plan)
+            const className = [
+              'plan-calendar-day',
+              day.inCurrentMonth ? '' : 'outside',
+              day.isToday ? 'today' : '',
+              day.date === selectedDate ? 'selected' : '',
+              plan ? 'has-plan' : '',
+            ].filter(Boolean).join(' ')
+
+            return (
+              <button
+                aria-label={`${formatDay(day.date)}，${calendarPlanStatus(plan)}${source ? `，${source}` : ''}`}
+                aria-pressed={day.date === selectedDate}
+                className={className}
+                key={day.date}
+                type="button"
+                onClick={() => onSelectDate(day.date)}
+              >
+                <span className="calendar-day-number">{day.dayOfMonth}</span>
+                <span className="calendar-day-status">{calendarPlanStatus(plan)}</span>
+                {source && <span className="calendar-day-source">{source}</span>}
+              </button>
+            )
+          })}
+        </div>
+      </div>
     </section>
   )
 }

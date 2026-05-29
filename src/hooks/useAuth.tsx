@@ -17,6 +17,10 @@ type AuthContextValue = {
   previewAs: (role: Role) => void
 }
 
+type LoadProfileOptions = {
+  blocking?: boolean
+}
+
 const AuthContext = createContext<AuthContextValue | null>(null)
 const LOGIN_RUN_ID_KEY = 'family-fitness-contract:login-run-id'
 
@@ -72,6 +76,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const activeUserIdRef = useRef<string | null>(null)
+  const profileRef = useRef<Profile | null>(null)
+
+  const commitProfile = useCallback((nextProfile: Profile | null) => {
+    profileRef.current = nextProfile
+    setProfile(nextProfile)
+  }, [])
 
   const ensureLoginRunId = useCallback(() => {
     const next = readStoredLoginRunId() ?? createLoginRunId()
@@ -110,18 +120,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ensureLoginRunId()
   }, [clearLoginRunId, ensureLoginRunId, startLoginRunId])
 
-  const loadProfile = useCallback(async (userId: string, email?: string | null) => {
+  const loadProfile = useCallback(async (userId: string, email?: string | null, options: LoadProfileOptions = {}) => {
     if (!supabase) {
       setLoading(false)
       return
     }
-    setLoading(true)
-    setAuthError(null)
+
+    const blocking = options.blocking ?? !profileRef.current
+    if (blocking) setLoading(true)
+    if (blocking || !profileRef.current || profileRef.current.id !== userId) setAuthError(null)
+
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
       if (error || !data) {
-        setProfile(null)
-        setAuthError('无法加载账号档案。请确认 Supabase profiles 已创建，或稍后重试。')
+        if (blocking || profileRef.current?.id !== userId) {
+          commitProfile(null)
+          setAuthError('无法加载账号档案。请确认 Supabase profiles 已创建，或稍后重试。')
+        }
         return
       }
       const nextProfile = data as Profile
@@ -132,24 +147,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .eq('id', userId)
           .select('*')
           .single()
-        setProfile((updated as Profile | null) ?? { ...nextProfile, email: email.toLowerCase() })
+        commitProfile((updated as Profile | null) ?? { ...nextProfile, email: email.toLowerCase() })
       } else {
-        setProfile(nextProfile)
+        commitProfile(nextProfile)
       }
+      setAuthError(null)
     } catch {
-      setProfile(null)
-      setAuthError('无法连接 Supabase，请检查网络后重试。')
+      if (blocking || profileRef.current?.id !== userId) {
+        commitProfile(null)
+        setAuthError('无法连接 Supabase，请检查网络后重试。')
+      }
     } finally {
-      setLoading(false)
+      if (blocking) setLoading(false)
     }
-  }, [])
+  }, [commitProfile])
 
   useEffect(() => {
     const loadPreview = () => {
       const previewRole = isLocalhostPreview() ? readPreviewRole() : null
       if (!previewRole) return false
       setSession(null)
-      setProfile(demoProfiles[previewRole])
+      commitProfile(demoProfiles[previewRole])
       ensureLoginRunId()
       setAuthError(null)
       setLoading(false)
@@ -174,7 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         setSession(data.session)
         attachSessionRun(data.session)
-        if (data.session?.user.id) void loadProfile(data.session.user.id, data.session.user.email ?? null)
+        if (data.session?.user.id) void loadProfile(data.session.user.id, data.session.user.email ?? null, { blocking: true })
         else setLoading(false)
       })
       .catch(() => {
@@ -185,16 +203,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (loadPreview()) return
       setSession(nextSession)
-      attachSessionRun(nextSession, event === 'SIGNED_IN' && activeUserIdRef.current !== nextSession?.user.id)
-      if (nextSession?.user.id) void loadProfile(nextSession.user.id, nextSession.user.email ?? null)
+      const nextUserId = nextSession?.user.id
+      const isNewSignedInUser = Boolean(nextUserId && event === 'SIGNED_IN' && activeUserIdRef.current !== nextUserId)
+      const needsBlockingProfile = Boolean(nextUserId && (!profileRef.current || profileRef.current.id !== nextUserId || isNewSignedInUser))
+      attachSessionRun(nextSession, isNewSignedInUser)
+      if (nextUserId) void loadProfile(nextUserId, nextSession.user.email ?? null, { blocking: needsBlockingProfile })
       else {
-        setProfile(null)
+        commitProfile(null)
         setLoading(false)
       }
     })
 
     return () => data.subscription.unsubscribe()
-  }, [attachSessionRun, ensureLoginRunId, loadProfile])
+  }, [attachSessionRun, commitProfile, ensureLoginRunId, loadProfile])
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -219,19 +240,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem(PREVIEW_ROLE_KEY)
         clearLoginRunId()
         setSession(null)
-        setProfile(null)
+        commitProfile(null)
         setAuthError(null)
+        setLoading(false)
       },
       previewAs: (role) => {
         if (isSupabaseConfigured && !isLocalhostPreview()) return
         localStorage.setItem(PREVIEW_ROLE_KEY, role)
         startLoginRunId()
-        setProfile(demoProfiles[role])
+        commitProfile(demoProfiles[role])
         setSession(null)
         setAuthError(null)
+        setLoading(false)
       },
     }),
-    [authError, clearLoginRunId, loading, loginRunId, profile, session, startLoginRunId],
+    [authError, clearLoginRunId, commitProfile, loading, loginRunId, profile, session, startLoginRunId],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

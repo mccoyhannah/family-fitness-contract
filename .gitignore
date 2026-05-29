@@ -15,6 +15,7 @@ dist-ssr
 .wrangler-xdg
 .deepseek
 supabase/.temp/
+.codegraph/
 
 # Editor directories and files
 .vscode/*

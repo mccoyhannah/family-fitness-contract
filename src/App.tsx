@@ -54,7 +54,7 @@ function RequireRole({ role }: { role: 'student' | 'coach' }) {
   const { authError, loading, profile } = useAuth()
   const location = useLocation()
 
-  if (loading) return <LoadingScreen />
+  if (loading && !profile) return <LoadingScreen />
 
   if (authError) {
     return <ConfigMissing title="账号状态无法确认" detail={authError} />
@@ -72,7 +72,7 @@ function RequireRole({ role }: { role: 'student' | 'coach' }) {
 function RoleAwareFallback() {
   const { authError, loading, profile } = useAuth()
 
-  if (loading) return <LoadingScreen />
+  if (loading && !profile) return <LoadingScreen />
   if (authError) return <Navigate to="/login" replace />
   if (!profile) return <Navigate to="/login" replace />
 

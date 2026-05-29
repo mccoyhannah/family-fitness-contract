@@ -60,6 +60,13 @@ function calendarPlanSource(plan?: Plan) {
   return plan.source === 'coach' ? '教练' : '成员'
 }
 
+const weekDayLabels = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+
+function compactMonthDay(date: string) {
+  const value = fromISODate(date)
+  return `${value.getMonth() + 1}/${value.getDate()}`
+}
+
 export default function CoachMembers() {
   const { profile } = useAuth()
   const {
@@ -421,12 +428,15 @@ export default function CoachMembers() {
             <div className="week-tabs">
               {week.map((day) => (
                 <button
+                  aria-label={formatDay(day.date)}
+                  aria-pressed={day.date === selectedDate}
                   className={day.date === selectedDate ? 'active' : ''}
                   key={day.date}
                   type="button"
                   onClick={() => selectPlanDate(day.date)}
                 >
-                  {formatDay(day.date)}
+                  <span className="week-tab-day">{weekDayLabels[day.dayOfWeek]}</span>
+                  <span className="week-tab-date">{compactMonthDay(day.date)}</span>
                 </button>
               ))}
             </div>

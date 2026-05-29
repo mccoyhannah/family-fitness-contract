@@ -36,10 +36,13 @@ const toneClass: Record<RecentRecord['tone'], string> = {
 
 function cleanRecentRecordDetail(detail: string) {
   return detail
-    .replace('最近 7 天无计划且未打卡，自动判定缺卡', '无计划且未打卡')
-    .replace('最近 7 天无计划且未打卡', '无计划且未打卡')
-    .replace('过了截止时间自动判定缺卡', '过了截止时间未打卡')
-    .replace(/^.+ · 过了截止时间未打卡$/, '过了截止时间未打卡')
+    .replace('最近 7 天无计划且未打卡，自动判定缺卡', '未打卡')
+    .replace('最近 7 天无计划且未打卡', '未打卡')
+    .replace('无计划且未打卡', '未打卡')
+    .replace('训练日未打卡', '未打卡')
+    .replace('过了截止时间自动判定缺卡', '未打卡')
+    .replace(/^.+ · 过了截止时间未打卡$/, '未打卡')
+    .replace('过了截止时间未打卡', '未打卡')
     .replace('自动判定缺卡', '缺卡')
 }
 
@@ -68,7 +71,7 @@ function recordFromPlan(plan: Plan, today: string): RecentRecord {
   if (!plan.is_training) {
     return {
       date: plan.date,
-      detail: plan.date === today ? '今天安排为恢复休息' : '安排为恢复休息',
+      detail: plan.date === today ? '已休息' : '休息',
       id: `rest-plan-${plan.id}`,
       statusLabel: plan.date === today ? '今日休息' : '休息日',
       tone: 'rest',
@@ -78,7 +81,7 @@ function recordFromPlan(plan: Plan, today: string): RecentRecord {
   if (isPastDeadline(plan.date, plan.deadline)) {
     return {
       date: plan.date,
-      detail: '训练日未打卡',
+      detail: '未打卡',
       id: `missed-plan-${plan.id}`,
       statusLabel: '缺卡',
       tone: 'missed',

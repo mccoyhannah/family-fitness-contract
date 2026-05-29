@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronUp, RotateCcw } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import MemberSelect from '../../components/MemberSelect'
 import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
@@ -12,12 +13,20 @@ import { notifyApp } from '../../lib/notice'
 import type { CheckIn, Plan } from '../../lib/types'
 
 const WAIVER_PREFIX = '[免罚申请]'
+const REVIEW_DRAFT_STORAGE_PREFIX = 'family-fitness-contract:coach-review-drafts:v1'
+
+type ReviewConfirmTone = 'primary' | 'danger'
 
 type ReviewConfirmRequest = {
   action: () => Promise<void>
+  actionLabel: string
   checkInId: string
-  message: string
+  dateLabel: string
+  memberName: string
+  summary: string
   successMessage: string
+  title: string
+  tone: ReviewConfirmTone
 }
 
 function isWaiverRequest(reason?: string | null) {
@@ -37,6 +46,36 @@ function fatigueLabel(fatigue: number | null) {
   return '5/5 · 不舒服'
 }
 
+function reviewDraftStorageKey(coachId?: string) {
+  return coachId ? `${REVIEW_DRAFT_STORAGE_PREFIX}:${coachId}` : null
+}
+
+function readReviewDrafts(coachId?: string) {
+  const key = reviewDraftStorageKey(coachId)
+  if (!key) return {}
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    return Object.fromEntries(
+      Object.entries(parsed).filter(([id, value]) => id && typeof value === 'string' && value.trim()),
+    ) as Record<string, string>
+  } catch {
+    return {}
+  }
+}
+
+function writeReviewDrafts(coachId: string | undefined, drafts: Record<string, string>) {
+  const key = reviewDraftStorageKey(coachId)
+  if (!key) return
+  try {
+    if (Object.keys(drafts).length === 0) localStorage.removeItem(key)
+    else localStorage.setItem(key, JSON.stringify(drafts))
+  } catch {
+    // Storage may be unavailable; keep the in-memory draft so review can continue.
+  }
+}
+
 export default function CoachReview() {
   const { profile: coach } = useAuth()
   const {
@@ -47,17 +86,34 @@ export default function CoachReview() {
     selectedMemberId,
     setSelectedMemberId,
   } = useMembers(coach?.id)
-  const { checkIns, deletePendingCheckIn, markCheckInMissedWithPenalty, penalties, updateCheckIn, updatePenalty } = useCoachData()
+  const {
+    checkIns,
+    deletePendingCheckIn,
+    markCheckInMissedWithPenalty,
+    penalties,
+    ready: coachDataReady,
+    updateCheckIn,
+    updatePenalty,
+  } = useCoachData()
+  const screenRef = useRef<HTMLElement | null>(null)
+  const confirmModalRef = useRef<HTMLElement | null>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
+  const reviewScrollTopRef = useRef(0)
   const reviewingCheckInIdRef = useRef('')
   const [confirmRequest, setConfirmRequest] = useState<ReviewConfirmRequest | null>(null)
   const [expandedCheckInIds, setExpandedCheckInIds] = useState<Set<string>>(() => new Set())
   const [reviewingCheckInId, setReviewingCheckInId] = useState('')
-  const [reviewCommentById, setReviewCommentById] = useState<Record<string, string>>({})
+  const [reviewCommentById, setReviewCommentById] = useState<Record<string, string>>(() => readReviewDrafts(coach?.id))
   const { plans } = usePlans(selectedMember?.id)
   const memberNameById = new Map(members.map((member) => [member.id, displayMemberLabel(member)]))
   const pending = membersReady
     ? checkIns.filter((item) => item.status === 'pending_review' && (!selectedMember || item.user_id === selectedMember.id))
     : []
+  const pendingCheckInIdsKey = checkIns
+    .filter((item) => item.status === 'pending_review')
+    .map((item) => item.id)
+    .sort()
+    .join(',')
 
   const buildReviewUpdate = (comment: string) => ({
     review_comment: comment.trim() || null,
@@ -84,14 +140,36 @@ export default function CoachReview() {
     await deletePendingCheckIn(checkIn)
   }
 
-  const requestReviewAction = (checkInId: string, action: () => Promise<void>, successMessage: string, message: string) => {
+  const requestReviewAction = (request: ReviewConfirmRequest) => {
     if (reviewingCheckInIdRef.current || confirmRequest) return
-    setConfirmRequest({ action, checkInId, message, successMessage })
+    reviewScrollTopRef.current = screenRef.current?.scrollTop ?? 0
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setConfirmRequest(request)
   }
 
   const cancelReviewAction = () => {
     if (reviewingCheckInIdRef.current) return
     setConfirmRequest(null)
+  }
+
+  const updateReviewCommentDraft = (checkInId: string, value: string) => {
+    setReviewCommentById((current) => {
+      const next = { ...current }
+      if (value.trim()) next[checkInId] = value
+      else delete next[checkInId]
+      writeReviewDrafts(coach?.id, next)
+      return next
+    })
+  }
+
+  const clearReviewCommentDraft = (checkInId: string) => {
+    setReviewCommentById((current) => {
+      if (!(checkInId in current)) return current
+      const next = { ...current }
+      delete next[checkInId]
+      writeReviewDrafts(coach?.id, next)
+      return next
+    })
   }
 
   const confirmReviewAction = async () => {
@@ -101,6 +179,7 @@ export default function CoachReview() {
     setReviewingCheckInId(checkInId)
     try {
       await action()
+      clearReviewCommentDraft(checkInId)
       notifyApp({ tone: 'success', message: successMessage })
       setConfirmRequest(null)
     } catch {
@@ -110,6 +189,51 @@ export default function CoachReview() {
       setReviewingCheckInId('')
     }
   }
+
+  useEffect(() => {
+    setReviewCommentById(readReviewDrafts(coach?.id))
+  }, [coach?.id])
+
+  useEffect(() => {
+    if (!coachDataReady) return
+    const validIds = new Set(pendingCheckInIdsKey ? pendingCheckInIdsKey.split(',') : [])
+    setReviewCommentById((current) => {
+      const next = Object.fromEntries(Object.entries(current).filter(([id]) => validIds.has(id)))
+      if (Object.keys(next).length === Object.keys(current).length) return current
+      writeReviewDrafts(coach?.id, next)
+      return next
+    })
+  }, [coach?.id, coachDataReady, pendingCheckInIdsKey])
+
+  useEffect(() => {
+    const screen = screenRef.current
+    if (!confirmRequest) {
+      screen?.scrollTo({ top: reviewScrollTopRef.current })
+      previousFocusRef.current?.focus({ preventScroll: true })
+      return
+    }
+
+    const restoreScroll = () => {
+      screen?.scrollTo({ top: reviewScrollTopRef.current })
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      cancelReviewAction()
+    }
+
+    restoreScroll()
+    window.addEventListener('keydown', onKeyDown)
+    const frame = window.requestAnimationFrame(() => {
+      restoreScroll()
+      confirmModalRef.current?.focus({ preventScroll: true })
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [confirmRequest])
 
   const coachMemberLabel = (memberId: string) => memberNameById.get(memberId) || '成员'
   const toggleExpanded = (checkInId: string) => {
@@ -122,7 +246,7 @@ export default function CoachReview() {
   }
 
   return (
-    <section className="screen with-nav review-screen">
+    <section className="screen with-nav review-screen" ref={screenRef}>
       <div className="page-title">
         <h2>异常待确认</h2>
       </div>
@@ -188,9 +312,7 @@ export default function CoachReview() {
                       maxLength={220}
                       rows={3}
                       value={reviewComment}
-                      onChange={(event) =>
-                        setReviewCommentById((current) => ({ ...current, [item.id]: event.target.value }))
-                      }
+                      onChange={(event) => updateReviewCommentDraft(item.id, event.target.value)}
                       placeholder="可写留言"
                     />
                   </label>
@@ -201,14 +323,17 @@ export default function CoachReview() {
                   className="review-action-primary"
                   type="button"
                   onClick={() =>
-                    requestReviewAction(
-                      item.id,
-                      () => approveCheckIn(item.id, item.user_id, item.date, reviewComment),
-                      hasWaiverRequest ? '已通过补卡。' : '已通过打卡。',
-                      hasWaiverRequest
-                        ? `确认通过补卡 · ${displayName} · ${formatDay(item.date)}？`
-                        : `确认通过 · ${displayName} · ${formatDay(item.date)}？`,
-                    )
+                    requestReviewAction({
+                      action: () => approveCheckIn(item.id, item.user_id, item.date, reviewComment),
+                      actionLabel: hasWaiverRequest ? '通过补卡' : '通过',
+                      checkInId: item.id,
+                      dateLabel: formatDay(item.date),
+                      memberName: displayName,
+                      successMessage: hasWaiverRequest ? '已通过补卡。' : '已通过打卡。',
+                      summary: hasWaiverRequest ? '通过后将补卡记为完成，并同步免罚。' : '通过后这次打卡将记为完成。',
+                      title: hasWaiverRequest ? '确认通过补卡' : '确认通过',
+                      tone: 'primary',
+                    })
                   }
                   disabled={Boolean(reviewingCheckInId || confirmRequest)}
                 >
@@ -219,12 +344,17 @@ export default function CoachReview() {
                     className="review-action-secondary"
                     type="button"
                     onClick={() =>
-                      requestReviewAction(
-                        item.id,
-                        () => approveLeave(item.id, item.user_id, item.date, reviewComment),
-                        '已准假。',
-                        `确认准假 · ${displayName} · ${formatDay(item.date)}？`,
-                      )
+                      requestReviewAction({
+                        action: () => approveLeave(item.id, item.user_id, item.date, reviewComment),
+                        actionLabel: '准假',
+                        checkInId: item.id,
+                        dateLabel: formatDay(item.date),
+                        memberName: displayName,
+                        successMessage: '已准假。',
+                        summary: '准假后这一天将不再按缺卡处理。',
+                        title: '确认准假',
+                        tone: 'primary',
+                      })
                     }
                     disabled={Boolean(reviewingCheckInId || confirmRequest)}
                   >
@@ -235,12 +365,17 @@ export default function CoachReview() {
                   className="return-review-button"
                   type="button"
                   onClick={() =>
-                    requestReviewAction(
-                      item.id,
-                      () => returnForResubmission(item),
-                      '已退回。',
-                      `确认退回 · ${displayName} · ${formatDay(item.date)}？`,
-                    )
+                    requestReviewAction({
+                      action: () => returnForResubmission(item),
+                      actionLabel: '退回',
+                      checkInId: item.id,
+                      dateLabel: formatDay(item.date),
+                      memberName: displayName,
+                      successMessage: '已退回。',
+                      summary: '退回后成员需要重新提交这次打卡。',
+                      title: '确认退回',
+                      tone: 'primary',
+                    })
                   }
                   disabled={Boolean(reviewingCheckInId || confirmRequest)}
                 >
@@ -251,12 +386,17 @@ export default function CoachReview() {
                   className="review-action-danger"
                   type="button"
                   onClick={() =>
-                    requestReviewAction(
-                      item.id,
-                      () => markCheckInMissedWithPenalty(item, memberPlans, buildReviewUpdate(reviewComment)),
-                      '已记为缺卡。',
-                      `确认记缺卡 · ${displayName} · ${formatDay(item.date)}？`,
-                    )
+                    requestReviewAction({
+                      action: () => markCheckInMissedWithPenalty(item, memberPlans, buildReviewUpdate(reviewComment)),
+                      actionLabel: '记缺卡',
+                      checkInId: item.id,
+                      dateLabel: formatDay(item.date),
+                      memberName: displayName,
+                      successMessage: '已记为缺卡。',
+                      summary: '记缺卡后会按规则生成或保留对应账款。',
+                      title: '确认记缺卡',
+                      tone: 'danger',
+                    })
                   }
                   disabled={Boolean(reviewingCheckInId || confirmRequest)}
                 >
@@ -267,23 +407,43 @@ export default function CoachReview() {
           )
         })}
       </div>
-      {confirmRequest && (
-        <div className="waiver-modal-backdrop" role="presentation">
-          <section className="waiver-modal review-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="review-confirm-title">
-            <div>
-              <h3 id="review-confirm-title">确认</h3>
-              <p>{confirmRequest.message}</p>
+      {confirmRequest && createPortal(
+        <div className="waiver-modal-backdrop review-confirm-backdrop" role="presentation">
+          <section
+            className={`waiver-modal review-confirm-modal${confirmRequest.tone === 'danger' ? ' danger' : ''}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="review-confirm-title"
+            aria-describedby="review-confirm-detail"
+            ref={confirmModalRef}
+            tabIndex={-1}
+          >
+            <div className="review-confirm-copy">
+              <span className="review-confirm-kicker">审核确认</span>
+              <h3 id="review-confirm-title">{confirmRequest.title}</h3>
+              <p id="review-confirm-detail">{confirmRequest.summary}</p>
             </div>
-            <div className="waiver-modal-actions">
+            <div className="review-confirm-meta" aria-label="确认对象">
+              <span>
+                <small>成员</small>
+                <strong>{confirmRequest.memberName}</strong>
+              </span>
+              <span>
+                <small>日期</small>
+                <strong>{confirmRequest.dateLabel}</strong>
+              </span>
+            </div>
+            <div className="waiver-modal-actions review-confirm-actions">
               <button type="button" onClick={cancelReviewAction} disabled={Boolean(reviewingCheckInId)}>
                 取消
               </button>
               <button type="button" onClick={() => void confirmReviewAction()} disabled={Boolean(reviewingCheckInId)}>
-                {reviewingCheckInId ? '处理中' : '确认'}
+                {reviewingCheckInId ? '处理中' : confirmRequest.actionLabel}
               </button>
             </div>
           </section>
-        </div>
+        </div>,
+        document.body,
       )}
     </section>
   )

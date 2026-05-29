@@ -757,6 +757,11 @@ textarea:focus-visible,
   opacity: 1;
 }
 
+.plan-calendar-day.selected .calendar-day-number {
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(19, 91, 57, 0.22);
+}
+
 .plan-calendar-day.has-plan:not(.selected) {
   border-color: #aad4b9;
   background: var(--brand-soft);
@@ -1713,14 +1718,58 @@ label {
 }
 
 .week-tabs {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(248, 251, 247, 0.82);
+}
+
+.week-tabs button {
+  min-width: 0;
+  min-height: 58px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 8px 6px;
+  border-color: transparent;
+  border-radius: calc(var(--radius) - 5px);
+  background: transparent;
+  box-shadow: none;
+  line-height: 1;
+}
+
+.week-tab-day,
+.week-tab-date {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.week-tab-day {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.week-tab-date {
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 860;
 }
 
 .week-tabs button.active {
   color: #fff;
   border-color: var(--brand-2);
-  background: var(--brand);
+  background: linear-gradient(180deg, var(--brand), var(--brand-2));
   box-shadow: 0 10px 22px rgba(21, 148, 93, 0.18);
+}
+
+.week-tabs button.active .week-tab-day,
+.week-tabs button.active .week-tab-date {
+  color: #fff;
 }
 
 .evidence-grid,
@@ -2067,7 +2116,7 @@ label {
 
 .row-actions.review-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   justify-content: stretch;
   gap: 8px;
 }
@@ -2310,20 +2359,102 @@ label {
 }
 
 .review-confirm-modal {
-  gap: 18px;
+  width: min(460px, calc(100vw - 32px));
+  gap: 16px;
+  padding: 24px;
+}
+
+.review-confirm-modal:focus {
+  outline: 0;
+}
+
+.review-confirm-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.review-confirm-kicker {
+  width: fit-content;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 9px;
+  border: 1px solid #aad4b9;
+  border-radius: var(--radius);
+  color: var(--brand-2);
+  background: var(--brand-soft);
+  font-size: 12px;
+  font-weight: 820;
+  line-height: 1;
 }
 
 .review-confirm-modal h3 {
   margin: 0;
   color: var(--ink);
-  font-size: 20px;
-  font-weight: 840;
+  font-size: 26px;
+  font-weight: 860;
+  line-height: 1.12;
 }
 
 .review-confirm-modal p {
-  margin: 10px 0 0;
+  margin: 0;
   color: var(--ink-soft);
   line-height: 1.55;
+}
+
+.review-confirm-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(248, 251, 247, 0.86);
+}
+
+.review-confirm-meta span {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(220, 230, 221, 0.92);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.review-confirm-meta small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1;
+}
+
+.review-confirm-meta strong {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 840;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.review-confirm-actions {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr);
+}
+
+.review-confirm-actions button {
+  min-height: 48px;
+}
+
+.review-confirm-modal.danger .review-confirm-kicker {
+  color: var(--danger);
+  border-color: #e8b7b2;
+  background: var(--danger-soft);
+}
+
+.review-confirm-modal.danger .review-confirm-actions button:last-child {
+  border-color: #a9342f;
+  background: var(--danger);
 }
 
 .penalty-card.waiver-under-review,
@@ -3794,6 +3925,10 @@ button:active,
     padding: 0 10px;
   }
 
+  .week-tabs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .hero-panel {
     padding: 22px;
   }
@@ -3829,6 +3964,14 @@ button:active,
     grid-column: auto;
   }
 
+  .week-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .week-tabs button {
+    min-height: 52px;
+  }
+
   .payments-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3840,6 +3983,10 @@ button:active,
 
   .review-summary-bar span {
     text-align: left;
+  }
+
+  .row-actions.review-actions > button:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
 
   .fund-expense-actions,

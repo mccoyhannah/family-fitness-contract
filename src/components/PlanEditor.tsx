@@ -30,20 +30,19 @@ export default function PlanEditor({ initial, onSubmit, restBlockedMessage, subm
     setSaving(true)
     setError('')
     try {
-      if (!draft.is_training && restBlockedMessage) throw new Error(restBlockedMessage)
       const items = draft.items
         .map((item, index) => ({ ...item, sort_order: index }))
         .filter((item) => item.name.trim())
       await onSubmit({
         ...draft,
-        title: draft.title.trim() || '今日训练',
+        title: draft.title.trim() || (draft.is_training ? '今日训练' : '今日休息'),
         focus: draft.focus.trim() || defaultPlanFocusForSource(draft.source),
         deadline: draft.deadline || '23:00',
         items: draft.is_training
           ? items.length > 0
             ? items
             : [{ name: defaultPlanFocusForSource(draft.source), sets: '1 次', reps: '完成即可', note: '按身体状态量力而行', sort_order: 0 }]
-          : items,
+          : [],
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败，请稍后重试。')
@@ -53,10 +52,7 @@ export default function PlanEditor({ initial, onSubmit, restBlockedMessage, subm
   }
 
   const changeTrainingMode = (isTraining: boolean) => {
-    if (!isTraining && restBlockedMessage) {
-      setError(restBlockedMessage)
-      return
-    }
+    setError('')
     setDraft({ ...draft, is_training: isTraining })
   }
 
@@ -100,16 +96,26 @@ export default function PlanEditor({ initial, onSubmit, restBlockedMessage, subm
             onChange={(event) => setDraft({ ...draft, deadline: event.target.value })}
           />
         </label>
-        <label className="switch-row">
-          <input
-            type="checkbox"
-            checked={draft.is_training}
-            onChange={(event) => changeTrainingMode(event.target.checked)}
-          />
-          训练日
-        </label>
+        <div className="plan-mode-group" role="group" aria-label="计划类型">
+          <label className={`switch-row plan-mode-option${draft.is_training ? ' selected' : ''}`}>
+            <input
+              type="checkbox"
+              checked={draft.is_training}
+              onChange={(event) => changeTrainingMode(event.target.checked)}
+            />
+            训练日
+          </label>
+          <label className={`switch-row plan-mode-option${!draft.is_training ? ' selected' : ''}`}>
+            <input
+              type="checkbox"
+              checked={!draft.is_training}
+              onChange={(event) => changeTrainingMode(!event.target.checked)}
+            />
+            休息日
+          </label>
+        </div>
       </div>
-      {restBlockedMessage && <p className="form-warning">{restBlockedMessage}</p>}
+      {!draft.is_training && restBlockedMessage && <p className="form-warning">{restBlockedMessage}</p>}
 
       <div className="section-heading compact-heading contract-section-heading">
         <h3>动作</h3>

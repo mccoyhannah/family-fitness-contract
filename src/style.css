@@ -1483,6 +1483,23 @@ label {
   flex: 0 0 auto;
 }
 
+.plan-mode-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.plan-mode-option {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.plan-mode-option.selected {
+  border-color: #83c9a1;
+  color: var(--brand-2);
+  background: var(--brand-soft);
+}
+
 .compact-heading {
   margin: 6px 0 0;
 }
@@ -2721,6 +2738,20 @@ code {
   align-items: flex-start;
 }
 
+.dashboard-record-button {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+}
+
+.dashboard-record-button:hover {
+  border-color: #9ecfb0;
+  box-shadow: var(--shadow-soft);
+}
+
 .dashboard-record-copy {
   min-width: 0;
   display: grid;
@@ -2735,6 +2766,42 @@ code {
   display: block;
   color: var(--muted);
   line-height: 1.55;
+}
+
+.dashboard-record-modal {
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(84vh, 760px);
+  overflow: auto;
+}
+
+.dashboard-record-modal:focus {
+  outline: 0;
+}
+
+.dashboard-record-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dashboard-record-close {
+  flex: 0 0 auto;
+}
+
+.dashboard-record-meta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-record-detail-panel {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.dashboard-evidence-grid a {
+  display: inline-flex;
+  max-width: 100%;
 }
 
 .checkin-screen {
@@ -4177,6 +4244,20 @@ button:active,
   .review-card-title-row {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .plan-mode-group,
+  .dashboard-record-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-record-modal-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-record-close {
+    width: 100%;
   }
 
   .ledger-donation-paybox {

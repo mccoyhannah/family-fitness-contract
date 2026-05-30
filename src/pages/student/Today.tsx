@@ -264,6 +264,17 @@ export default function Today() {
     return planFromTemplate(profile.id, todayTemplate, 'student')
   }, [profile, todayTemplate])
 
+  const saveSelfPlan = async (nextDraft: PlanDraft) => {
+    if (!nextDraft.is_training) {
+      const conflict = getRestConflict(nextDraft.date, plans, checkIns, penalties)
+      if (conflict) {
+        notifyApp({ tone: 'warning', message: conflict.message })
+        throw new Error(conflict.message)
+      }
+    }
+    return savePlan(nextDraft)
+  }
+
   if (showLoadingSkeleton) return <TodayLoadingSkeleton />
 
   if (!todayTemplate) {
@@ -330,7 +341,7 @@ export default function Today() {
             onLeaveReasonChange={setLeaveReason}
             onMarkRest={markTodayRest}
             onRestBlockedNotice={(message) => notifyApp({ tone: 'warning', message })}
-            onSave={savePlan}
+            onSave={saveSelfPlan}
             onTogglePlan={toggleSelfPlan}
           />
         )

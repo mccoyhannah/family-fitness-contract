@@ -12,7 +12,7 @@ import { buildPlan, planFromTemplate, planToExercises } from '../../lib/plan'
 import { getStudentPlanCardAction } from '../../lib/planCalendar'
 import { formatPlanFocusText, formatPlanSourceLabel } from '../../lib/planDisplay'
 import { getRestConflict } from '../../lib/restRules'
-import type { CheckIn, Penalty, Plan, PlanDay, PlanDraft } from '../../lib/types'
+import type { Plan, PlanDay, PlanDraft } from '../../lib/types'
 
 export default function Plan() {
   const { profile } = useAuth()
@@ -65,13 +65,10 @@ export default function Plan() {
           return (
             <PlanDayCard
               day={day}
-              checkIns={checkIns}
               editing={editing}
               expanded={expandedDates.has(day.date)}
               key={day.date}
               plan={plan}
-              plans={plans}
-              penalties={penalties}
               studentId={profile?.id}
               onCancelEdit={() => setEditingDate(null)}
               onEdit={() => {
@@ -89,7 +86,6 @@ export default function Plan() {
 }
 
 function PlanDayCard({
-  checkIns,
   day,
   editing,
   expanded,
@@ -97,12 +93,9 @@ function PlanDayCard({
   onEdit,
   onSave,
   onToggle,
-  penalties,
   plan,
-  plans,
   studentId,
 }: {
-  checkIns: CheckIn[]
   day: PlanDay
   editing: boolean
   expanded: boolean
@@ -110,9 +103,7 @@ function PlanDayCard({
   onEdit: () => void
   onSave: (draft: PlanDraft) => Promise<void>
   onToggle: () => void
-  penalties: Penalty[]
   plan?: Plan
-  plans: Plan[]
   studentId?: string
 }) {
   const exercises = plan ? planToExercises(plan) : []
@@ -123,7 +114,6 @@ function PlanDayCard({
     if (plan) return planToDraft(plan)
     return planFromTemplate(studentId, day, 'student')
   }, [action.canConvertRestToTraining, day, plan, studentId])
-  const restBlockedMessage = draft ? getRestConflict(draft.date, plans, checkIns, penalties)?.message ?? null : null
   const editorTitle = action.canConvertRestToTraining ? '改成训练计划' : plan ? '编辑自定计划' : '制定这一天的计划'
   const submitLabel = action.canConvertRestToTraining ? '保存训练计划' : plan ? '保存自定计划' : '保存这天计划'
 
@@ -184,7 +174,6 @@ function PlanDayCard({
           </div>
           <PlanEditor
             initial={draft}
-            restBlockedMessage={restBlockedMessage}
             submitLabel={submitLabel}
             onSubmit={onSave}
           />

@@ -128,7 +128,6 @@ export default function CoachMembers() {
   const savingCurrentMember = Boolean(selectedMember && savingMemberId === selectedMember.id)
   const selectedCheckIns = selectedMember ? checkIns.filter((item) => item.user_id === selectedMember.id) : []
   const selectedPenalties = selectedMember ? penalties.filter((item) => item.user_id === selectedMember.id) : []
-  const restBlockedMessage = draft ? getRestConflict(draft.date, plans, selectedCheckIns, selectedPenalties)?.message ?? null : null
 
   const submitAdd = async () => {
     const result = await addMember(identifier, displayName)
@@ -444,7 +443,6 @@ export default function CoachMembers() {
             <PlanEditor
               key={draftKey}
               initial={draft}
-              restBlockedMessage={restBlockedMessage}
               submitLabel="保存教练计划"
               onSubmit={submitPlan}
             />

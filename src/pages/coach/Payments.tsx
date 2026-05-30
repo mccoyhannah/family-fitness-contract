@@ -432,6 +432,7 @@ export default function CoachPayments() {
         {visiblePenalties.length === 0 && <p className="muted">当前没有符合筛选条件的基金记录。</p>}
         {visiblePenalties.map((penalty) => {
           const displayName = memberNameById.get(penalty.user_id) || '成员'
+          const penaltyReason = formatPenaltyReason(penalty)
           const action = activePaymentAction?.penaltyId === penalty.id ? activePaymentAction : null
           const canAct = penalty.status === 'pending' || penalty.status === 'payment_reported'
           return (
@@ -441,11 +442,23 @@ export default function CoachPayments() {
                   <strong>¥{formatAmount(penalty.amount)}</strong>
                   <span>缺卡贡献</span>
                 </div>
-                <div className="payment-meta-row" aria-label="账款摘要">
-                  <span className="payment-meta-chip">{displayName}</span>
-                  <span className="payment-meta-chip">{formatDay(penalty.date)}</span>
-                  <span className="payment-meta-chip">连续第 {penalty.consecutive_count} 天</span>
-                  <span className="payment-meta-chip reason">原因：{formatPenaltyReason(penalty)}</span>
+                <div className="payment-summary-grid" aria-label="账款摘要">
+                  <span className="payment-summary-item">
+                    <small>成员</small>
+                    <strong>{displayName}</strong>
+                  </span>
+                  <span className="payment-summary-item">
+                    <small>日期</small>
+                    <strong>{formatDay(penalty.date)}</strong>
+                  </span>
+                  <span className="payment-summary-item">
+                    <small>连续</small>
+                    <strong>第 {penalty.consecutive_count} 天</strong>
+                  </span>
+                </div>
+                <div className="payment-reason-box">
+                  <small>原因</small>
+                  <p>{penaltyReason}</p>
                 </div>
                 {penalty.status === 'payment_reported' && (
                   <div className="payment-report-note">

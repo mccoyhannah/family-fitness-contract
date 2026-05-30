@@ -689,7 +689,6 @@ function TodayOpenPlanSection({
         <div className="self-plan-editor-scroll-target" ref={editorRef}>
           <PlanEditor
             initial={draft}
-            restBlockedMessage={restBlockedMessage}
             submitLabel="保存今日自定计划"
             onSubmit={async (nextDraft) => void (await onSave(nextDraft))}
           />

@@ -130,8 +130,14 @@ export default function PlanEditor({ initial, onSubmit, submitLabel }: PlanEdito
           <div className="plan-item-list contract-term-list">
             {draft.items.map((item, index) => (
               <article className="plan-item-editor contract-term-editor" key={item.id ?? index}>
-                <div className="form-grid">
-                  <label>
+                <div className="plan-item-editor-head">
+                  <span className="plan-item-index">动作 {index + 1}</span>
+                  <button className="icon-action danger-action plan-item-remove" type="button" onClick={() => removeItem(index)} aria-label={`删除动作 ${index + 1}`}>
+                    <Trash2 size={17} />
+                  </button>
+                </div>
+                <div className="plan-item-fields">
+                  <label className="plan-item-name-field">
                     动作名
                     <input value={item.name} onChange={(event) => updateItem(index, 'name', event.target.value)} />
                   </label>
@@ -139,17 +145,12 @@ export default function PlanEditor({ initial, onSubmit, submitLabel }: PlanEdito
                     组数
                     <input value={item.sets} onChange={(event) => updateItem(index, 'sets', event.target.value)} />
                   </label>
-                </div>
-                <div className="form-grid">
                   <label>
                     次数/时间
                     <input value={item.reps} onChange={(event) => updateItem(index, 'reps', event.target.value)} />
                   </label>
-                  <button className="icon-action danger-action" type="button" onClick={() => removeItem(index)} aria-label="删除动作">
-                    <Trash2 size={18} />
-                  </button>
                 </div>
-                <label>
+                <label className="plan-item-note-field">
                   注意事项
                   <input value={item.note} onChange={(event) => updateItem(index, 'note', event.target.value)} />
                 </label>

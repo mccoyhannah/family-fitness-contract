@@ -26,6 +26,7 @@ export default function CheckIn() {
   const navigate = useNavigate()
   const today = toISODate(new Date())
   const todayPlan = plans.find((plan) => plan.date === today)
+  const todayPlanExercises = todayPlan ? planToExercises(todayPlan) : []
   const todayCheckIn = checkIns.find((checkIn) => checkIn.date === today)
   const todayPendingCheckIn = checkIns.find((checkIn) => checkIn.date === today && checkIn.status === 'pending_review')
   const todayMissedCheckIn = checkIns.find((checkIn) => checkIn.date === today && checkIn.status === 'missed')
@@ -99,7 +100,7 @@ export default function CheckIn() {
             ? '今天已记缺卡，可以补交训练记录给教练审核。'
             : todayPendingCheckIn
               ? '今天已有待审核记录，可以更新身体状态和备注。'
-            : '记录身体状态和备注后提交给教练审核。'}
+            : '按今日计划练完后，记录身体状态和备注给教练审核。'}
         </p>
       </div>
       {(submitStatus || error) && (
@@ -117,16 +118,32 @@ export default function CheckIn() {
       )}
       {todayPlan && (
         <div className="day-card checkin-plan-card">
-          <div className="day-head">
-            <strong>{todayPlan.title}</strong>
+          <div className="checkin-plan-head">
+            <div>
+              <span className="checkin-plan-kicker">今日训练清单</span>
+              <strong>{todayPlan.title}</strong>
+            </div>
             <span className={`plan-source-tag ${todayPlan.source}`}>{formatPlanSourceLabel(todayPlan.source)}</span>
           </div>
-          <p className="muted">{formatPlanFocusText(todayPlan.focus, todayPlan.source)} · 截止 {todayPlan.deadline}</p>
-          <div className="exercise-list compact-list">
-            {planToExercises(todayPlan).map((exercise) => (
-              <span className="mini-chip" key={exercise.id}>{exercise.name}</span>
-            ))}
-          </div>
+          <p className="muted">
+            {todayPlan.is_training ? '练完后按下方表单打卡' : '今天是恢复安排'} · {formatPlanFocusText(todayPlan.focus, todayPlan.source)} · 截止 {todayPlan.deadline}
+          </p>
+          {todayPlanExercises.length > 0 ? (
+            <div className="checkin-plan-list" aria-label="今日训练动作">
+              {todayPlanExercises.map((exercise, index) => (
+                <div className="checkin-plan-row" key={exercise.id}>
+                  <span className="checkin-plan-index">{index + 1}</span>
+                  <div className="checkin-plan-main">
+                    <strong>{exercise.name}</strong>
+                    {exercise.note && <small>{exercise.note}</small>}
+                  </div>
+                  <span className="checkin-plan-dose">{exercise.sets} · {exercise.reps}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="checkin-plan-empty">今天没有训练动作。</div>
+          )}
         </div>
       )}
       {restDay && (

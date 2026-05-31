@@ -23,6 +23,7 @@ import { getContributionPromptState, getRestChoiceActionState, type Contribution
 import type { CheckIn, Exercise, Plan, PlanDraft } from '../../lib/types'
 
 const CONTRIBUTION_PROMPT_SHOWN_KEY = 'family-fitness-contract:contribution-prompt-shown-key'
+const LEAVE_OFF_WORK_TIME_OPTIONS = ['18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00']
 
 function readShownContributionPromptKey() {
   try {
@@ -691,7 +692,7 @@ function TodayOpenPlanSection({
         <div className="self-plan-editor-scroll-target" ref={editorRef}>
           <PlanEditor
             initial={draft}
-            submitLabel="保存今日自定计划"
+            submitLabel="保存计划"
             onSubmit={async (nextDraft) => void (await onSave(nextDraft))}
           />
         </div>
@@ -720,15 +721,23 @@ function LeaveRequestFields({
   return (
     <div className="leave-request-fields">
       <div className="leave-details-grid">
-        <label>
-          下班时间
-          <input
-            disabled={disabled}
-            type="time"
-            value={offWorkTime}
-            onChange={(event) => onOffWorkTimeChange(event.target.value)}
-          />
-        </label>
+        <div className="leave-time-field">
+          <div className="field-label">下班时间</div>
+          <div className="leave-time-options" role="group" aria-label="下班时间">
+            {LEAVE_OFF_WORK_TIME_OPTIONS.map((time) => (
+              <button
+                aria-pressed={offWorkTime === time}
+                className={offWorkTime === time ? 'leave-time-option selected' : 'leave-time-option'}
+                disabled={disabled}
+                key={time}
+                type="button"
+                onClick={() => onOffWorkTimeChange(time)}
+              >
+                {time}
+              </button>
+            ))}
+          </div>
+        </div>
         <label>
           请假理由，可空
           <input

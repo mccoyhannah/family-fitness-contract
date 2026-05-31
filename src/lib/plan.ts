@@ -78,6 +78,45 @@ export function planFromTemplate(userId: string, planDay: PlanDay, source: PlanS
   }
 }
 
+export function planDraftFromPlan(userId: string, plan: Plan, date: string, source: PlanSource): PlanDraft {
+  return {
+    user_id: userId,
+    date,
+    title: plan.title,
+    focus: plan.focus,
+    deadline: plan.deadline,
+    is_training: plan.is_training,
+    source,
+    items: plan.items
+      .slice()
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((item, index) => ({
+        name: item.name,
+        sets: item.sets,
+        reps: item.reps,
+        note: item.note,
+        sort_order: index,
+      })),
+  }
+}
+
+export function latestCoachTrainingPlanBefore(plans: Plan[], date: string) {
+  return plans
+    .filter((plan) => plan.source === 'coach' && plan.is_training && plan.date < date)
+    .sort((a, b) => b.date.localeCompare(a.date))[0]
+}
+
+export function studentDraftFromRecentCoachPlan(
+  userId: string,
+  plans: Plan[],
+  date: string,
+  fallbackDay: PlanDay,
+): PlanDraft {
+  const latestCoachPlan = latestCoachTrainingPlanBefore(plans, date)
+  if (latestCoachPlan) return planDraftFromPlan(userId, latestCoachPlan, date, 'student')
+  return planFromTemplate(userId, fallbackDay, 'student')
+}
+
 export function planToExercises(plan: Pick<Plan, 'items'>): Exercise[] {
   return plan.items
     .slice()

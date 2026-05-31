@@ -40,6 +40,15 @@ const toneClass: Record<RecentRecord['tone'], string> = {
   today_due: 'today_due',
 }
 
+const systemSubmissionNotes = new Set([
+  '已提交，等待教练确认',
+  '已提交，等待教练确认。',
+  '补交打卡，等待教练确认',
+  '补交打卡，等待教练确认。',
+  '请假申请，等待教练确认',
+  '请假申请，等待教练确认。',
+])
+
 function isWaiverRequest(reason?: string | null) {
   return Boolean(reason?.includes(WAIVER_PREFIX))
 }
@@ -79,11 +88,17 @@ function cleanRecentRecordDetail(detail: string) {
     .replace('自动判定缺卡', '缺卡')
 }
 
+function visibleCheckInNote(note?: string | null) {
+  const trimmed = note?.trim()
+  if (!trimmed || systemSubmissionNotes.has(trimmed)) return ''
+  return trimmed
+}
+
 function checkInDetail(checkIn: CheckIn) {
-  if (checkIn.status === 'completed') return checkIn.note || '训练已完成'
-  if (checkIn.status === 'excused') return checkIn.leave_reason || checkIn.note || '已请假'
-  if (checkIn.status === 'pending_review') return checkIn.note || '等待审核'
-  return cleanRecentRecordDetail(checkIn.note || checkIn.leave_reason || '训练日未打卡')
+  if (checkIn.status === 'completed') return '训练完成'
+  if (checkIn.status === 'excused') return '已请假'
+  if (checkIn.status === 'pending_review') return '待审核'
+  return '未打卡'
 }
 
 function planDetail(plan: Plan) {
@@ -289,6 +304,7 @@ function DashboardRecordModal({
   const waiverReason = isWaiverRequest(checkIn?.leave_reason) ? cleanWaiverReason(checkIn?.leave_reason) : null
   const leaveReason = checkIn?.leave_reason && !waiverReason ? checkIn.leave_reason : null
   const hasReview = Boolean(checkIn?.review_comment || checkIn?.reviewed_at)
+  const note = visibleCheckInNote(checkIn?.note)
 
   return (
     <section
@@ -332,7 +348,7 @@ function DashboardRecordModal({
             <>
               {waiverReason && <p className="review-note-box">补卡免罚：{waiverReason}</p>}
               {leaveReason && <p className="review-note-box">请假理由：{leaveReason}</p>}
-              {checkIn.note ? <p className="review-note-box">{checkIn.note}</p> : <p className="review-empty-detail">未填写备注。</p>}
+              {note ? <p className="review-note-box">{note}</p> : <p className="review-empty-detail">未填写备注。</p>}
               {checkIn.issues.length > 0 ? (
                 <div className="review-chip-row">
                   {checkIn.issues.map((issue) => (

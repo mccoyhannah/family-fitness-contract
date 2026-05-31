@@ -14,7 +14,7 @@ import { usePlans } from '../../hooks/usePlans'
 import { formatDay, toISODate } from '../../lib/date'
 import { buildLeaveRequestReason, validateLeaveRequest } from '../../lib/leaveRequest'
 import { notifyApp } from '../../lib/notice'
-import { buildPlan, planFromTemplate, planToExercises } from '../../lib/plan'
+import { buildPlan, planToExercises, studentDraftFromRecentCoachPlan } from '../../lib/plan'
 import { formatPlanFocusText, formatPlanSourceLabel } from '../../lib/planDisplay'
 import { getRestConflict } from '../../lib/restRules'
 import { buildMissedSync } from '../../lib/sync'
@@ -260,9 +260,9 @@ export default function Today() {
   }
 
   const selfPlanDraft = useMemo<PlanDraft | null>(() => {
-    if (!profile) return null
-    return planFromTemplate(profile.id, todayTemplate, 'student')
-  }, [profile, todayTemplate])
+    if (!profile || !todayTemplate) return null
+    return studentDraftFromRecentCoachPlan(profile.id, plans, today, todayTemplate)
+  }, [plans, profile, today, todayTemplate])
 
   const saveSelfPlan = async (nextDraft: PlanDraft) => {
     if (!nextDraft.is_training) {
@@ -272,7 +272,9 @@ export default function Today() {
         throw new Error(conflict.message)
       }
     }
-    return savePlan(nextDraft)
+    const savedPlan = await savePlan(nextDraft)
+    notifyApp({ tone: 'success', message: '今日计划已保存。' })
+    return savedPlan
   }
 
   if (showLoadingSkeleton) return <TodayLoadingSkeleton />

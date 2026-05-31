@@ -3,6 +3,7 @@ import test from 'node:test'
 import { computeConsecutiveMisses } from '../src/lib/penalty.ts'
 import { buildMissedSync } from '../src/lib/sync.ts'
 import { buildLeaveRequestReason, validateLeaveRequest } from '../src/lib/leaveRequest.ts'
+import { latestCoachTrainingPlanBefore, planDraftFromPlan, studentDraftFromRecentCoachPlan } from '../src/lib/plan.ts'
 import { getMonthCalendarDays, getPlansInWeek, getStudentPlanCardAction, getWeekDates } from '../src/lib/planCalendar.ts'
 import { getRestConflict } from '../src/lib/restRules.ts'
 import { getContributionPromptState, getRestChoiceActionState } from '../src/lib/todayPrompts.ts'
@@ -40,6 +41,39 @@ function penalty(date: string, consecutiveCount: number, amount: number, status:
 
 function plan(date: string, isTraining: boolean): Pick<Plan, 'date' | 'is_training'> {
   return { date, is_training: isTraining }
+}
+
+function fullPlan(overrides: Partial<Plan> & Pick<Plan, 'date' | 'id'>): Plan {
+  return {
+    id: overrides.id,
+    user_id: overrides.user_id ?? userId,
+    date: overrides.date,
+    title: overrides.title ?? '教练训练',
+    focus: overrides.focus ?? '力量',
+    deadline: overrides.deadline ?? '23:00',
+    is_training: overrides.is_training ?? true,
+    source: overrides.source ?? 'coach',
+    items: overrides.items ?? [
+      {
+        id: `${overrides.id}-item-2`,
+        plan_id: overrides.id,
+        name: '后做动作',
+        sets: '2 组',
+        reps: '8 次',
+        note: '排第二',
+        sort_order: 1,
+      },
+      {
+        id: `${overrides.id}-item-1`,
+        plan_id: overrides.id,
+        name: '先做动作',
+        sets: '1 组',
+        reps: '10 次',
+        note: '排第一',
+        sort_order: 0,
+      },
+    ],
+  }
 }
 
 test('buildMissedSync recalculates old same-day missed penalties into a continuous sequence', () => {
@@ -215,4 +249,65 @@ test('student plan card actions hide rest details and keep training actions', ()
     canView: false,
     editLabel: null,
   })
+})
+
+test('coach training plan can be copied into a new student draft for today', () => {
+  const sourcePlan = fullPlan({ id: 'coach-plan-1', date: '2026-05-28' })
+  const draft = planDraftFromPlan(userId, sourcePlan, '2026-05-30', 'student')
+
+  assert.equal('id' in draft, false)
+  assert.equal(draft.user_id, userId)
+  assert.equal(draft.date, '2026-05-30')
+  assert.equal(draft.source, 'student')
+  assert.equal(draft.title, sourcePlan.title)
+  assert.deepEqual(
+    draft.items.map((item) => [item.name, item.sort_order, 'id' in item]),
+    [
+      ['先做动作', 0, false],
+      ['后做动作', 1, false],
+    ],
+  )
+})
+
+test('latest coach training plan ignores rest days, student plans, and future dates', () => {
+  const plans = [
+    fullPlan({ id: 'old-coach-training', date: '2026-05-20' }),
+    fullPlan({ id: 'student-training', date: '2026-05-29', source: 'student' }),
+    fullPlan({ id: 'coach-rest', date: '2026-05-29', is_training: false }),
+    fullPlan({ id: 'latest-coach-training', date: '2026-05-28' }),
+    fullPlan({ id: 'future-coach-training', date: '2026-05-31' }),
+  ]
+
+  assert.equal(latestCoachTrainingPlanBefore(plans, '2026-05-30')?.id, 'latest-coach-training')
+  assert.equal(latestCoachTrainingPlanBefore(plans, '2026-05-20'), undefined)
+})
+
+test('student self-plan draft falls back to the template without coach history', () => {
+  const draft = studentDraftFromRecentCoachPlan(
+    userId,
+    [fullPlan({ id: 'student-plan', date: '2026-05-28', source: 'student' })],
+    '2026-05-30',
+    {
+      date: '2026-05-30',
+      dayOfWeek: 6,
+      title: '模板训练',
+      focus: '平衡',
+      deadline: '22:30',
+      isTraining: true,
+      exercises: [
+        {
+          id: 'template-item',
+          name: '模板动作',
+          sets: '3 组',
+          reps: '20 秒',
+          note: '稳一点',
+        },
+      ],
+    },
+  )
+
+  assert.equal(draft.source, 'student')
+  assert.equal(draft.title, '模板训练')
+  assert.equal(draft.deadline, '22:30')
+  assert.deepEqual(draft.items.map((item) => item.name), ['模板动作'])
 })

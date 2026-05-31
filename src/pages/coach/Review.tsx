@@ -482,11 +482,11 @@ function ReviewExpandedDetails({
         )}
       </section>
 
-      <section className="review-detail-section">
-        <div className="review-detail-head">
-          <strong>计划内容</strong>
-          <span>{plan ? `${plan.source === 'coach' ? '教练制定' : '成员自定'} · 截止 ${plan.deadline}` : '未同步'}</span>
-        </div>
+        <section className="review-detail-section">
+          <div className="review-detail-head">
+            <strong>计划内容</strong>
+            <span>{plan ? (plan.source === 'coach' ? '教练制定' : '成员自定') : '未同步'}</span>
+          </div>
         {plan ? (
           <>
             <p className="review-plan-summary">{plan.title} · {plan.focus}</p>

@@ -67,7 +67,7 @@ export function usePenaltySettings() {
   }, [load])
 
   const saveSettings = async (nextSettings: Partial<PenaltySettings>) => {
-    const next = normalizePenaltySettings(nextSettings)
+    const next = normalizePenaltySettings({ ...settings, ...nextSettings })
     if (shouldUseLocalPenaltySettings()) {
       writeLocalPenaltySettings(next)
       setSettings(next)
@@ -80,6 +80,7 @@ export function usePenaltySettings() {
       .from('penalty_settings')
       .update({
         base_amount: next.base_amount,
+        check_in_deadline: next.check_in_deadline,
         daily_increment: next.daily_increment,
         max_amount: next.max_amount,
         updated_at: new Date().toISOString(),

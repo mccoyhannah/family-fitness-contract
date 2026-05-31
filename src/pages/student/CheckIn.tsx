@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import FatigueCards from '../../components/FatigueCards'
 import { useAuth } from '../../hooks/useAuth'
 import { useCheckIns } from '../../hooks/useCheckIns'
+import { usePenaltySettings } from '../../hooks/usePenaltySettings'
 import { usePlans } from '../../hooks/usePlans'
 import { toISODate } from '../../lib/date'
 import { notifyApp } from '../../lib/notice'
@@ -16,6 +17,7 @@ type SubmitStage = 'idle' | 'saving' | 'failed' | 'success'
 export default function CheckIn() {
   const { profile } = useAuth()
   const { checkIns, upsertCheckIn } = useCheckIns(profile?.id)
+  const { settings: penaltySettings } = usePenaltySettings()
   const { loading: plansLoading, plans } = usePlans(profile?.id)
   const [fatigue, setFatigue] = useState(3)
   const [note, setNote] = useState('')
@@ -134,7 +136,7 @@ export default function CheckIn() {
             <span className={`plan-source-tag ${todayPlan.source}`}>{formatPlanSourceLabel(todayPlan.source)}</span>
           </div>
           <p className="muted">
-            练完后按下方表单打卡 · {formatPlanFocusText(todayPlan.focus, todayPlan.source)} · 截止 {todayPlan.deadline}
+            练完后按下方表单打卡 · {formatPlanFocusText(todayPlan.focus, todayPlan.source)} · 打卡截止 {penaltySettings.check_in_deadline}
           </p>
           {todayPlanExercises.length > 0 ? (
             <div className="checkin-plan-list" aria-label="今日训练动作">

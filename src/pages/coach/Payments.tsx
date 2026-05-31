@@ -13,7 +13,8 @@ import { usePenaltySettings } from '../../hooks/usePenaltySettings'
 import { formatDay, toISODate } from '../../lib/date'
 import { displayMemberLabel } from '../../lib/memberLabels'
 import { notifyApp } from '../../lib/notice'
-import type { FundExpense, FundExpensePurpose, Penalty, PenaltyStatus } from '../../lib/types'
+import { CHECK_IN_DEADLINE_OPTIONS } from '../../lib/penaltySettings'
+import type { FundExpense, FundExpensePurpose, Penalty, PenaltySettings, PenaltyStatus } from '../../lib/types'
 
 type PenaltyAction = {
   penaltyId: string
@@ -35,6 +36,8 @@ type ExpenseDraft = {
   spent_on: string
   title: string
 }
+
+type RuleDraft = Pick<PenaltySettings, 'base_amount' | 'check_in_deadline' | 'daily_increment' | 'max_amount'>
 
 const fundPurposeLabel: Record<FundExpensePurpose, string> = {
   ai: 'AI TOKEN / 订阅',
@@ -99,8 +102,9 @@ export default function CoachPayments() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'payment_reported' | 'paid' | 'waived'>('all')
   const [sortOrder, setSortOrder] = useState<PaymentSortOrder>('priority')
   const [activePaymentAction, setActivePaymentAction] = useState<PenaltyAction | null>(null)
-  const [ruleDraft, setRuleDraft] = useState(() => ({
+  const [ruleDraft, setRuleDraft] = useState<RuleDraft>(() => ({
     base_amount: penaltySettings.base_amount,
+    check_in_deadline: penaltySettings.check_in_deadline,
     daily_increment: penaltySettings.daily_increment,
     max_amount: penaltySettings.max_amount,
   }))
@@ -178,6 +182,7 @@ export default function CoachPayments() {
     if (savingRule) return
     setRuleDraft({
       base_amount: penaltySettings.base_amount,
+      check_in_deadline: penaltySettings.check_in_deadline,
       daily_increment: penaltySettings.daily_increment,
       max_amount: penaltySettings.max_amount,
     })
@@ -251,8 +256,13 @@ export default function CoachPayments() {
     }
   }
 
-  const changeRuleDraft = (key: keyof typeof ruleDraft, value: number) => {
+  const changeRuleAmount = (key: 'base_amount' | 'daily_increment' | 'max_amount', value: number) => {
     setRuleDraft((current) => ({ ...current, [key]: Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0 }))
+    setRuleMessage('')
+  }
+
+  const changeRuleDeadline = (value: string) => {
+    setRuleDraft((current) => ({ ...current, check_in_deadline: value }))
     setRuleMessage('')
   }
 
@@ -269,11 +279,12 @@ export default function CoachPayments() {
       const saved = await saveSettings(ruleDraft)
       setRuleDraft({
         base_amount: saved.base_amount,
+        check_in_deadline: saved.check_in_deadline,
         daily_increment: saved.daily_increment,
         max_amount: saved.max_amount,
       })
-      setRuleMessage('规则已保存，只影响之后新生成的待贡献金额。')
-      notifyApp({ tone: 'success', message: '贡献规则已保存。' })
+      setRuleMessage('规则已保存。')
+      notifyApp({ tone: 'success', message: '规则已保存。' })
     } catch {
       setRuleMessage('规则保存失败，请检查网络后再试。')
       notifyApp({ tone: 'warning', message: '规则保存失败，请检查网络后再试。' })
@@ -518,7 +529,7 @@ export default function CoachPayments() {
             <Settings2 aria-hidden="true" size={18} />
             <span>
               <strong>基金设置</strong>
-              <small>贡献规则 / 收款码 / 支出记录</small>
+              <small>贡献规则 / 打卡截止 / 收款码</small>
             </span>
           </span>
           {fundSettingsOpen ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
@@ -529,7 +540,7 @@ export default function CoachPayments() {
               <div className="penalty-rule-head">
                 <div>
                   <strong>贡献规则</strong>
-                  <span>之后新缺卡生效</span>
+                  <span>打卡截止 {ruleDraft.check_in_deadline}</span>
                 </div>
               </div>
               <form className="penalty-rule-grid" onSubmit={(event) => void submitPenaltyRule(event)}>
@@ -541,7 +552,7 @@ export default function CoachPayments() {
                     step={1}
                     type="number"
                     value={ruleDraft.base_amount}
-                    onChange={(event) => changeRuleDraft('base_amount', event.currentTarget.valueAsNumber)}
+                    onChange={(event) => changeRuleAmount('base_amount', event.currentTarget.valueAsNumber)}
                   />
                 </label>
                 <label>
@@ -552,7 +563,7 @@ export default function CoachPayments() {
                     step={1}
                     type="number"
                     value={ruleDraft.daily_increment}
-                    onChange={(event) => changeRuleDraft('daily_increment', event.currentTarget.valueAsNumber)}
+                    onChange={(event) => changeRuleAmount('daily_increment', event.currentTarget.valueAsNumber)}
                   />
                 </label>
                 <label>
@@ -563,15 +574,31 @@ export default function CoachPayments() {
                     step={1}
                     type="number"
                     value={ruleDraft.max_amount}
-                    onChange={(event) => changeRuleDraft('max_amount', event.currentTarget.valueAsNumber)}
+                    onChange={(event) => changeRuleAmount('max_amount', event.currentTarget.valueAsNumber)}
                   />
                 </label>
+                <fieldset className="check-in-deadline-field">
+                  <legend>打卡截止</legend>
+                  <div className="check-in-deadline-options" role="group" aria-label="打卡截止时间">
+                    {CHECK_IN_DEADLINE_OPTIONS.map((time) => (
+                      <button
+                        aria-pressed={ruleDraft.check_in_deadline === time}
+                        className={ruleDraft.check_in_deadline === time ? 'active' : ''}
+                        key={time}
+                        type="button"
+                        onClick={() => changeRuleDeadline(time)}
+                      >
+                        {time}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
                 <button type="submit" disabled={penaltySettingsLoading || savingRule}>
                   {savingRule ? '保存中' : '保存规则'}
                 </button>
               </form>
               <p className={ruleMessage ? ruleMessage.includes('失败') || ruleMessage.includes('不能') ? 'form-error penalty-rule-message' : 'form-success penalty-rule-message' : 'penalty-rule-message'} aria-live="polite">
-                {ruleMessage || `第 1 天 ¥${formatAmount(ruleDraft.base_amount)} · 每天 +¥${formatAmount(ruleDraft.daily_increment)} · 封顶 ¥${formatAmount(ruleDraft.max_amount)}`}
+                {ruleMessage || `第 1 天 ¥${formatAmount(ruleDraft.base_amount)} · 每天 +¥${formatAmount(ruleDraft.daily_increment)} · 封顶 ¥${formatAmount(ruleDraft.max_amount)} · 截止 ${ruleDraft.check_in_deadline}`}
               </p>
             </section>
 

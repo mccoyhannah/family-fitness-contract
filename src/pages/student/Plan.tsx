@@ -5,6 +5,7 @@ import PlanEditor from '../../components/PlanEditor'
 import { useAuth } from '../../hooks/useAuth'
 import { useCheckIns } from '../../hooks/useCheckIns'
 import { usePenalties } from '../../hooks/usePenalties'
+import { usePenaltySettings } from '../../hooks/usePenaltySettings'
 import { usePlans } from '../../hooks/usePlans'
 import { formatDay } from '../../lib/date'
 import { notifyApp } from '../../lib/notice'
@@ -18,6 +19,7 @@ export default function Plan() {
   const { profile } = useAuth()
   const { checkIns } = useCheckIns(profile?.id)
   const { penalties } = usePenalties(profile?.id)
+  const { settings: penaltySettings } = usePenaltySettings()
   const { plans, savePlan } = usePlans(profile?.id)
   const [expandedDates, setExpandedDates] = useState<Set<string>>(() => new Set())
   const [editingDate, setEditingDate] = useState<string | null>(null)
@@ -64,6 +66,7 @@ export default function Plan() {
           const editing = editingDate === day.date
           return (
             <PlanDayCard
+              checkInDeadline={penaltySettings.check_in_deadline}
               day={day}
               editing={editing}
               expanded={expandedDates.has(day.date)}
@@ -86,6 +89,7 @@ export default function Plan() {
 }
 
 function PlanDayCard({
+  checkInDeadline,
   day,
   editing,
   expanded,
@@ -96,6 +100,7 @@ function PlanDayCard({
   plan,
   studentId,
 }: {
+  checkInDeadline: string
   day: PlanDay
   editing: boolean
   expanded: boolean
@@ -131,7 +136,7 @@ function PlanDayCard({
         {plan && (
           <p className="muted">
             {plan.is_training
-              ? `${plan.title} · ${formatPlanFocusText(plan.focus, plan.source)} · 截止 ${plan.deadline}`
+              ? `${plan.title} · ${formatPlanFocusText(plan.focus, plan.source)}`
               : restTitle}
           </p>
         )}
@@ -174,6 +179,7 @@ function PlanDayCard({
             </button>
           </div>
           <PlanEditor
+            checkInDeadline={checkInDeadline}
             initial={draft}
             submitLabel={submitLabel}
             onSubmit={onSave}

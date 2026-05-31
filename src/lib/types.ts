@@ -62,6 +62,7 @@ export type DonationSettings = {
 export type PenaltySettings = {
   id?: boolean
   base_amount: number
+  check_in_deadline: string
   daily_increment: number
   max_amount: number
   updated_at?: string

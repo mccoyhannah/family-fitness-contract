@@ -97,7 +97,7 @@ export default function Today() {
     if (!profile) return
     if (!penaltySettingsReady) return
     if (checkInsLoading || penaltiesLoading || plansLoading) return
-    const syncKey = `${profile.id}:${profile.created_at ?? 'unknown'}:${today}:${plans.map((plan) => plan.id).join(',')}:${penaltySettings.base_amount}:${penaltySettings.daily_increment}:${penaltySettings.max_amount}`
+    const syncKey = `${profile.id}:${profile.created_at ?? 'unknown'}:${today}:${plans.map((plan) => plan.id).join(',')}:${penaltySettings.base_amount}:${penaltySettings.daily_increment}:${penaltySettings.max_amount}:${penaltySettings.check_in_deadline}`
     if (completedSyncKeyRef.current === syncKey || syncingKeyRef.current === syncKey) return
 
     const synced = buildMissedSync(profile.id, plans, checkIns, penalties, new Date(), profile.created_at, penaltySettings)
@@ -209,7 +209,7 @@ export default function Today() {
         date: today,
         title: '今日休息',
         focus: '主动恢复',
-        deadline: todayTemplate.deadline || '23:00',
+        deadline: penaltySettings.check_in_deadline,
         is_training: false,
         source: 'student',
         items: [],
@@ -335,6 +335,7 @@ export default function Today() {
             leaveOffWorkTime={leaveOffWorkTime}
             leaveReason={leaveReason}
             open={selfPlanOpen}
+            checkInDeadline={penaltySettings.check_in_deadline}
             requestingLeave={requestingLeave}
             restBlockedMessage={restBlockedMessage}
             restSaving={restSaving}
@@ -433,7 +434,7 @@ function TodayHeroSection({
         <span>{plan?.title ?? '今天还没有计划'}</span>
         {plan && <span className={`plan-source-tag ${plan.source}`}>{formatPlanSourceLabel(plan.source)}</span>}
       </h2>
-      {plan && plan.is_training && <p>{formatPlanFocusText(plan.focus, plan.source)} · 截止 {plan.deadline}</p>}
+      {plan && plan.is_training && <p>{formatPlanFocusText(plan.focus, plan.source)}</p>}
       {isRestDay ? (
         <div className="metric-row rest-metric-row">
           <Metric icon={<Flame />} label="待付罚款" value={`¥${pendingTotal}`} />
@@ -606,6 +607,7 @@ function TodayTrainingSection({
 
 function TodayOpenPlanSection({
   checkIn,
+  checkInDeadline,
   draft,
   editorRef,
   leaveFatigue,
@@ -625,6 +627,7 @@ function TodayOpenPlanSection({
   restSaving,
 }: {
   checkIn?: CheckIn
+  checkInDeadline: string
   draft: PlanDraft
   editorRef: RefObject<HTMLDivElement | null>
   leaveFatigue: number | null
@@ -699,6 +702,7 @@ function TodayOpenPlanSection({
       {open && (
         <div className="self-plan-editor-scroll-target" ref={editorRef}>
           <PlanEditor
+            checkInDeadline={checkInDeadline}
             initial={draft}
             submitLabel="保存计划"
             onSubmit={async (nextDraft) => void (await onSave(nextDraft))}

@@ -117,6 +117,7 @@ where source_type is not null and source_id is not null;
 create table if not exists public.penalty_settings (
   id boolean primary key default true,
   base_amount int not null default 10 check (base_amount >= 0),
+  check_in_deadline text not null default '23:00' check (check_in_deadline ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'),
   daily_increment int not null default 10 check (daily_increment >= 0),
   max_amount int not null default 50 check (max_amount >= base_amount),
   updated_at timestamptz default now(),
@@ -124,8 +125,8 @@ create table if not exists public.penalty_settings (
   check (id)
 );
 
-insert into public.penalty_settings (id, base_amount, daily_increment, max_amount)
-values (true, 10, 10, 50)
+insert into public.penalty_settings (id, base_amount, check_in_deadline, daily_increment, max_amount)
+values (true, 10, '23:00', 10, 50)
 on conflict (id) do nothing;
 
 create table if not exists public.donation_settings (
@@ -1204,7 +1205,7 @@ grant select, insert, delete on public.penalties to authenticated;
 revoke update on public.penalties from authenticated;
 grant update (status, donation_note, donation_reported_at) on public.penalties to authenticated;
 grant select on public.penalty_settings to authenticated;
-grant update (base_amount, daily_increment, max_amount, updated_at, updated_by) on public.penalty_settings to authenticated;
+grant update (base_amount, check_in_deadline, daily_increment, max_amount, updated_at, updated_by) on public.penalty_settings to authenticated;
 grant select, insert, update on public.donation_settings to authenticated;
 grant select, insert, update, delete on public.fund_expenses to authenticated;
 grant select, insert, delete on public.check_in_evidence to authenticated;

@@ -7,6 +7,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useCheckInEvidence } from '../../hooks/useCheckInEvidence'
 import { useCoachData } from '../../hooks/useCoachData'
 import { useMembers } from '../../hooks/useMembers'
+import { usePenaltySettings } from '../../hooks/usePenaltySettings'
 import { usePlans } from '../../hooks/usePlans'
 import { formatDay, isPastDeadline, toISODate } from '../../lib/date'
 import type { CheckIn, CheckInEvidence, CheckInStatus, Plan } from '../../lib/types'
@@ -117,7 +118,7 @@ function recordFromCheckIn(checkIn: CheckIn, plan?: Plan): RecentRecord {
   }
 }
 
-function recordFromPlan(plan: Plan, today: string): RecentRecord {
+function recordFromPlan(plan: Plan, today: string, checkInDeadline: string): RecentRecord {
   if (!plan.is_training) {
     return {
       date: plan.date,
@@ -129,7 +130,7 @@ function recordFromPlan(plan: Plan, today: string): RecentRecord {
     }
   }
 
-  if (isPastDeadline(plan.date, plan.deadline)) {
+  if (isPastDeadline(plan.date, checkInDeadline || plan.deadline)) {
     return {
       date: plan.date,
       detail: '未打卡',
@@ -171,6 +172,7 @@ export default function CoachDashboard() {
   } = useMembers(profile?.id)
   const { checkIns, penalties, profiles, ready: coachDataReady } = useCoachData()
   const { evidenceFor } = useCheckInEvidence(selectedMember?.id)
+  const { settings: penaltySettings } = usePenaltySettings()
   const { plans } = usePlans(selectedMember?.id)
   const modalRef = useRef<HTMLElement | null>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
@@ -195,10 +197,10 @@ export default function CoachDashboard() {
       recordsByDate.set(checkIn.date, recordFromCheckIn(checkIn, plan))
     })
     plans.forEach((plan) => {
-      if (!recordsByDate.has(plan.date)) recordsByDate.set(plan.date, recordFromPlan(plan, today))
+      if (!recordsByDate.has(plan.date)) recordsByDate.set(plan.date, recordFromPlan(plan, today, penaltySettings.check_in_deadline))
     })
     return Array.from(recordsByDate.values()).sort(sortRecentRecords(today)).slice(0, 5)
-  }, [plans, scopedCheckIns, today])
+  }, [penaltySettings.check_in_deadline, plans, scopedCheckIns, today])
   const selectedEvidence = selectedRecord?.checkIn ? evidenceFor(selectedRecord.checkIn.id) : []
 
   const openRecord = (record: RecentRecord) => {
@@ -379,7 +381,7 @@ function DashboardRecordModal({
         <section className="review-detail-section">
           <div className="review-detail-head">
             <strong>当天计划</strong>
-            <span>{plan ? `${plan.source === 'coach' ? '教练制定' : '成员自定'} · 截止 ${plan.deadline}` : '未同步'}</span>
+            <span>{plan ? (plan.source === 'coach' ? '教练制定' : '成员自定') : '未同步'}</span>
           </div>
           {plan ? (
             <>

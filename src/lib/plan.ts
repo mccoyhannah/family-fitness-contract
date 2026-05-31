@@ -1,4 +1,6 @@
 import { addDays, getWeekStart, toISODate } from './date'
+import { normalizeCheckInDeadline } from './penaltySettings'
+import { defaultPlanFocusForSource } from './planDisplay'
 import type { Exercise, Plan, PlanDay, PlanDraft, PlanSource } from './types'
 
 const ex = (id: string, name: string, sets: string, reps: string, note: string): Exercise => ({
@@ -115,6 +117,25 @@ export function studentDraftFromRecentCoachPlan(
   const latestCoachPlan = latestCoachTrainingPlanBefore(plans, date)
   if (latestCoachPlan) return planDraftFromPlan(userId, latestCoachPlan, date, 'student')
   return planFromTemplate(userId, fallbackDay, 'student')
+}
+
+export function normalizePlanDraftForSave(draft: PlanDraft, checkInDeadline: string): PlanDraft {
+  const fallbackFocus = draft.is_training ? defaultPlanFocusForSource(draft.source) : '恢复调整'
+  const items = draft.items
+    .map((item, index) => ({ ...item, sort_order: index }))
+    .filter((item) => item.name.trim())
+
+  return {
+    ...draft,
+    title: draft.title.trim() || (draft.is_training ? '今日训练' : '今日休息'),
+    focus: draft.focus.trim() || fallbackFocus,
+    deadline: normalizeCheckInDeadline(checkInDeadline, draft.deadline || undefined),
+    items: draft.is_training
+      ? items.length > 0
+        ? items
+        : [{ name: defaultPlanFocusForSource(draft.source), sets: '1 次', reps: '完成即可', note: '按身体状态量力而行', sort_order: 0 }]
+      : [],
+  }
 }
 
 export function planToExercises(plan: Pick<Plan, 'items'>): Exercise[] {

@@ -3,7 +3,8 @@ import test from 'node:test'
 import { computeConsecutiveMisses } from '../src/lib/penalty.ts'
 import { buildMissedSync } from '../src/lib/sync.ts'
 import { buildLeaveRequestReason, validateLeaveRequest } from '../src/lib/leaveRequest.ts'
-import { latestCoachTrainingPlanBefore, planDraftFromPlan, studentDraftFromRecentCoachPlan } from '../src/lib/plan.ts'
+import { normalizePenaltySettings } from '../src/lib/penaltySettings.ts'
+import { latestCoachTrainingPlanBefore, normalizePlanDraftForSave, planDraftFromPlan, studentDraftFromRecentCoachPlan } from '../src/lib/plan.ts'
 import { getMonthCalendarDays, getPlansInWeek, getStudentPlanCardAction, getWeekDates } from '../src/lib/planCalendar.ts'
 import { getRestConflict } from '../src/lib/restRules.ts'
 import { getContributionPromptState, getRestChoiceActionState } from '../src/lib/todayPrompts.ts'
@@ -115,6 +116,25 @@ test('a rest day breaks the missed-check-in streak', () => {
   )
 
   assert.equal(count, 1)
+})
+
+test('penalty settings normalize check-in deadline with a safe fallback', () => {
+  assert.equal(normalizePenaltySettings({ check_in_deadline: '22:30' }).check_in_deadline, '22:30')
+  assert.equal(normalizePenaltySettings({ check_in_deadline: '25:99' }).check_in_deadline, '23:00')
+})
+
+test('missed sync uses the global check-in deadline before plan deadline', () => {
+  const synced = buildMissedSync(
+    userId,
+    [fullPlan({ id: 'late-plan', date: '2026-05-30', deadline: '23:00' })],
+    [],
+    [],
+    new Date('2026-05-30T22:05:00'),
+    '2026-05-01',
+    normalizePenaltySettings({ check_in_deadline: '22:00' }),
+  )
+
+  assert.equal(synced.checkIns.find((checkIn) => checkIn.date === '2026-05-30')?.status, 'missed')
 })
 
 test('rest is blocked after an adjacent rest day or effective missed day', () => {
@@ -310,4 +330,28 @@ test('student self-plan draft falls back to the template without coach history',
   assert.equal(draft.title, '模板训练')
   assert.equal(draft.deadline, '22:30')
   assert.deepEqual(draft.items.map((item) => item.name), ['模板动作'])
+})
+
+test('plan draft save normalization applies check-in deadline and rest defaults', () => {
+  const trainingDraft = normalizePlanDraftForSave(
+    {
+      user_id: userId,
+      date: '2026-05-30',
+      title: '',
+      focus: '',
+      deadline: '21:00',
+      is_training: true,
+      source: 'student',
+      items: [{ name: '深蹲', sets: '3 组', reps: '8 次', note: '', sort_order: 4 }],
+    },
+    '22:30',
+  )
+  const restDraft = normalizePlanDraftForSave({ ...trainingDraft, is_training: false, title: '', focus: '' }, '23:30')
+
+  assert.equal(trainingDraft.deadline, '22:30')
+  assert.equal(trainingDraft.items[0].sort_order, 0)
+  assert.equal(restDraft.title, '今日休息')
+  assert.equal(restDraft.focus, '恢复调整')
+  assert.equal(restDraft.deadline, '23:30')
+  assert.deepEqual(restDraft.items, [])
 })

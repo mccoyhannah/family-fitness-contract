@@ -63,7 +63,7 @@ export function buildMissedSync(
   const sortedPlan = plan.slice().sort((a, b) => a.date.localeCompare(b.date))
   const planByDate = new Map(sortedPlan.map((day) => [day.date, day]))
   const plannedMissCandidates = sortedPlan
-    .filter((day) => day.is_training && isPastDeadline(day.date, day.deadline, now))
+    .filter((day) => day.is_training && isPastDeadline(day.date, settings?.check_in_deadline || day.deadline, now))
     .map((day) => ({
       date: day.date,
       note: '过了截止时间未打卡',

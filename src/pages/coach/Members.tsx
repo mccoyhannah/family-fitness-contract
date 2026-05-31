@@ -6,6 +6,7 @@ import PlanEditor from '../../components/PlanEditor'
 import { useAuth } from '../../hooks/useAuth'
 import { useCoachData } from '../../hooks/useCoachData'
 import { useMembers } from '../../hooks/useMembers'
+import { usePenaltySettings } from '../../hooks/usePenaltySettings'
 import { usePlans } from '../../hooks/usePlans'
 import { formatDay, fromISODate, toISODate } from '../../lib/date'
 import { displayMemberLabel } from '../../lib/memberLabels'
@@ -81,6 +82,7 @@ export default function CoachMembers() {
     updateMemberDisplayName,
   } = useMembers(profile?.id)
   const { checkIns, penalties } = useCoachData()
+  const { settings: penaltySettings } = usePenaltySettings()
   const { plans, savePlan } = usePlans(selectedMember?.id)
   const [displayName, setDisplayName] = useState('')
   const [identifier, setIdentifier] = useState('')
@@ -448,6 +450,7 @@ export default function CoachMembers() {
             </div>
             {copyMessage && <p className="form-success plan-copy-note" role="status" aria-live="polite">{copyMessage}</p>}
             <PlanEditor
+              checkInDeadline={penaltySettings.check_in_deadline}
               key={draftKey}
               initial={draft}
               submitLabel={planSubmitLabel}

@@ -1,16 +1,17 @@
 import { Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { defaultPlanFocusForSource } from '../lib/planDisplay'
+import { normalizePlanDraftForSave } from '../lib/plan'
 import type { PlanDraft } from '../lib/types'
 
 type PlanEditorProps = {
+  checkInDeadline: string
   initial: PlanDraft
   submitLabel: string
   onSubmit: (draft: PlanDraft) => Promise<void>
 }
 
-export default function PlanEditor({ initial, onSubmit, submitLabel }: PlanEditorProps) {
+export default function PlanEditor({ checkInDeadline, initial, onSubmit, submitLabel }: PlanEditorProps) {
   const initialKey = useMemo(
     () => `${initial.id ?? 'new'}:${initial.user_id}:${initial.date}:${initial.source}`,
     [initial.date, initial.id, initial.source, initial.user_id],
@@ -30,21 +31,7 @@ export default function PlanEditor({ initial, onSubmit, submitLabel }: PlanEdito
     setSaving(true)
     setError('')
     try {
-      const fallbackFocus = draft.is_training ? defaultPlanFocusForSource(draft.source) : '恢复调整'
-      const items = draft.items
-        .map((item, index) => ({ ...item, sort_order: index }))
-        .filter((item) => item.name.trim())
-      await onSubmit({
-        ...draft,
-        title: draft.title.trim() || (draft.is_training ? '今日训练' : '今日休息'),
-        focus: draft.focus.trim() || fallbackFocus,
-        deadline: draft.deadline || '23:00',
-        items: draft.is_training
-          ? items.length > 0
-            ? items
-            : [{ name: defaultPlanFocusForSource(draft.source), sets: '1 次', reps: '完成即可', note: '按身体状态量力而行', sort_order: 0 }]
-          : [],
-      })
+      await onSubmit(normalizePlanDraftForSave(draft, checkInDeadline))
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败，请稍后重试。')
     } finally {
@@ -81,42 +68,34 @@ export default function PlanEditor({ initial, onSubmit, submitLabel }: PlanEdito
   return (
     <form className={`form-card plan-editor contract-clause-editor ${modeClass}`} onSubmit={submit}>
       <div className="plan-mode-group plan-mode-toolbar" role="group" aria-label="计划类型">
-        <label className={`switch-row plan-mode-option${draft.is_training ? ' selected' : ''}`}>
-          <input
-            type="checkbox"
-            checked={draft.is_training}
-            onChange={(event) => changeTrainingMode(event.target.checked)}
-          />
+        <button
+          aria-pressed={draft.is_training}
+          className={`plan-mode-option${draft.is_training ? ' selected' : ''}`}
+          type="button"
+          onClick={() => changeTrainingMode(true)}
+        >
           训练日
-        </label>
-        <label className={`switch-row plan-mode-option${!draft.is_training ? ' selected' : ''}`}>
-          <input
-            type="checkbox"
-            checked={!draft.is_training}
-            onChange={(event) => changeTrainingMode(!event.target.checked)}
-          />
+        </button>
+        <button
+          aria-pressed={!draft.is_training}
+          className={`plan-mode-option${!draft.is_training ? ' selected' : ''}`}
+          type="button"
+          onClick={() => changeTrainingMode(false)}
+        >
           休息日
-        </label>
+        </button>
       </div>
 
       {draft.is_training ? (
         <>
-          <label>
-            计划标题
-            <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
-          </label>
-          <label>
-            训练重点
-            <input value={draft.focus} onChange={(event) => setDraft({ ...draft, focus: event.target.value })} />
-          </label>
-          <div className="form-grid plan-training-fields">
+          <div className="plan-title-focus-row">
             <label>
-              截止时间
-              <input
-                type="time"
-                value={draft.deadline}
-                onChange={(event) => setDraft({ ...draft, deadline: event.target.value })}
-              />
+              标题
+              <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
+            </label>
+            <label>
+              重点
+              <input value={draft.focus} onChange={(event) => setDraft({ ...draft, focus: event.target.value })} />
             </label>
           </div>
 

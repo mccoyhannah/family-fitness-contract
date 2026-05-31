@@ -446,6 +446,12 @@ textarea:focus-visible,
   background: var(--brand-soft);
 }
 
+.plan-source-tag.student {
+  border-color: #e0c16d;
+  color: #805b0b;
+  background: #fff7df;
+}
+
 .plan-source-tag.empty {
   border-color: var(--line);
   color: var(--muted);
@@ -472,6 +478,11 @@ textarea:focus-visible,
 .day-card .plan-source-tag.coach,
 .hero-panel .plan-source-tag.coach {
   color: var(--brand-2);
+}
+
+.day-card .plan-source-tag.student,
+.hero-panel .plan-source-tag.student {
+  color: #805b0b;
 }
 
 .day-card .plan-source-tag.empty {
@@ -669,8 +680,8 @@ textarea:focus-visible,
 }
 
 .plan-calendar-section {
-  margin-top: 30px;
-  padding-top: 22px;
+  margin-top: 24px;
+  padding-top: 18px;
   border-top: 1px solid var(--line);
 }
 
@@ -689,6 +700,77 @@ textarea:focus-visible,
     linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(247, 251, 247, 0.94)),
     repeating-linear-gradient(0deg, transparent 0 34px, rgba(21, 148, 93, 0.035) 34px 35px);
   box-shadow: var(--shadow-soft);
+}
+
+.plan-calendar-section.collapsed .plan-calendar-card {
+  gap: 0;
+  padding: 12px 14px;
+  box-shadow: none;
+}
+
+.calendar-toggle-button {
+  min-height: 36px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.calendar-toggle-button svg {
+  transition: transform 0.18s ease;
+}
+
+.calendar-toggle-button[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
+.plan-calendar-compact {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plan-calendar-compact > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.plan-calendar-compact small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.plan-calendar-compact strong {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 840;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+
+.plan-calendar-compact-meta {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.plan-calendar-compact-meta span {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, 0.76);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .plan-calendar-toolbar {
@@ -715,18 +797,10 @@ textarea:focus-visible,
   background: rgba(255, 255, 255, 0.78);
 }
 
-.plan-calendar-weekdays,
 .plan-calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 7px;
-}
-
-.plan-calendar-weekdays span {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 820;
-  text-align: center;
 }
 
 .plan-calendar-day {
@@ -899,6 +973,18 @@ textarea:focus-visible,
   color: var(--brand-2);
   border-color: #aad4b9;
   background: var(--brand-soft);
+}
+
+.planned-source-chip.coach {
+  color: var(--brand-2);
+  border-color: #aad4b9;
+  background: var(--brand-soft);
+}
+
+.planned-source-chip.student {
+  color: #805b0b;
+  border-color: #e0c16d;
+  background: #fff7df;
 }
 
 .planned-copy-button,
@@ -1458,6 +1544,10 @@ label {
   gap: 12px;
 }
 
+.plan-training-fields {
+  grid-template-columns: minmax(160px, 240px);
+}
+
 .fatigue-field {
   display: grid;
   gap: 12px;
@@ -1533,6 +1623,10 @@ label {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.plan-mode-toolbar {
+  margin-bottom: 2px;
 }
 
 .plan-mode-option {
@@ -1653,10 +1747,10 @@ label {
 
 .plan-rest-panel {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
-  gap: 14px;
-  align-items: start;
-  padding: 14px;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
   border: 1px solid #bdd6e3;
   border-radius: var(--radius);
   background:
@@ -1665,8 +1759,8 @@ label {
 }
 
 .plan-rest-mark {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
   border: 1px solid #bdd6e3;
@@ -1680,47 +1774,33 @@ label {
 
 .plan-rest-copy {
   min-width: 0;
-  display: grid;
-  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .plan-rest-copy > strong {
   color: var(--ink);
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 860;
   line-height: 1.2;
 }
 
-.plan-rest-summary {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.plan-rest-summary span {
-  min-width: 0;
-  display: grid;
-  gap: 5px;
-  padding: 10px;
-  border: 1px solid rgba(189, 214, 227, 0.86);
+.plan-rest-badge {
+  min-height: 30px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 9px;
+  border: 1px solid #bdd6e3;
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.74);
-}
-
-.plan-rest-summary small {
-  color: var(--muted);
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.78);
   font-size: 12px;
-  font-weight: 760;
-  line-height: 1;
-}
-
-.plan-rest-summary b {
-  min-width: 0;
-  color: var(--ink);
-  font-size: 15px;
-  font-weight: 840;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
+  font-weight: 820;
+  white-space: nowrap;
 }
 
 .member-select {
@@ -4368,8 +4448,7 @@ button:active,
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .payment-summary-grid,
-  .plan-rest-summary {
+  .payment-summary-grid {
     grid-template-columns: 1fr;
     max-width: none;
   }
@@ -4379,7 +4458,7 @@ button:active,
   }
 
   .plan-rest-panel {
-    grid-template-columns: 1fr;
+    grid-template-columns: 40px minmax(0, 1fr);
   }
 
   .review-summary-bar {
@@ -4452,7 +4531,6 @@ button:active,
     min-height: 40px;
   }
 
-  .plan-calendar-weekdays,
   .plan-calendar-grid {
     gap: 5px;
   }

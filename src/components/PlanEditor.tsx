@@ -18,7 +18,6 @@ export default function PlanEditor({ initial, onSubmit, submitLabel }: PlanEdito
   const [draft, setDraft] = useState(initial)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const focusLabel = draft.is_training ? '训练重点' : '恢复重点'
   const modeClass = draft.is_training ? 'training-mode' : 'rest-mode'
 
   useEffect(() => {
@@ -81,45 +80,46 @@ export default function PlanEditor({ initial, onSubmit, submitLabel }: PlanEdito
 
   return (
     <form className={`form-card plan-editor contract-clause-editor ${modeClass}`} onSubmit={submit}>
-      <label>
-        计划标题
-        <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
-      </label>
-      <label>
-        {focusLabel}
-        <input value={draft.focus} onChange={(event) => setDraft({ ...draft, focus: event.target.value })} />
-      </label>
-      <div className="form-grid">
-        <label>
-          截止时间
+      <div className="plan-mode-group plan-mode-toolbar" role="group" aria-label="计划类型">
+        <label className={`switch-row plan-mode-option${draft.is_training ? ' selected' : ''}`}>
           <input
-            type="time"
-            value={draft.deadline}
-            onChange={(event) => setDraft({ ...draft, deadline: event.target.value })}
+            type="checkbox"
+            checked={draft.is_training}
+            onChange={(event) => changeTrainingMode(event.target.checked)}
           />
+          训练日
         </label>
-        <div className="plan-mode-group" role="group" aria-label="计划类型">
-          <label className={`switch-row plan-mode-option${draft.is_training ? ' selected' : ''}`}>
-            <input
-              type="checkbox"
-              checked={draft.is_training}
-              onChange={(event) => changeTrainingMode(event.target.checked)}
-            />
-            训练日
-          </label>
-          <label className={`switch-row plan-mode-option${!draft.is_training ? ' selected' : ''}`}>
-            <input
-              type="checkbox"
-              checked={!draft.is_training}
-              onChange={(event) => changeTrainingMode(!event.target.checked)}
-            />
-            休息日
-          </label>
-        </div>
+        <label className={`switch-row plan-mode-option${!draft.is_training ? ' selected' : ''}`}>
+          <input
+            type="checkbox"
+            checked={!draft.is_training}
+            onChange={(event) => changeTrainingMode(!event.target.checked)}
+          />
+          休息日
+        </label>
       </div>
 
       {draft.is_training ? (
         <>
+          <label>
+            计划标题
+            <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
+          </label>
+          <label>
+            训练重点
+            <input value={draft.focus} onChange={(event) => setDraft({ ...draft, focus: event.target.value })} />
+          </label>
+          <div className="form-grid plan-training-fields">
+            <label>
+              截止时间
+              <input
+                type="time"
+                value={draft.deadline}
+                onChange={(event) => setDraft({ ...draft, deadline: event.target.value })}
+              />
+            </label>
+          </div>
+
           <div className="section-heading compact-heading contract-section-heading">
             <h3>动作</h3>
             <button className="icon-action" type="button" onClick={addItem} aria-label="添加动作">
@@ -162,25 +162,8 @@ export default function PlanEditor({ initial, onSubmit, submitLabel }: PlanEdito
         <section className="plan-rest-panel" aria-label="休息安排">
           <span className="plan-rest-mark" aria-hidden="true">休</span>
           <div className="plan-rest-copy">
-            <strong>休息安排</strong>
-            <div className="plan-rest-summary" aria-label="休息日摘要">
-              <span>
-                <small>状态</small>
-                <b>休息日</b>
-              </span>
-              <span>
-                <small>标题</small>
-                <b>{draft.title.trim() || '今日休息'}</b>
-              </span>
-              <span>
-                <small>恢复重点</small>
-                <b>{draft.focus.trim() || '恢复调整'}</b>
-              </span>
-              <span>
-                <small>动作</small>
-                <b>无需安排</b>
-              </span>
-            </div>
+            <strong>今日设为休息日</strong>
+            <span className="plan-rest-badge">休息日</span>
           </div>
         </section>
       )}

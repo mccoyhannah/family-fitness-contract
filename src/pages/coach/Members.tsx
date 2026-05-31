@@ -96,6 +96,7 @@ export default function CoachMembers() {
   const [copyDraftToken, setCopyDraftToken] = useState(0)
   const [copyMessage, setCopyMessage] = useState('')
   const [expandedPlanIds, setExpandedPlanIds] = useState<Set<string>>(() => new Set())
+  const [calendarOpen, setCalendarOpen] = useState(false)
   const planWorkspaceRef = useRef<HTMLElement | null>(null)
   const today = toISODate(new Date())
   const week = useMemo(() => buildPlan(new Date(`${selectedDate}T12:00:00`)), [selectedDate])
@@ -183,6 +184,7 @@ export default function CoachMembers() {
     setCopiedDraft(null)
     setCopyMessage('')
     setExpandedPlanIds(new Set())
+    setCalendarOpen(false)
     setCalendarMonthDate(getMonthStartDate(today))
   }
 
@@ -335,11 +337,13 @@ export default function CoachMembers() {
         <>
           <PlanCalendarIndex
             days={calendarDays}
+            isOpen={calendarOpen}
             monthLabel={calendarMonthLabel}
             plansByDate={plansByDate}
             selectedDate={selectedDate}
             onSelectDate={selectPlanDate}
             onShiftMonth={changeCalendarMonth}
+            onToggle={() => setCalendarOpen((current) => !current)}
           />
 
           <section className="planned-list-section" aria-label={`${displayMemberLabel(selectedMember)} 已安排的计划`}>
@@ -366,8 +370,8 @@ export default function CoachMembers() {
                         <div className="planned-plan-main">
                           <strong>{formatDay(plan.date)} · {plan.title}</strong>
                           <div className="planned-plan-meta" aria-label="计划摘要">
-                            <span className="planned-source-chip">{plan.source === 'coach' ? '教练制定' : '成员自定'}</span>
-                            <span className="planned-count-chip">{hasTrainingDetails ? `${plan.items.length} 个动作` : plan.date === today ? '今日休息' : '休息日'}</span>
+                            <span className={`planned-source-chip ${plan.source}`}>{plan.source === 'coach' ? '教练制定' : '成员自定'}</span>
+                            <span className="planned-count-chip">{hasTrainingDetails ? `${plan.items.length} 个动作` : '休息日'}</span>
                           </div>
                         </div>
                         <div className="planned-plan-actions">
@@ -496,68 +500,97 @@ export default function CoachMembers() {
 
 function PlanCalendarIndex({
   days,
+  isOpen,
   monthLabel,
+  onToggle,
   onSelectDate,
   onShiftMonth,
   plansByDate,
   selectedDate,
 }: {
   days: MonthCalendarDay[]
+  isOpen: boolean
   monthLabel: string
+  onToggle: () => void
   onSelectDate: (date: string) => void
   onShiftMonth: (amount: number) => void
   plansByDate: Map<string, Plan>
   selectedDate: string
 }) {
+  const selectedPlan = plansByDate.get(selectedDate)
+  const selectedSource = calendarPlanSource(selectedPlan)
+  const selectedStatus = selectedPlan
+    ? selectedPlan.is_training
+      ? `${selectedPlan.items.length} 个动作`
+      : '休息日'
+    : '未安排'
+
   return (
-    <section className="plan-calendar-section" aria-label="计划日历索引">
+    <section className={`plan-calendar-section${isOpen ? ' expanded' : ' collapsed'}`} aria-label="计划日历索引">
       <div className="section-heading compact-heading">
         <h3>计划日历</h3>
-        <span>周一到周日</span>
+        <button
+          aria-expanded={isOpen}
+          className="calendar-toggle-button ghost-button"
+          type="button"
+          onClick={onToggle}
+        >
+          <ChevronDown size={17} aria-hidden="true" />
+          {isOpen ? '收起日历' : '展开日历'}
+        </button>
       </div>
       <div className="plan-calendar-card">
-        <div className="plan-calendar-toolbar">
-          <button className="month-nav-button" type="button" onClick={() => onShiftMonth(-1)} aria-label="上个月">
-            <ChevronLeft size={18} />
-          </button>
-          <strong>{monthLabel}</strong>
-          <button className="month-nav-button" type="button" onClick={() => onShiftMonth(1)} aria-label="下个月">
-            <ChevronRight size={18} />
-          </button>
+        <div className="plan-calendar-compact">
+          <div>
+            <small>当前选择</small>
+            <strong>{formatDay(selectedDate)}</strong>
+          </div>
+          <div className="plan-calendar-compact-meta" aria-label="选中日期计划摘要">
+            <span>{selectedStatus}</span>
+            {selectedSource && <span>{selectedSource}</span>}
+          </div>
         </div>
-        <div className="plan-calendar-weekdays" aria-hidden="true">
-          {['一', '二', '三', '四', '五', '六', '日'].map((label) => (
-            <span key={label}>{label}</span>
-          ))}
-        </div>
-        <div className="plan-calendar-grid">
-          {days.map((day) => {
-            const plan = plansByDate.get(day.date)
-            const source = calendarPlanSource(plan)
-            const className = [
-              'plan-calendar-day',
-              day.inCurrentMonth ? '' : 'outside',
-              day.isToday ? 'today' : '',
-              day.date === selectedDate ? 'selected' : '',
-              plan ? 'has-plan' : '',
-            ].filter(Boolean).join(' ')
-
-            return (
-              <button
-                aria-label={`${formatDay(day.date)}，${calendarPlanStatus(plan)}${source ? `，${source}` : ''}`}
-                aria-pressed={day.date === selectedDate}
-                className={className}
-                key={day.date}
-                type="button"
-                onClick={() => onSelectDate(day.date)}
-              >
-                <span className="calendar-day-number">{day.dayOfMonth}</span>
-                <span className="calendar-day-status">{calendarPlanStatus(plan)}</span>
-                {source && <span className="calendar-day-source">{source}</span>}
+        {isOpen && (
+          <>
+            <div className="plan-calendar-toolbar">
+              <button className="month-nav-button" type="button" onClick={() => onShiftMonth(-1)} aria-label="上个月">
+                <ChevronLeft size={18} />
               </button>
-            )
-          })}
-        </div>
+              <strong>{monthLabel}</strong>
+              <button className="month-nav-button" type="button" onClick={() => onShiftMonth(1)} aria-label="下个月">
+                <ChevronRight size={18} />
+              </button>
+            </div>
+            <div className="plan-calendar-grid">
+              {days.map((day) => {
+                const plan = plansByDate.get(day.date)
+                const source = calendarPlanSource(plan)
+                const className = [
+                  'plan-calendar-day',
+                  day.inCurrentMonth ? '' : 'outside',
+                  day.isToday ? 'today' : '',
+                  day.date === selectedDate ? 'selected' : '',
+                  plan ? 'has-plan' : '',
+                ].filter(Boolean).join(' ')
+
+                return (
+                  <button
+                    aria-label={`${formatDay(day.date)}，${calendarPlanStatus(plan)}${source ? `，${source}` : ''}`}
+                    aria-pressed={day.date === selectedDate}
+                    className={className}
+                    key={day.date}
+                    type="button"
+                    onClick={() => onSelectDate(day.date)}
+                  >
+                    <span className="calendar-day-number">{day.dayOfMonth}</span>
+                    <span className="calendar-day-status">{calendarPlanStatus(plan)}</span>
+                    {source && <span className="calendar-day-source">{source}</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </>
+        )}
       </div>
     </section>
   )

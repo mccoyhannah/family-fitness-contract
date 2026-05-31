@@ -116,6 +116,7 @@ function PlanDayCard({
   }, [action.canConvertRestToTraining, day, plan, studentId])
   const editorTitle = action.canConvertRestToTraining ? '改成训练计划' : plan ? '编辑自定计划' : '制定这一天的计划'
   const submitLabel = action.canConvertRestToTraining ? '保存训练计划' : plan ? '保存自定计划' : '保存这天计划'
+  const restTitle = plan && !plan.is_training ? formatRestPlanTitle(plan.title) : ''
 
   return (
     <article className={`day-card plan-day-card${expanded ? ' expanded' : ''}${editing ? ' editing' : ''}`}>
@@ -131,12 +132,12 @@ function PlanDayCard({
           <p className="muted">
             {plan.is_training
               ? `${plan.title} · ${formatPlanFocusText(plan.focus, plan.source)} · 截止 ${plan.deadline}`
-              : plan.title}
+              : restTitle}
           </p>
         )}
-        {plan && (
+        {plan?.is_training && (
           <div className="plan-day-meta">
-            <span>{plan.is_training ? `${plan.items.length} 个动作` : '恢复日'}</span>
+            <span>{plan.items.length} 个动作</span>
           </div>
         )}
       </div>
@@ -181,6 +182,11 @@ function PlanDayCard({
       )}
     </article>
   )
+}
+
+function formatRestPlanTitle(title: string) {
+  const normalized = title.trim()
+  return normalized && normalized !== '今日休息' ? normalized : '恢复日'
 }
 
 function planToTrainingDraft(plan: Plan, day: PlanDay, userId: string): PlanDraft {

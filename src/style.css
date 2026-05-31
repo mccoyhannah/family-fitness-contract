@@ -508,6 +508,10 @@ textarea:focus-visible,
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.metric-row.rest-metric-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .metric-row.four-col {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -3026,6 +3030,30 @@ code {
   background: linear-gradient(180deg, var(--brand), #f0a33a);
 }
 
+.checkin-rest-card {
+  display: grid;
+  gap: 0;
+  border-color: rgba(180, 210, 188, 0.94);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 250, 0.96), rgba(248, 252, 247, 0.96)),
+    var(--brand-soft);
+}
+
+.checkin-rest-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.checkin-rest-head strong {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
 .checkin-plan-head {
   display: flex;
   align-items: flex-start;
@@ -4498,6 +4526,15 @@ button:active,
   .plan-editor-strip {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .plan-day-title {
+    align-items: flex-start;
+    flex-direction: row;
+  }
+
+  .plan-day-title .plan-source-tag {
+    flex: 0 0 auto;
   }
 
   .plan-card-actions {

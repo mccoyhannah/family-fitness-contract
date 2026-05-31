@@ -116,7 +116,15 @@ export default function CheckIn() {
           <p>先回到今日页，让教练制定计划，或自己制定今日计划后再打卡。</p>
         </div>
       )}
-      {todayPlan && (
+      {todayPlan && restDay && (
+        <div className="day-card checkin-rest-card">
+          <div className="checkin-rest-head">
+            <strong>今日休息</strong>
+            <span className={`plan-source-tag ${todayPlan.source}`}>{formatPlanSourceLabel(todayPlan.source)}</span>
+          </div>
+        </div>
+      )}
+      {todayPlan && !restDay && (
         <div className="day-card checkin-plan-card">
           <div className="checkin-plan-head">
             <div>
@@ -126,7 +134,7 @@ export default function CheckIn() {
             <span className={`plan-source-tag ${todayPlan.source}`}>{formatPlanSourceLabel(todayPlan.source)}</span>
           </div>
           <p className="muted">
-            {todayPlan.is_training ? '练完后按下方表单打卡' : '今天是恢复安排'} · {formatPlanFocusText(todayPlan.focus, todayPlan.source)} · 截止 {todayPlan.deadline}
+            练完后按下方表单打卡 · {formatPlanFocusText(todayPlan.focus, todayPlan.source)} · 截止 {todayPlan.deadline}
           </p>
           {todayPlanExercises.length > 0 ? (
             <div className="checkin-plan-list" aria-label="今日训练动作">
@@ -144,12 +152,6 @@ export default function CheckIn() {
           ) : (
             <div className="checkin-plan-empty">今天没有训练动作。</div>
           )}
-        </div>
-      )}
-      {restDay && (
-        <div className="status-card rest-day-card contract-clause-card">
-          <strong>今天是休息日</strong>
-          <p>今天不用提交训练打卡。需要改成训练时，先回到今日页或计划页调整当天计划。</p>
         </div>
       )}
       {!restDay && (

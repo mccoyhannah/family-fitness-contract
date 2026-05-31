@@ -421,6 +421,8 @@ function TodayHeroSection({
   plan?: Plan
   todayExercises: Exercise[]
 }) {
+  const isRestDay = Boolean(plan && !plan.is_training)
+
   return (
     <div className="hero-panel contract-cover-panel">
       <span className="hero-kicker">
@@ -431,14 +433,18 @@ function TodayHeroSection({
         <span>{plan?.title ?? '今天还没有计划'}</span>
         {plan && <span className={`plan-source-tag ${plan.source}`}>{formatPlanSourceLabel(plan.source)}</span>}
       </h2>
-      {plan && (
-        <p>{plan.is_training ? `${formatPlanFocusText(plan.focus, plan.source)} · 截止 ${plan.deadline}` : '恢复日'}</p>
+      {plan && plan.is_training && <p>{formatPlanFocusText(plan.focus, plan.source)} · 截止 {plan.deadline}</p>}
+      {isRestDay ? (
+        <div className="metric-row rest-metric-row">
+          <Metric icon={<Flame />} label="待付罚款" value={`¥${pendingTotal}`} />
+        </div>
+      ) : (
+        <div className="metric-row three-col">
+          <Metric icon={<CalendarCheck />} label="今日状态" value={checkIn ? '已记录' : '待完成'} />
+          <Metric icon={<Flame />} label="待付罚款" value={`¥${pendingTotal}`} />
+          <Metric icon={<CalendarCheck />} label="今日动作" value={plan ? `${todayExercises.length} 个` : '未制定'} />
+        </div>
       )}
-      <div className="metric-row three-col">
-        <Metric icon={<CalendarCheck />} label="今日状态" value={plan && !plan.is_training ? '已休息' : checkIn ? '已记录' : '待完成'} />
-        <Metric icon={<Flame />} label="待付罚款" value={`¥${pendingTotal}`} />
-        <Metric icon={<CalendarCheck />} label="今日动作" value={plan ? (plan.is_training ? `${todayExercises.length} 个` : '恢复日') : '未制定'} />
-      </div>
     </div>
   )
 }
@@ -545,11 +551,13 @@ function TodayTrainingSection({
   requestingLeave: boolean
   restBlockedMessage?: string | null
 }) {
+  if (!plan.is_training && !restBlockedMessage) return null
+
   return (
     <section className="contract-section training-clause-section">
       <div className="section-heading contract-section-heading">
-        <h3>{plan.is_training ? '今日训练' : '今日休息'}</h3>
-        <span>{plan.is_training ? `${plan.items.length} 个动作` : '恢复日'}</span>
+        <h3>{plan.is_training ? '今日训练' : '需要调整安排'}</h3>
+        <span>{plan.is_training ? `${plan.items.length} 个动作` : '请改成训练'}</span>
       </div>
       {plan.is_training ? (
         <>
@@ -565,7 +573,7 @@ function TodayTrainingSection({
         </>
       ) : (
         <div className="status-card rest-day-card contract-clause-card">
-          <strong>{restBlockedMessage ? '今天不能继续休息' : '今日休息'}</strong>
+          <strong>今天不能继续休息</strong>
           {restBlockedMessage && <p>{restBlockedMessage}</p>}
           {restBlockedMessage && (
             <button className="ghost-button rest-conflict-edit-button" type="button" onClick={onPlanEdit}>

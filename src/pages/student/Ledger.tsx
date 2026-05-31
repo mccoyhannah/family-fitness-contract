@@ -163,11 +163,10 @@ export default function Ledger() {
       <div className="hero-panel">
         <span className="hero-kicker">家庭基金</span>
         <h2>待贡献 ¥{formatAmount(pendingTotal)}</h2>
-        <p>缺卡贡献会进入同一个家庭基金，用来买健身装备、AI TOKEN 和 AI 订阅。</p>
       </div>
       <div className="status-card action-card ledger-fund-summary">
         <strong>已入账 ¥{formatAmount(paidTotal)} · 已用于 ¥{formatAmount(expenseTotal)}</strong>
-        <p>{reported} 笔等待核对，{settled} 条已处理；捐赠后点“确认已捐赠”，管理端会马上看到。</p>
+        <p>待核对 {reported} 笔 · 已处理 {settled} 条</p>
       </div>
       {fundExpenses.length > 0 && (
         <div className="status-card ledger-expense-preview">

@@ -129,6 +129,7 @@ export default function CoachMembers() {
   const savingCurrentMember = Boolean(selectedMember && savingMemberId === selectedMember.id)
   const selectedCheckIns = selectedMember ? checkIns.filter((item) => item.user_id === selectedMember.id) : []
   const selectedPenalties = selectedMember ? penalties.filter((item) => item.user_id === selectedMember.id) : []
+  const planSubmitLabel = selectedPlan ? '修改计划' : '保存计划'
 
   const submitAdd = async () => {
     const result = await addMember(identifier, displayName)
@@ -229,6 +230,7 @@ export default function CoachMembers() {
   }
 
   const submitPlan = async (nextDraft: PlanDraft) => {
+    const isUpdatingPlan = plans.some((plan) => plan.user_id === nextDraft.user_id && plan.date === nextDraft.date)
     if (!nextDraft.is_training) {
       const conflict = getRestConflict(nextDraft.date, plans, selectedCheckIns, selectedPenalties)
       if (conflict) {
@@ -237,9 +239,10 @@ export default function CoachMembers() {
       }
     }
     await savePlan(nextDraft)
+    notifyApp({ tone: 'success', message: isUpdatingPlan ? '计划已修改。' : '计划已保存。' })
     if (copiedDraft?.user_id === nextDraft.user_id && copiedDraft.date === nextDraft.date) {
       setCopiedDraft(null)
-      setCopyMessage('今天计划已保存。')
+      setCopyMessage('')
     }
   }
 
@@ -447,7 +450,7 @@ export default function CoachMembers() {
             <PlanEditor
               key={draftKey}
               initial={draft}
-              submitLabel="保存教练计划"
+              submitLabel={planSubmitLabel}
               onSubmit={submitPlan}
             />
           </section>

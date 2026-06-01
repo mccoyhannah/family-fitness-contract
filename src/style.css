@@ -2061,6 +2061,29 @@ label {
   padding: 12px 0;
 }
 
+.member-select-compact {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  margin-top: 0;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #dbe5dd;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 10px 28px rgba(22, 63, 41, 0.055);
+}
+
+.member-select-compact.member-select-loading {
+  min-height: 64px;
+}
+
+.member-select-compact .participant-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 780;
+}
+
 .member-list,
 .week-tabs {
   display: grid;
@@ -2107,6 +2130,40 @@ label {
 .member-card small {
   color: var(--muted);
   font-size: 12px;
+}
+
+.member-select-compact .member-choice-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.member-select-compact .member-choice {
+  min-height: 44px;
+  width: auto;
+  min-width: 72px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 13px;
+  border-color: #dbe5dd;
+  background: #fff;
+  box-shadow: none;
+  text-align: center;
+}
+
+.member-select-compact .member-choice.active {
+  border-color: #8fbfa1;
+  background: #eef7f1;
+  box-shadow: inset 0 0 0 1px rgba(21, 148, 93, 0.14);
+}
+
+.member-select-compact .member-choice strong {
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.12;
 }
 
 .current-member-card {
@@ -2467,12 +2524,39 @@ label {
   line-height: 1.45;
 }
 
+.review-page-title {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.review-page-title h2 {
+  font-size: clamp(27px, 5vw, 35px);
+  text-wrap: balance;
+}
+
+.review-page-title p {
+  max-width: none;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 760;
+  line-height: 1.45;
+}
+
+.review-toolbar {
+  margin: 0 0 16px;
+}
+
 .review-detail-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
+  gap: 12px;
   align-items: stretch;
   justify-content: stretch;
+  padding: 16px;
+  border-color: #dfe8e1;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 252, 249, 0.96));
+  box-shadow: 0 12px 34px rgba(20, 57, 38, 0.07);
 }
 
 .review-detail-card > .review-card-topline,
@@ -2480,34 +2564,6 @@ label {
 .review-detail-card > .review-card-foot,
 .review-detail-card > .review-actions {
   width: 100%;
-}
-
-.review-summary-bar {
-  min-height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0 0 14px;
-  padding: 12px 14px;
-  border: 1px solid #cfe1d3;
-  border-radius: var(--radius);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(241, 248, 242, 0.88));
-}
-
-.review-summary-bar strong {
-  color: var(--brand-2);
-  font-size: 16px;
-  font-weight: 820;
-  line-height: 1.2;
-}
-
-.review-summary-bar span {
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 720;
-  line-height: 1.45;
-  text-align: right;
 }
 
 .review-card-summary {
@@ -2522,9 +2578,9 @@ label {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(199, 213, 202, 0.72);
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(216, 226, 218, 0.92);
 }
 
 .review-card-person {
@@ -2532,13 +2588,13 @@ label {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 9px;
+  gap: 8px;
 }
 
 .review-card-person strong {
   min-width: 0;
   color: var(--ink);
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 880;
   line-height: 1.1;
   overflow-wrap: anywhere;
@@ -2559,15 +2615,15 @@ label {
 }
 
 .review-date-chip {
-  min-height: 30px;
+  min-height: 28px;
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
-  padding: 0 10px;
-  border: 1px solid #c7d5ca;
+  padding: 0 9px;
+  border: 1px solid #d7e1da;
   border-radius: var(--radius);
   color: var(--ink-soft);
-  background: var(--paper-soft);
+  background: #f7faf7;
   font-size: 12px;
   font-weight: 760;
   white-space: nowrap;
@@ -2575,8 +2631,8 @@ label {
 
 .review-compact-brief {
   display: grid;
-  gap: 6px;
-  padding: 6px 2px 2px;
+  gap: 9px;
+  padding: 2px 0 0;
 }
 
 .review-compact-line {
@@ -2584,54 +2640,46 @@ label {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 8px;
   color: var(--ink-soft);
   font-size: 14px;
-  font-weight: 780;
+  font-weight: 760;
   line-height: 1.35;
 }
 
-.review-kind-pill {
-  min-height: 28px;
+.review-kind-text {
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
-  padding: 0 10px;
-  border: 1px solid #aad4b9;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid #dbe6df;
   border-radius: var(--radius);
-  color: var(--brand-2);
-  background: var(--brand-soft);
+  color: #2f5a42;
+  background: #f5faf6;
   font-size: 13px;
-  font-weight: 840;
-  line-height: 1;
+  font-weight: 820;
+  line-height: 1.1;
 }
 
-.review-kind-pill.waiver {
-  color: var(--accent);
-  border-color: #bdd6e3;
-  background: var(--accent-soft);
+.review-kind-text.waiver {
+  color: #6f5309;
+  border-color: #ead7a7;
+  background: #fff8e7;
 }
 
 .review-fatigue-score {
   color: var(--ink-soft);
-  font-weight: 820;
-}
-
-.review-fatigue-detail {
-  margin-left: 58px;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 720;
-  line-height: 1.3;
+  font-weight: 780;
 }
 
 .review-issue-text {
   font-size: 13px;
-  font-weight: 780;
+  font-weight: 800;
 }
 
 .review-issue-text.warning {
-  color: var(--warning);
+  color: #98690c;
 }
 
 .review-plan-mini {
@@ -2639,9 +2687,11 @@ label {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 2px;
-  padding-top: 7px;
-  border-top: 1px solid rgba(220, 230, 221, 0.86);
+  gap: 4px;
+  padding: 9px 10px;
+  border: 1px solid #edf2ee;
+  border-radius: var(--radius);
+  background: #fbfcfb;
   color: var(--muted);
 }
 
@@ -2655,7 +2705,7 @@ label {
   min-width: 0;
   color: var(--ink-soft);
   font-size: 14px;
-  font-weight: 820;
+  font-weight: 800;
   line-height: 1.25;
   overflow-wrap: anywhere;
 }
@@ -2671,22 +2721,37 @@ label {
   gap: 8px;
 }
 
+.review-task-status {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid #d9e5de;
+  border-radius: var(--radius);
+  color: #425b4b;
+  background: #f7faf8;
+  font-size: 12px;
+  font-weight: 820;
+  white-space: nowrap;
+}
+
 .review-card-foot {
   display: flex;
   justify-content: flex-end;
 }
 
 .review-expand-button {
-  min-height: 36px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  padding: 0 12px;
-  border: 1px solid var(--line-strong);
+  padding: 0 13px;
+  border: 1px solid #dbe5dd;
   border-radius: var(--radius);
-  color: var(--brand-2);
-  background: rgba(255, 255, 255, 0.78);
+  color: var(--ink-soft);
+  background: #fff;
   cursor: pointer;
   font-size: 13px;
   font-weight: 780;
@@ -2719,13 +2784,13 @@ label {
   justify-content: flex-start;
   flex-wrap: wrap;
   gap: 8px;
-  padding-top: 2px;
+  padding-top: 4px;
 }
 
 .row-actions.review-actions button {
   width: auto;
   min-width: 0;
-  min-height: 38px;
+  min-height: 44px;
   padding: 0 14px;
   white-space: nowrap;
 }
@@ -4931,15 +4996,6 @@ button:active,
     grid-template-columns: 40px minmax(0, 1fr);
   }
 
-  .review-summary-bar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .review-summary-bar span {
-    text-align: left;
-  }
-
   .row-actions.review-actions > button:last-child:nth-child(odd) {
     grid-column: 1 / -1;
   }
@@ -5216,8 +5272,19 @@ button:active,
     justify-items: end;
   }
 
-  .review-fatigue-detail {
-    margin-left: 0;
+  .member-select-compact {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 10px;
+  }
+
+  .member-select-compact .member-choice-list {
+    gap: 7px;
+    justify-content: flex-end;
+  }
+
+  .member-select-compact .member-choice {
+    flex: 0 1 auto;
+    min-width: 72px;
   }
 
   .review-card-foot {
@@ -5297,7 +5364,7 @@ button:active,
 
   .review-card .row-actions.review-actions button {
     flex: 1 1 94px;
-    min-height: 38px;
+    min-height: 44px;
     padding: 0 10px;
   }
 

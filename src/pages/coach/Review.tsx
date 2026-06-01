@@ -2,7 +2,6 @@ import { ChevronDown, ChevronUp, RotateCcw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import MemberSelect from '../../components/MemberSelect'
-import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
 import { useCoachData } from '../../hooks/useCoachData'
 import { useMembers } from '../../hooks/useMembers'
@@ -254,6 +253,8 @@ export default function CoachReview() {
   }, [confirmRequest])
 
   const coachMemberLabel = (memberId: string) => memberNameById.get(memberId) || '成员'
+  const reviewTargetLabel = selectedMember ? displayMemberLabel(selectedMember) : '全部成员'
+  const reviewSummary = membersReady ? `${pending.length} 条待处理 · ${reviewTargetLabel}` : '正在同步成员'
   const toggleExpanded = (checkInId: string) => {
     setExpandedCheckInIds((current) => {
       const next = new Set(current)
@@ -265,13 +266,20 @@ export default function CoachReview() {
 
   return (
     <section className="screen with-nav review-screen" ref={screenRef}>
-      <div className="page-title">
-        <h2>待确认</h2>
+      <div className="page-title review-page-title">
+        <h2>打卡审核</h2>
+        <p aria-live="polite">{reviewSummary}</p>
       </div>
-      <MemberSelect loading={membersLoading} members={members} ready={membersReady} selectedMemberId={selectedMemberId} onChange={setSelectedMemberId} />
-      <div className="review-summary-bar" aria-live="polite">
-        <strong>{membersReady ? `${pending.length} 条待确认` : '正在同步成员'}</strong>
-        <span>{selectedMember ? displayMemberLabel(selectedMember) : '全部成员'}</span>
+      <div className="review-toolbar">
+        <MemberSelect
+          label="成员"
+          loading={membersLoading}
+          members={members}
+          ready={membersReady}
+          selectedMemberId={selectedMemberId}
+          variant="compact"
+          onChange={setSelectedMemberId}
+        />
       </div>
       <div className="review-list">
         {pending.map((item) => {
@@ -284,6 +292,7 @@ export default function CoachReview() {
           const reviewKind = hasWaiverRequest ? '补卡免罚' : item.leave_reason ? '请假' : '打卡'
           const fatigueSummary = fatigueReviewSummary(item.fatigue)
           const issueSummary = item.issues.length > 0 ? `有不适 ${item.issues.length} 项` : null
+          const fatigueText = fatigueSummary.detail ? `${fatigueSummary.score} · ${fatigueSummary.detail}` : fatigueSummary.score
           const reviewComment = reviewCommentById[item.id] ?? item.review_comment ?? ''
           return (
             <article className={`review-card review-detail-card${hasWaiverRequest ? ' waiver-review-card' : ''}`} key={item.id}>
@@ -293,18 +302,17 @@ export default function CoachReview() {
                   <span className="review-date-chip">{formatDay(item.date)}</span>
                 </div>
                 <div className="review-status-column">
-                  <StatusPill status={item.status} />
+                  <span className="review-task-status">待处理</span>
                 </div>
               </div>
-              <div className="review-compact-brief" aria-label="待确认摘要">
+              <div className="review-compact-brief" aria-label="待处理摘要">
                 <div className="review-compact-line">
-                  <span className={hasWaiverRequest ? 'review-kind-pill waiver' : 'review-kind-pill'}>{reviewKind}</span>
-                  <span className="review-fatigue-score">{fatigueSummary.score}</span>
+                  <span className={hasWaiverRequest ? 'review-kind-text waiver' : 'review-kind-text'}>{reviewKind}</span>
+                  <span className="review-fatigue-score">{fatigueText}</span>
                   {issueSummary && <span className="review-issue-text warning">{issueSummary}</span>}
                 </div>
-                {fatigueSummary.detail && <span className="review-fatigue-detail">{fatigueSummary.detail}</span>}
                 <div className={plan ? 'review-plan-mini' : 'review-plan-mini muted'}>
-                  {plan && <span>计划：</span>}
+                  {plan && <span>对应计划：</span>}
                   <strong>{plan?.title ?? '计划未同步'}</strong>
                 </div>
               </div>

@@ -2,18 +2,32 @@ import type { MemberProfile } from '../lib/types'
 import { displayMemberLabel } from '../lib/memberLabels'
 
 type MemberSelectProps = {
+  label?: string
   loading?: boolean
   members: MemberProfile[]
-  ready?: boolean
   selectedMemberId: string
   onChange: (memberId: string) => void
+  ready?: boolean
+  variant?: 'default' | 'compact'
 }
 
-export default function MemberSelect({ loading = false, members, onChange, ready = true, selectedMemberId }: MemberSelectProps) {
+export default function MemberSelect({
+  label = '当前成员',
+  loading = false,
+  members,
+  onChange,
+  ready = true,
+  selectedMemberId,
+  variant = 'default',
+}: MemberSelectProps) {
+  const rootClassName = variant === 'compact'
+    ? 'member-select member-select-compact participant-select'
+    : 'member-select participant-select'
+
   if (!ready) {
     return (
-      <div className="member-select member-select-loading participant-select" aria-busy={loading} aria-label="当前成员">
-        <div className="field-label participant-label">当前成员</div>
+      <div className={`${rootClassName} member-select-loading`} aria-busy={loading} aria-label={label}>
+        <div className="field-label participant-label">{label}</div>
         <span className="skeleton-line medium" />
       </div>
     )
@@ -24,8 +38,8 @@ export default function MemberSelect({ loading = false, members, onChange, ready
   }
 
   return (
-    <div className="member-select participant-select" aria-label="当前成员">
-      <div className="field-label participant-label">当前成员</div>
+    <div className={rootClassName} aria-label={label}>
+      <div className="field-label participant-label">{label}</div>
       <div className="member-choice-list participant-choice-list">
         {members.map((member) => (
           <button

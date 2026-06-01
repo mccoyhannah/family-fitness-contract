@@ -458,6 +458,28 @@ textarea:focus-visible,
   background: var(--paper-soft);
 }
 
+.plan-focus-strip {
+  width: fit-content;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(184, 220, 199, 0.95);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  background: rgba(247, 252, 248, 0.88);
+  font-size: 15px;
+  font-weight: 720;
+  line-height: 1.48;
+  overflow-wrap: anywhere;
+}
+
+.contract-cover-panel .metric-row {
+  margin-top: 18px;
+}
+
 .hero-panel p,
 .muted,
 .page-title p,
@@ -468,6 +490,10 @@ textarea:focus-visible,
 .member-card span,
 .member-choice small {
   color: var(--muted);
+}
+
+.hero-panel .plan-focus-strip {
+  color: var(--ink-soft);
 }
 
 .day-card .plan-source-tag,
@@ -1560,16 +1586,16 @@ label {
 }
 
 .fatigue-card {
-  min-height: 104px;
+  min-height: 88px;
   display: grid;
-  justify-items: center;
+  justify-items: stretch;
   align-content: center;
-  gap: 5px;
-  padding: 10px 6px;
+  gap: 8px;
+  padding: 12px 10px;
   color: var(--ink);
   background: var(--paper-soft);
   cursor: pointer;
-  text-align: center;
+  text-align: left;
 }
 
 .fatigue-card.active {
@@ -1590,15 +1616,42 @@ label {
   transform-origin: center;
 }
 
+.fatigue-main {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
 .fatigue-card strong {
+  min-width: 0;
   font-size: 14px;
   font-weight: 800;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+
+.fatigue-detail {
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+.fatigue-detail b {
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 840;
+  line-height: 1;
 }
 
 .fatigue-card small {
   color: var(--muted);
   font-size: 11px;
+  font-weight: 720;
   line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .switch-row {
@@ -4075,7 +4128,8 @@ code {
   padding-bottom: 18px;
 }
 
-.payment-list-pager {
+.payment-list-pager,
+.ledger-list-pager {
   min-height: 46px;
   display: flex;
   align-items: center;
@@ -4090,24 +4144,28 @@ code {
   font-weight: 760;
 }
 
-.payment-list-pager > span {
+.payment-list-pager > span,
+.ledger-list-pager > span {
   white-space: nowrap;
 }
 
-.payment-list-pager-actions {
+.payment-list-pager-actions,
+.ledger-list-pager-actions {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
-.payment-list-pager-actions strong {
+.payment-list-pager-actions strong,
+.ledger-list-pager-actions strong {
   color: var(--ink-soft);
   font-size: 13px;
   font-weight: 820;
   white-space: nowrap;
 }
 
-.payment-list-pager-actions button {
+.payment-list-pager-actions button,
+.ledger-list-pager-actions button {
   min-height: 34px;
   flex: 0 0 auto;
   padding: 0 12px;
@@ -4119,7 +4177,8 @@ code {
   font-weight: 820;
 }
 
-.payment-list-pager-actions button:disabled {
+.payment-list-pager-actions button:disabled,
+.ledger-list-pager-actions button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -4636,7 +4695,28 @@ button:active,
   }
 
   .fatigue-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
+  }
+
+  .fatigue-card {
+    min-height: 64px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .fatigue-main {
+    justify-content: flex-start;
+  }
+
+  .fatigue-detail {
+    justify-items: end;
+    text-align: right;
+  }
+
+  .fatigue-face {
+    font-size: 24px;
   }
 
   .preview-actions {
@@ -4701,7 +4781,7 @@ button:active,
   }
 
   .leave-time-options {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .plan-item-editor {
@@ -4946,12 +5026,14 @@ button:active,
     padding: 16px;
   }
 
-  .payment-list-pager {
+  .payment-list-pager,
+  .ledger-list-pager {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .payment-list-pager-actions {
+  .payment-list-pager-actions,
+  .ledger-list-pager-actions {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
   }

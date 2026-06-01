@@ -1,5 +1,5 @@
 import type { FormEvent } from 'react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
 import { useCheckIns } from '../../hooks/useCheckIns'
@@ -11,6 +11,7 @@ import { notifyApp } from '../../lib/notice'
 import type { FundExpensePurpose, Penalty } from '../../lib/types'
 
 const WAIVER_PREFIX = '[免罚申请]'
+const LEDGER_PENALTY_PAGE_SIZE = 5
 const waiverReasonTemplates = [
   '实在太忙忘记打卡了，已经完成训练。',
   '身体不舒服，请求这次免罚。',
@@ -58,6 +59,7 @@ export default function Ledger() {
   const [submittingDonation, setSubmittingDonation] = useState(false)
   const [waiverTargetId, setWaiverTargetId] = useState('')
   const [waiverReason, setWaiverReason] = useState('')
+  const [penaltyPage, setPenaltyPage] = useState(1)
   const [submittingWaiver, setSubmittingWaiver] = useState(false)
   const pendingTotal = penalties.filter((item) => item.status === 'pending').reduce((sum, item) => sum + item.amount, 0)
   const reported = penalties.filter((item) => item.status === 'payment_reported').length
@@ -66,6 +68,32 @@ export default function Ledger() {
   const expenseTotal = fundExpenses.reduce((sum, item) => sum + item.amount, 0)
   const formatAmount = (amount: number) => (Number.isInteger(amount) ? `${amount}` : amount.toFixed(2))
   const checkInByDate = useMemo(() => new Map(checkIns.map((item) => [item.date, item])), [checkIns])
+  const totalPenaltyPages = Math.max(1, Math.ceil(penalties.length / LEDGER_PENALTY_PAGE_SIZE))
+  const safePenaltyPage = Math.min(penaltyPage, totalPenaltyPages)
+  const firstPenaltyIndex = (safePenaltyPage - 1) * LEDGER_PENALTY_PAGE_SIZE
+  const displayedPenalties = penalties.slice(firstPenaltyIndex, firstPenaltyIndex + LEDGER_PENALTY_PAGE_SIZE)
+  const hasPenaltyPages = penalties.length > LEDGER_PENALTY_PAGE_SIZE
+  const pageChangeDisabled = submittingDonation || submittingWaiver
+
+  const resetInlinePanels = () => {
+    setDonationTargetId('')
+    setDonationTime(toDateTimeLocalValue())
+    setDonationNote('')
+    setWaiverTargetId('')
+    setWaiverReason('')
+  }
+
+  useEffect(() => {
+    if (penaltyPage > totalPenaltyPages) {
+      resetInlinePanels()
+      setPenaltyPage(totalPenaltyPages)
+    }
+  }, [penaltyPage, totalPenaltyPages])
+
+  useEffect(() => {
+    resetInlinePanels()
+    setPenaltyPage(1)
+  }, [profile?.id])
 
   const openDonationConfirm = (penalty: Penalty) => {
     setDonationTargetId(penalty.id)
@@ -118,6 +146,13 @@ export default function Ledger() {
     if (submittingWaiver) return
     setWaiverTargetId('')
     setWaiverReason('')
+  }
+
+  const goToPenaltyPage = (nextPage: number) => {
+    const boundedPage = Math.min(Math.max(nextPage, 1), totalPenaltyPages)
+    if (boundedPage === safePenaltyPage) return
+    resetInlinePanels()
+    setPenaltyPage(boundedPage)
   }
 
   const submitWaiverRequest = async () => {
@@ -182,7 +217,7 @@ export default function Ledger() {
       )}
       <div className="penalty-list">
         {penalties.length === 0 && <p className="muted">暂无待贡献记录。请假和今日休息不会生成家庭基金贡献。</p>}
-        {penalties.map((penalty) => {
+        {displayedPenalties.map((penalty) => {
           const checkIn = checkInByDate.get(penalty.date)
           const isWaiverPending = penalty.status === 'pending' && checkIn?.status === 'pending_review'
           const canRequestWaiver = penalty.status === 'pending' && checkIn?.status === 'missed'
@@ -304,6 +339,22 @@ export default function Ledger() {
             </article>
           )
         })}
+        {hasPenaltyPages && (
+          <div className="ledger-list-pager" aria-label="缺卡贡献分页">
+            <span>
+              {firstPenaltyIndex + 1}-{firstPenaltyIndex + displayedPenalties.length} / {penalties.length} 条
+            </span>
+            <div className="ledger-list-pager-actions">
+              <button type="button" disabled={pageChangeDisabled || safePenaltyPage <= 1} onClick={() => goToPenaltyPage(Math.max(1, safePenaltyPage - 1))}>
+                上一页
+              </button>
+              <strong>第 {safePenaltyPage} / {totalPenaltyPages} 页</strong>
+              <button type="button" disabled={pageChangeDisabled || safePenaltyPage >= totalPenaltyPages} onClick={() => goToPenaltyPage(Math.min(totalPenaltyPages, safePenaltyPage + 1))}>
+                下一页
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   )

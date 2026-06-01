@@ -23,7 +23,19 @@ import { getContributionPromptState, getRestChoiceActionState, type Contribution
 import type { CheckIn, Exercise, Plan, PlanDraft } from '../../lib/types'
 
 const CONTRIBUTION_PROMPT_SHOWN_KEY = 'family-fitness-contract:contribution-prompt-shown-key'
-const LEAVE_OFF_WORK_TIME_OPTIONS = ['18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00']
+const LEAVE_OFF_WORK_TIME_OPTIONS = [
+  '18:00',
+  '18:30',
+  '19:00',
+  '19:30',
+  '20:00',
+  '20:30',
+  '21:00',
+  '21:30',
+  '22:00',
+  '22:30',
+  '23:00',
+]
 
 function readShownContributionPromptKey() {
   try {
@@ -434,7 +446,7 @@ function TodayHeroSection({
         <span>{plan?.title ?? '今天还没有计划'}</span>
         {plan && <span className={`plan-source-tag ${plan.source}`}>{formatPlanSourceLabel(plan.source)}</span>}
       </h2>
-      {plan && plan.is_training && <p>{formatPlanFocusText(plan.focus, plan.source)}</p>}
+      {plan && plan.is_training && <p className="plan-focus-strip">{formatPlanFocusText(plan.focus, plan.source)}</p>}
       {isRestDay ? (
         <div className="metric-row rest-metric-row">
           <Metric icon={<Flame />} label="待付罚款" value={`¥${pendingTotal}`} />
@@ -734,8 +746,8 @@ function LeaveRequestFields({
     <div className="leave-request-fields">
       <div className="leave-details-grid">
         <div className="leave-time-field">
-          <div className="field-label">下班时间</div>
-          <div className="leave-time-options" role="group" aria-label="下班时间">
+          <div className="field-label">到家时间</div>
+          <div className="leave-time-options" role="group" aria-label="到家时间">
             {LEAVE_OFF_WORK_TIME_OPTIONS.map((time) => (
               <button
                 aria-pressed={offWorkTime === time}

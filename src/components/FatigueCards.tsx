@@ -33,9 +33,14 @@ export default function FatigueCards({ disabled = false, onChange, value }: Fati
             type="button"
             onClick={() => onChange(option.value)}
           >
-            <span className="fatigue-face" aria-hidden="true">{option.face}</span>
-            <strong>{option.label}</strong>
-            <small>{option.value}/5 · {option.hint}</small>
+            <span className="fatigue-main">
+              <span className="fatigue-face" aria-hidden="true">{option.face}</span>
+              <strong>{option.label}</strong>
+            </span>
+            <span className="fatigue-detail">
+              <b>{option.value}/5</b>
+              <small>{option.hint}</small>
+            </span>
           </button>
         ))}
       </div>

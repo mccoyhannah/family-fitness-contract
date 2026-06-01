@@ -267,6 +267,7 @@ export default function CoachReview() {
           const planTitle = plan?.title ?? '计划未同步'
           const planSource = plan ? (plan.source === 'coach' ? '教练制定' : '成员自定') : '未同步'
           const issueSummary = item.issues.length > 0 ? `异常 ${item.issues.length}` : '无异常'
+          const healthSummary = `疲劳 ${fatigueLabel(item.fatigue)}`
           const reviewComment = reviewCommentById[item.id] ?? item.review_comment ?? ''
           return (
             <article className={`review-card review-detail-card${hasWaiverRequest ? ' waiver-review-card' : ''}`} key={item.id}>
@@ -279,18 +280,14 @@ export default function CoachReview() {
                   <StatusPill status={item.status} />
                 </div>
               </div>
-              <div className="review-brief-grid" aria-label="待确认摘要">
-                <div className={hasWaiverRequest ? 'review-brief-item review-brief-type waiver' : 'review-brief-item review-brief-type'}>
-                  <span>类型</span>
-                  <strong>{reviewKind}</strong>
+              <div className="review-compact-brief" aria-label="待确认摘要">
+                <div className="review-compact-line">
+                  <span className={hasWaiverRequest ? 'review-kind-pill waiver' : 'review-kind-pill'}>{reviewKind}</span>
+                  <span>{healthSummary}</span>
+                  <span className={item.issues.length > 0 ? 'review-issue-text warning' : 'review-issue-text'}>{issueSummary}</span>
                 </div>
-                <div className={item.issues.length > 0 ? 'review-brief-item review-brief-health warning' : 'review-brief-item review-brief-health'}>
-                  <span>身体状态</span>
-                  <strong>疲劳 {fatigueLabel(item.fatigue)}</strong>
-                  <small>{issueSummary}</small>
-                </div>
-                <div className="review-brief-item review-brief-plan">
-                  <span>今日计划</span>
+                <div className="review-plan-mini">
+                  <span>计划</span>
                   <strong>{planTitle}</strong>
                   <small>{planSource}</small>
                 </div>

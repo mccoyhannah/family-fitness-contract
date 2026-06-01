@@ -88,6 +88,7 @@ a,
 .bottom-nav a,
 .member-choice,
 .member-card,
+.coach-plan-module,
 .fatigue-card {
   transition:
     transform 0.18s var(--spring),
@@ -697,21 +698,93 @@ textarea:focus-visible,
   padding-bottom: calc(98px + env(safe-area-inset-bottom, 0px));
 }
 
+.coach-plan-module {
+  margin-top: 28px;
+  padding: 16px 14px 18px;
+  border-left: 4px solid rgba(21, 148, 93, 0.46);
+  border-radius: var(--radius);
+  background: rgba(255, 254, 250, 0.62);
+}
+
+.coach-plan-module + .coach-plan-module {
+  margin-top: 24px;
+}
+
+.coach-plan-module-calendar {
+  background: linear-gradient(180deg, rgba(255, 254, 250, 0.68), rgba(247, 251, 247, 0.82));
+}
+
+.coach-plan-module-week {
+  border-left-color: rgba(37, 108, 145, 0.5);
+  background: linear-gradient(180deg, rgba(247, 251, 247, 0.72), rgba(239, 247, 244, 0.86));
+}
+
+.coach-plan-module-editor {
+  border-left-color: rgba(154, 100, 15, 0.5);
+  background: linear-gradient(180deg, rgba(255, 254, 250, 0.9), rgba(255, 249, 232, 0.62));
+}
+
+.coach-plan-module-head {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.coach-plan-module-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.coach-plan-module-title h3 {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  font-size: 19px;
+  font-weight: 850;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+
+.coach-plan-module-index {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 1px solid rgba(21, 148, 93, 0.2);
+  border-radius: var(--radius);
+  color: var(--brand-2);
+  background: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 860;
+  letter-spacing: 0;
+}
+
+.coach-plan-module-head > span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.35;
+  text-align: right;
+}
+
 .plan-workspace {
   margin-top: 28px;
 }
 
-.plan-workspace .section-heading {
-  margin-top: 0;
-}
-
 .plan-calendar-section {
   margin-top: 24px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
 }
 
-.plan-calendar-section .section-heading {
+.coach-plan-module .plan-calendar-card,
+.coach-plan-module .planned-week-list {
   margin-top: 0;
 }
 
@@ -909,14 +982,12 @@ textarea:focus-visible,
   color: rgba(255, 255, 255, 0.82);
 }
 
-.planned-list-section,
 .low-frequency-section {
   margin-top: 34px;
   padding-top: 22px;
   border-top: 1px solid var(--line);
 }
 
-.planned-list-section .section-heading,
 .low-frequency-section .section-heading {
   margin-top: 0;
 }
@@ -2437,6 +2508,33 @@ label {
   align-items: start;
 }
 
+.review-card-topline {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(199, 213, 202, 0.72);
+}
+
+.review-card-person {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.review-card-person strong {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: 880;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
 .review-card-copy {
   min-width: 0;
   display: grid;
@@ -2505,14 +2603,81 @@ label {
   background: var(--accent-soft);
 }
 
+.review-brief-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1fr) minmax(0, 1.12fr);
+  gap: 10px;
+}
+
+.review-brief-item {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.review-brief-item span {
+  color: var(--muted-2);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.review-brief-item strong {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 840;
+  line-height: 1.24;
+  overflow-wrap: anywhere;
+}
+
+.review-brief-item small {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.review-brief-type {
+  border-color: #cfe1d3;
+  background: rgba(241, 248, 242, 0.72);
+}
+
+.review-brief-type.waiver {
+  border-color: #bdd6e3;
+  background: var(--accent-soft);
+}
+
+.review-brief-health.warning {
+  border-color: #efd7a8;
+  background: var(--warning-soft);
+}
+
+.review-brief-plan {
+  border-color: #bdd6e3;
+  background: rgba(231, 241, 246, 0.7);
+}
+
 .review-status-column {
   display: grid;
   justify-items: end;
   gap: 8px;
 }
 
+.review-card-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .review-expand-button {
-  min-height: 40px;
+  min-height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2521,7 +2686,7 @@ label {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   color: var(--brand-2);
-  background: var(--brand-soft);
+  background: rgba(255, 255, 255, 0.78);
   cursor: pointer;
   font-size: 13px;
   font-weight: 780;
@@ -4822,6 +4987,26 @@ button:active,
     grid-template-columns: 1fr;
   }
 
+  .coach-plan-module {
+    margin-top: 22px;
+    padding: 14px 10px 16px;
+    border-left-width: 3px;
+  }
+
+  .coach-plan-module-head {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .coach-plan-module-head > span {
+    text-align: left;
+  }
+
+  .calendar-toggle-button {
+    width: 100%;
+  }
+
   .planned-plan-topline {
     grid-template-columns: 1fr;
     display: grid;
@@ -5012,6 +5197,29 @@ button:active,
   .review-card-summary,
   .review-detail-head {
     grid-template-columns: 1fr;
+  }
+
+  .review-card-topline {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .review-card-person {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .review-status-column {
+    justify-items: start;
+  }
+
+  .review-brief-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .review-card-foot,
+  .review-expand-button {
+    width: 100%;
   }
 
   .review-card-title-row {

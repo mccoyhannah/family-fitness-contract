@@ -264,35 +264,47 @@ export default function CoachReview() {
           const waiverReason = cleanWaiverReason(item.leave_reason)
           const isExpanded = expandedCheckInIds.has(item.id)
           const reviewKind = hasWaiverRequest ? '补卡免罚' : item.leave_reason ? '请假' : '打卡'
-          const planSummary = plan ? `${plan.title} · ${plan.source === 'coach' ? '教练' : '成员'}` : '计划未同步'
+          const planTitle = plan?.title ?? '计划未同步'
+          const planSource = plan ? (plan.source === 'coach' ? '教练制定' : '成员自定') : '未同步'
+          const issueSummary = item.issues.length > 0 ? `异常 ${item.issues.length}` : '无异常'
           const reviewComment = reviewCommentById[item.id] ?? item.review_comment ?? ''
           return (
             <article className={`review-card review-detail-card${hasWaiverRequest ? ' waiver-review-card' : ''}`} key={item.id}>
-              <div className="review-card-summary">
-                <div className="review-card-copy">
-                  <div className="review-card-title-row">
-                    <strong>{displayName}</strong>
-                    <span className="review-date-chip">{formatDay(item.date)}</span>
-                  </div>
-                  <div className="review-card-meta">
-                    <span className={hasWaiverRequest ? 'review-meta-chip review-type-chip waiver' : 'review-meta-chip review-type-chip'}>{reviewKind}</span>
-                    <span className="review-meta-chip">疲劳 {fatigueLabel(item.fatigue)}</span>
-                    <span className={item.issues.length > 0 ? 'review-meta-chip warning' : 'review-meta-chip'}>{item.issues.length > 0 ? `异常 ${item.issues.length}` : '无异常'}</span>
-                    <span className="review-meta-chip review-plan-chip">{planSummary}</span>
-                  </div>
+              <div className="review-card-topline">
+                <div className="review-card-person">
+                  <strong>{displayName}</strong>
+                  <span className="review-date-chip">{formatDay(item.date)}</span>
                 </div>
                 <div className="review-status-column">
                   <StatusPill status={item.status} />
-                  <button
-                    aria-expanded={isExpanded}
-                    className="review-expand-button"
-                    type="button"
-                    onClick={() => toggleExpanded(item.id)}
-                  >
-                    {isExpanded ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
-                    {isExpanded ? '收起' : '详情/留言'}
-                  </button>
                 </div>
+              </div>
+              <div className="review-brief-grid" aria-label="待确认摘要">
+                <div className={hasWaiverRequest ? 'review-brief-item review-brief-type waiver' : 'review-brief-item review-brief-type'}>
+                  <span>类型</span>
+                  <strong>{reviewKind}</strong>
+                </div>
+                <div className={item.issues.length > 0 ? 'review-brief-item review-brief-health warning' : 'review-brief-item review-brief-health'}>
+                  <span>身体状态</span>
+                  <strong>疲劳 {fatigueLabel(item.fatigue)}</strong>
+                  <small>{issueSummary}</small>
+                </div>
+                <div className="review-brief-item review-brief-plan">
+                  <span>今日计划</span>
+                  <strong>{planTitle}</strong>
+                  <small>{planSource}</small>
+                </div>
+              </div>
+              <div className="review-card-foot">
+                <button
+                  aria-expanded={isExpanded}
+                  className="review-expand-button"
+                  type="button"
+                  onClick={() => toggleExpanded(item.id)}
+                >
+                  {isExpanded ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
+                  {isExpanded ? '收起' : '详情/留言'}
+                </button>
               </div>
               {isExpanded && (
                 <div className="review-expanded-stack">

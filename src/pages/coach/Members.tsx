@@ -351,9 +351,12 @@ export default function CoachMembers() {
             onToggle={() => setCalendarOpen((current) => !current)}
           />
 
-          <section className="planned-list-section" aria-label={`${displayMemberLabel(selectedMember)} 已安排的计划`}>
-            <div className="section-heading compact-heading">
-              <h3>本周已安排计划</h3>
+          <section className="planned-list-section coach-plan-module coach-plan-module-week" aria-label={`${displayMemberLabel(selectedMember)} 已安排的计划`}>
+            <div className="coach-plan-module-head">
+              <div className="coach-plan-module-title">
+                <span className="coach-plan-module-index">02</span>
+                <h3>本周安排</h3>
+              </div>
               <span>{formatDay(week[0].date)} - {formatDay(week[6].date)}</span>
             </div>
             {weekPlans.length === 0 ? (
@@ -425,12 +428,15 @@ export default function CoachMembers() {
           </section>
 
           <section
-            className={copyMessage ? 'plan-workspace plan-workspace-copied' : 'plan-workspace'}
+            className={copyMessage ? 'plan-workspace coach-plan-module coach-plan-module-editor plan-workspace-copied' : 'plan-workspace coach-plan-module coach-plan-module-editor'}
             ref={planWorkspaceRef}
             aria-label={`给 ${displayMemberLabel(selectedMember)} 制定计划`}
           >
-            <div className="section-heading">
-              <h3>给 {displayMemberLabel(selectedMember)} 制定计划</h3>
+            <div className="coach-plan-module-head">
+              <div className="coach-plan-module-title">
+                <span className="coach-plan-module-index">03</span>
+                <h3>给 {displayMemberLabel(selectedMember)} 制定计划</h3>
+              </div>
               <span>{formatDay(selectedDate)}</span>
             </div>
             <div className="week-tabs">
@@ -532,9 +538,12 @@ function PlanCalendarIndex({
     : '未安排'
 
   return (
-    <section className={`plan-calendar-section${isOpen ? ' expanded' : ' collapsed'}`} aria-label="计划日历索引">
-      <div className="section-heading compact-heading">
-        <h3>计划日历</h3>
+    <section className={`plan-calendar-section coach-plan-module coach-plan-module-calendar${isOpen ? ' expanded' : ' collapsed'}`} aria-label="计划日历索引">
+      <div className="coach-plan-module-head">
+        <div className="coach-plan-module-title">
+          <span className="coach-plan-module-index">01</span>
+          <h3>计划日历</h3>
+        </div>
         <button
           aria-expanded={isOpen}
           className="calendar-toggle-button ghost-button"

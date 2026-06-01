@@ -24,17 +24,16 @@ import type { CheckIn, Exercise, Plan, PlanDraft } from '../../lib/types'
 
 const CONTRIBUTION_PROMPT_SHOWN_KEY = 'family-fitness-contract:contribution-prompt-shown-key'
 const LEAVE_OFF_WORK_TIME_OPTIONS = [
-  '18:00',
-  '18:30',
-  '19:00',
-  '19:30',
-  '20:00',
-  '20:30',
-  '21:00',
-  '21:30',
-  '22:00',
-  '22:30',
-  '23:00',
+  '18:00-18:30',
+  '18:30-19:00',
+  '19:00-19:30',
+  '19:30-20:00',
+  '20:00-20:30',
+  '20:30-21:00',
+  '21:00-21:30',
+  '21:30-22:00',
+  '22:00-22:30',
+  '22:30-23:00',
 ]
 
 function readShownContributionPromptKey() {
@@ -607,9 +606,9 @@ function TodayTrainingSection({
             onOffWorkTimeChange={onLeaveOffWorkTimeChange}
             onReasonChange={onLeaveReasonChange}
           />
-          <button disabled={Boolean(checkIn) || requestingLeave} type="button" onClick={() => void onAskLeave()}>
+          <button className="leave-request-submit-button" disabled={Boolean(checkIn) || requestingLeave} type="button" onClick={() => void onAskLeave()}>
             <Umbrella size={20} />
-            {requestingLeave ? '提交中' : '申请请假，待教练确认'}
+            {requestingLeave ? '提交中' : '暂停训练，申请请假'}
           </button>
         </div>
       )}
@@ -692,9 +691,9 @@ function TodayOpenPlanSection({
             <CalendarCheck size={18} />
             {restAction.label}
           </button>
-          <button disabled={disabled || requestingLeave} type="button" onClick={() => void onAskLeave()}>
+          <button className="leave-request-submit-button" disabled={disabled || requestingLeave} type="button" onClick={() => void onAskLeave()}>
             <Umbrella size={18} />
-            {requestingLeave ? '提交中' : '申请请假'}
+            {requestingLeave ? '提交中' : '暂停训练，申请请假'}
           </button>
           <button aria-expanded={open} className="ghost-button" disabled={disabled} type="button" onClick={onTogglePlan}>
             {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
@@ -746,8 +745,8 @@ function LeaveRequestFields({
     <div className="leave-request-fields">
       <div className="leave-details-grid">
         <div className="leave-time-field">
-          <div className="field-label">到家时间</div>
-          <div className="leave-time-options" role="group" aria-label="到家时间">
+          <div className="field-label">到家时间段</div>
+          <div className="leave-time-options" role="group" aria-label="到家时间段">
             {LEAVE_OFF_WORK_TIME_OPTIONS.map((time) => (
               <button
                 aria-pressed={offWorkTime === time}
@@ -774,7 +773,7 @@ function LeaveRequestFields({
         </label>
       </div>
       <div className={disabled ? 'leave-fatigue-field disabled' : 'leave-fatigue-field'}>
-        <FatigueCards disabled={disabled} value={fatigue} onChange={onFatigueChange} />
+        <FatigueCards disabled={disabled} value={fatigue} variant="leave" onChange={onFatigueChange} />
       </div>
     </div>
   )

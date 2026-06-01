@@ -155,16 +155,24 @@ test('rest is blocked after an adjacent rest day or effective missed day', () =>
 test('leave request requires off-work time and fatigue, then formats them for review', () => {
   assert.match(
     validateLeaveRequest({ offWorkTime: '', fatigue: 4, reason: '加班太晚' }) ?? '',
-    /到家时间/,
+    /到家时间段/,
   )
   assert.match(
     validateLeaveRequest({ offWorkTime: '21:30', fatigue: null, reason: '加班太晚' }) ?? '',
+    /到家时间段/,
+  )
+  assert.match(
+    validateLeaveRequest({ offWorkTime: '21:30-21:00', fatigue: 4, reason: '加班太晚' }) ?? '',
+    /到家时间段/,
+  )
+  assert.match(
+    validateLeaveRequest({ offWorkTime: '21:00-21:30', fatigue: null, reason: '加班太晚' }) ?? '',
     /疲劳度/,
   )
-  assert.equal(validateLeaveRequest({ offWorkTime: '21:30', fatigue: 4, reason: '加班太晚' }), null)
+  assert.equal(validateLeaveRequest({ offWorkTime: '21:00-21:30', fatigue: 4, reason: '加班太晚' }), null)
   assert.equal(
-    buildLeaveRequestReason({ offWorkTime: '21:30', fatigue: 4, reason: '加班太晚' }),
-    '到家时间 21:30；疲劳度 4/5；理由：加班太晚',
+    buildLeaveRequestReason({ offWorkTime: '21:00-21:30', fatigue: 4, reason: '加班太晚' }),
+    '到家时间段 21:00-21:30；疲劳度 4/5；理由：加班太晚',
   )
 })
 

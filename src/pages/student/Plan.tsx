@@ -133,13 +133,8 @@ function PlanDayCard({
             {plan?.source === 'coach' && <small>只读</small>}
           </span>
         </div>
-        {plan && (
-          <p className="muted">
-            {plan.is_training
-              ? `${plan.title} · ${formatPlanFocusText(plan.focus, plan.source)}`
-              : restTitle}
-          </p>
-        )}
+        {plan?.is_training && <strong className="plan-day-training-title">{plan.title}</strong>}
+        {plan && !plan.is_training && <p className="muted">{restTitle}</p>}
         {plan?.is_training && (
           <div className="plan-day-meta">
             <span>{plan.items.length} 个动作</span>
@@ -164,6 +159,7 @@ function PlanDayCard({
 
       {expanded && action.canView && plan && !editing && (
         <div className="plan-day-detail">
+          {plan.is_training && <p className="plan-day-focus-strip">{formatPlanFocusText(plan.focus, plan.source)}</p>}
           {exercises.map((exercise) => (
             <ExerciseCard exercise={exercise} key={exercise.id} />
           ))}

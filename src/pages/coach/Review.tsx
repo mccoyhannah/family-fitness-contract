@@ -46,6 +46,24 @@ function fatigueLabel(fatigue: number | null) {
   return '5/5 · 不舒服'
 }
 
+function fatigueReviewSummary(fatigue: number | null) {
+  if (!fatigue) return { detail: '', score: '疲劳未填写' }
+  const level = Math.min(Math.max(fatigue, 1), 5)
+  const detail = level <= 1
+    ? '轻松'
+    : level === 2
+      ? '正常'
+      : level === 3
+        ? '有点累'
+        : level === 4
+          ? '很累'
+          : '不舒服'
+  return {
+    detail,
+    score: `疲劳 ${level}/5`,
+  }
+}
+
 function reviewDraftStorageKey(coachId?: string) {
   return coachId ? `${REVIEW_DRAFT_STORAGE_PREFIX}:${coachId}` : null
 }
@@ -264,10 +282,8 @@ export default function CoachReview() {
           const waiverReason = cleanWaiverReason(item.leave_reason)
           const isExpanded = expandedCheckInIds.has(item.id)
           const reviewKind = hasWaiverRequest ? '补卡免罚' : item.leave_reason ? '请假' : '打卡'
-          const planTitle = plan?.title ?? '计划未同步'
-          const planSource = plan ? (plan.source === 'coach' ? '教练制定' : '成员自定') : '未同步'
-          const issueSummary = item.issues.length > 0 ? `异常 ${item.issues.length}` : '无异常'
-          const healthSummary = `疲劳 ${fatigueLabel(item.fatigue)}`
+          const fatigueSummary = fatigueReviewSummary(item.fatigue)
+          const issueSummary = item.issues.length > 0 ? `有不适 ${item.issues.length} 项` : null
           const reviewComment = reviewCommentById[item.id] ?? item.review_comment ?? ''
           return (
             <article className={`review-card review-detail-card${hasWaiverRequest ? ' waiver-review-card' : ''}`} key={item.id}>
@@ -283,13 +299,13 @@ export default function CoachReview() {
               <div className="review-compact-brief" aria-label="待确认摘要">
                 <div className="review-compact-line">
                   <span className={hasWaiverRequest ? 'review-kind-pill waiver' : 'review-kind-pill'}>{reviewKind}</span>
-                  <span>{healthSummary}</span>
-                  <span className={item.issues.length > 0 ? 'review-issue-text warning' : 'review-issue-text'}>{issueSummary}</span>
+                  <span className="review-fatigue-score">{fatigueSummary.score}</span>
+                  {issueSummary && <span className="review-issue-text warning">{issueSummary}</span>}
                 </div>
-                <div className="review-plan-mini">
-                  <span>计划</span>
-                  <strong>{planTitle}</strong>
-                  <small>{planSource}</small>
+                {fatigueSummary.detail && <span className="review-fatigue-detail">{fatigueSummary.detail}</span>}
+                <div className={plan ? 'review-plan-mini' : 'review-plan-mini muted'}>
+                  {plan && <span>计划：</span>}
+                  <strong>{plan?.title ?? '计划未同步'}</strong>
                 </div>
               </div>
               <div className="review-card-foot">
@@ -486,7 +502,7 @@ function ReviewExpandedDetails({
             ))}
           </div>
         ) : (
-          <p className="review-empty-detail">无异常标记。</p>
+          <p className="review-empty-detail">未填写身体不适项。</p>
         )}
       </section>
 

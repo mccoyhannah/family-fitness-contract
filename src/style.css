@@ -2573,126 +2573,18 @@ label {
   white-space: nowrap;
 }
 
-.review-card-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.review-meta-chip {
-  min-height: 30px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  color: var(--muted);
-  background: var(--paper-soft);
-  font-size: 12px;
-  font-weight: 760;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.review-meta-chip.warning {
-  color: var(--warning);
-  border-color: #efd7a8;
-  background: var(--warning-soft);
-}
-
-.review-meta-chip.waiver {
-  color: var(--brand-2);
-  border-color: #aad4b9;
-  background: var(--brand-soft);
-}
-
-.review-meta-chip.review-plan-chip {
-  color: var(--accent);
-  border-color: #bdd6e3;
-  background: var(--accent-soft);
-}
-
-.review-brief-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1fr) minmax(0, 1.12fr);
-  gap: 10px;
-}
-
-.review-brief-item {
-  min-width: 0;
-  display: grid;
-  align-content: start;
-  gap: 5px;
-  padding: 11px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.72);
-}
-
-.review-brief-item span {
-  color: var(--muted-2);
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.review-brief-item strong {
-  min-width: 0;
-  color: var(--ink);
-  font-size: 15px;
-  font-weight: 840;
-  line-height: 1.24;
-  overflow-wrap: anywhere;
-}
-
-.review-brief-item small {
-  min-width: 0;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 760;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
-}
-
-.review-brief-type {
-  border-color: #cfe1d3;
-  background: rgba(241, 248, 242, 0.72);
-}
-
-.review-brief-type.waiver {
-  border-color: #bdd6e3;
-  background: var(--accent-soft);
-}
-
-.review-brief-health.warning {
-  border-color: #efd7a8;
-  background: var(--warning-soft);
-}
-
-.review-brief-plan {
-  border-color: #bdd6e3;
-  background: rgba(231, 241, 246, 0.7);
-}
-
 .review-compact-brief {
   display: grid;
-  gap: 9px;
-  padding: 10px 12px;
-  border: 1px solid rgba(207, 225, 211, 0.84);
-  border-radius: var(--radius);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(248, 251, 247, 0.74));
-}
-
-.review-compact-line,
-.review-plan-mini {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
+  padding: 6px 2px 2px;
 }
 
 .review-compact-line {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
   color: var(--ink-soft);
   font-size: 14px;
   font-weight: 780;
@@ -2720,8 +2612,22 @@ label {
   background: var(--accent-soft);
 }
 
-.review-issue-text {
+.review-fatigue-score {
+  color: var(--ink-soft);
+  font-weight: 820;
+}
+
+.review-fatigue-detail {
+  margin-left: 58px;
   color: var(--muted);
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.3;
+}
+
+.review-issue-text {
+  font-size: 13px;
+  font-weight: 780;
 }
 
 .review-issue-text.warning {
@@ -2729,30 +2635,34 @@ label {
 }
 
 .review-plan-mini {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px;
   padding-top: 7px;
-  border-top: 1px dashed rgba(199, 213, 202, 0.78);
+  border-top: 1px solid rgba(220, 230, 221, 0.86);
   color: var(--muted);
 }
 
 .review-plan-mini span {
   color: var(--muted-2);
-  font-size: 12px;
-  font-weight: 820;
+  font-size: 13px;
+  font-weight: 760;
 }
 
 .review-plan-mini strong {
   min-width: 0;
-  color: var(--ink);
-  font-size: 15px;
-  font-weight: 850;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 820;
   line-height: 1.25;
   overflow-wrap: anywhere;
 }
 
-.review-plan-mini small {
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 780;
+.review-plan-mini.muted strong {
+  color: var(--muted);
+  font-weight: 760;
 }
 
 .review-status-column {
@@ -5306,8 +5216,8 @@ button:active,
     justify-items: end;
   }
 
-  .review-brief-grid {
-    grid-template-columns: 1fr;
+  .review-fatigue-detail {
+    margin-left: 0;
   }
 
   .review-card-foot {

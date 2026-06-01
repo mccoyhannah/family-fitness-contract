@@ -248,7 +248,7 @@ export default function CoachReview() {
   return (
     <section className="screen with-nav review-screen" ref={screenRef}>
       <div className="page-title">
-        <h2>异常待确认</h2>
+        <h2>待确认</h2>
       </div>
       <MemberSelect loading={membersLoading} members={members} ready={membersReady} selectedMemberId={selectedMemberId} onChange={setSelectedMemberId} />
       <div className="review-summary-bar" aria-live="polite">
@@ -256,7 +256,6 @@ export default function CoachReview() {
         <span>{selectedMember ? displayMemberLabel(selectedMember) : '全部成员'}</span>
       </div>
       <div className="review-list">
-        {pending.length === 0 && <p className="muted review-empty-state">暂无待确认</p>}
         {pending.map((item) => {
           const displayName = coachMemberLabel(item.user_id)
           const memberPlans = plans.filter((row) => row.user_id === item.user_id)

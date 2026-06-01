@@ -39,6 +39,8 @@ type ExpenseDraft = {
 
 type RuleDraft = Pick<PenaltySettings, 'base_amount' | 'check_in_deadline' | 'daily_increment' | 'max_amount'>
 
+const PAYMENT_LIST_LIMIT = 5
+
 const fundPurposeLabel: Record<FundExpensePurpose, string> = {
   ai: 'AI TOKEN / 订阅',
   fitness: '健身装备',
@@ -120,6 +122,7 @@ export default function CoachPayments() {
   const [editingExpenseId, setEditingExpenseId] = useState('')
   const [expenseHistoryOpen, setExpenseHistoryOpen] = useState(false)
   const [fundSettingsOpen, setFundSettingsOpen] = useState(false)
+  const [showAllPenalties, setShowAllPenalties] = useState(false)
   const [savingExpense, setSavingExpense] = useState(false)
   const [updatingPenaltyId, setUpdatingPenaltyId] = useState('')
   const paymentReturnPointRef = useRef<PaymentReturnPoint | null>(null)
@@ -140,6 +143,8 @@ export default function CoachPayments() {
       return b.date.localeCompare(a.date)
     })
   }, [scopedPenalties, sortOrder, statusFilter])
+  const displayedPenalties = showAllPenalties ? visiblePenalties : visiblePenalties.slice(0, PAYMENT_LIST_LIMIT)
+  const hasMorePenalties = visiblePenalties.length > PAYMENT_LIST_LIMIT
   const memberNameById = new Map(members.map((member) => [member.id, displayMemberLabel(member)]))
   const fundSummary = useMemo(() => {
     const paidTotal = penalties.filter((penalty) => penalty.status === 'paid').reduce((sum, penalty) => sum + penalty.amount, 0)
@@ -195,6 +200,10 @@ export default function CoachPayments() {
       qr_image_url: donationSettings.qr_image_url,
     })
   }, [donationSettings, savingDonationSettings])
+
+  useEffect(() => {
+    setShowAllPenalties(false)
+  }, [selectedMemberId, sortOrder, statusFilter])
 
   const findPaymentCard = (penaltyId: string) =>
     Array.from(document.querySelectorAll<HTMLElement>('[data-penalty-id]')).find(
@@ -441,7 +450,7 @@ export default function CoachPayments() {
 
       <div className="penalty-list payment-list">
         {visiblePenalties.length === 0 && <p className="muted">当前没有符合筛选条件的基金记录。</p>}
-        {visiblePenalties.map((penalty) => {
+        {displayedPenalties.map((penalty) => {
           const displayName = memberNameById.get(penalty.user_id) || '成员'
           const penaltyReason = formatPenaltyReason(penalty)
           const action = activePaymentAction?.penaltyId === penalty.id ? activePaymentAction : null
@@ -516,6 +525,16 @@ export default function CoachPayments() {
             </article>
           )
         })}
+        {hasMorePenalties && (
+          <div className="payment-list-more">
+            <span>
+              已显示 {displayedPenalties.length} / {visiblePenalties.length} 条
+            </span>
+            <button type="button" onClick={() => setShowAllPenalties((current) => !current)}>
+              {showAllPenalties ? '收起' : '展开全部'}
+            </button>
+          </div>
+        )}
       </div>
 
       <section className="fund-settings-panel" aria-label="基金设置">
@@ -529,10 +548,13 @@ export default function CoachPayments() {
             <Settings2 aria-hidden="true" size={18} />
             <span>
               <strong>基金设置</strong>
-              <small>贡献规则 / 打卡截止 / 收款码</small>
+              <small>规则 / 收款码 / 支出</small>
             </span>
           </span>
-          {fundSettingsOpen ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+          <span className="fund-settings-toggle-meta">
+            <span className="fund-settings-deadline-chip">截止 {ruleDraft.check_in_deadline}</span>
+            {fundSettingsOpen ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+          </span>
         </button>
         {fundSettingsOpen && (
           <div className="fund-settings-body">
@@ -542,6 +564,11 @@ export default function CoachPayments() {
                   <strong>贡献规则</strong>
                   <span>打卡截止 {ruleDraft.check_in_deadline}</span>
                 </div>
+              </div>
+              <div className="penalty-rule-summary" aria-label="当前贡献规则">
+                <span>首日 ¥{formatAmount(ruleDraft.base_amount)}</span>
+                <span>递增 ¥{formatAmount(ruleDraft.daily_increment)}</span>
+                <span>封顶 ¥{formatAmount(ruleDraft.max_amount)}</span>
               </div>
               <form className="penalty-rule-grid" onSubmit={(event) => void submitPenaltyRule(event)}>
                 <label>
@@ -597,9 +624,11 @@ export default function CoachPayments() {
                   {savingRule ? '保存中' : '保存规则'}
                 </button>
               </form>
-              <p className={ruleMessage ? ruleMessage.includes('失败') || ruleMessage.includes('不能') ? 'form-error penalty-rule-message' : 'form-success penalty-rule-message' : 'penalty-rule-message'} aria-live="polite">
-                {ruleMessage || `第 1 天 ¥${formatAmount(ruleDraft.base_amount)} · 每天 +¥${formatAmount(ruleDraft.daily_increment)} · 封顶 ¥${formatAmount(ruleDraft.max_amount)} · 截止 ${ruleDraft.check_in_deadline}`}
-              </p>
+              {ruleMessage && (
+                <p className={ruleMessage.includes('失败') || ruleMessage.includes('不能') ? 'form-error penalty-rule-message' : 'form-success penalty-rule-message'} aria-live="polite">
+                  {ruleMessage}
+                </p>
+              )}
             </section>
 
             <section className="status-card donation-settings-card" aria-label="收款码配置">

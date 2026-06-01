@@ -4,7 +4,13 @@ import { computeConsecutiveMisses } from '../src/lib/penalty.ts'
 import { buildMissedSync } from '../src/lib/sync.ts'
 import { buildLeaveRequestReason, validateLeaveRequest } from '../src/lib/leaveRequest.ts'
 import { normalizePenaltySettings } from '../src/lib/penaltySettings.ts'
-import { latestCoachTrainingPlanBefore, normalizePlanDraftForSave, planDraftFromPlan, studentDraftFromRecentCoachPlan } from '../src/lib/plan.ts'
+import {
+  blankTrainingPlanDraft,
+  latestTrainingPlanBefore,
+  normalizePlanDraftForSave,
+  planDraftFromPlan,
+  planDraftFromRecentTrainingPlan,
+} from '../src/lib/plan.ts'
 import { getMonthCalendarDays, getPlansInWeek, getStudentPlanCardAction, getWeekDates } from '../src/lib/planCalendar.ts'
 import { getRestConflict } from '../src/lib/restRules.ts'
 import { getContributionPromptState, getRestChoiceActionState } from '../src/lib/todayPrompts.ts'
@@ -297,47 +303,58 @@ test('coach training plan can be copied into a new student draft for today', () 
   )
 })
 
-test('latest coach training plan ignores rest days, student plans, and future dates', () => {
+test('latest training plan uses coach or student history and ignores rest days and future dates', () => {
   const plans = [
     fullPlan({ id: 'old-coach-training', date: '2026-05-20' }),
     fullPlan({ id: 'student-training', date: '2026-05-29', source: 'student' }),
-    fullPlan({ id: 'coach-rest', date: '2026-05-29', is_training: false }),
+    fullPlan({ id: 'coach-rest', date: '2026-05-30', is_training: false }),
     fullPlan({ id: 'latest-coach-training', date: '2026-05-28' }),
     fullPlan({ id: 'future-coach-training', date: '2026-05-31' }),
   ]
 
-  assert.equal(latestCoachTrainingPlanBefore(plans, '2026-05-30')?.id, 'latest-coach-training')
-  assert.equal(latestCoachTrainingPlanBefore(plans, '2026-05-20'), undefined)
+  assert.equal(latestTrainingPlanBefore(plans, '2026-05-30')?.id, 'student-training')
+  assert.equal(latestTrainingPlanBefore(plans, '2026-05-20'), undefined)
 })
 
-test('student self-plan draft falls back to the template without coach history', () => {
-  const draft = studentDraftFromRecentCoachPlan(
+test('recent training plan draft copies history for the requested source', () => {
+  const sourcePlan = fullPlan({ id: 'student-plan', date: '2026-05-29', source: 'student' })
+  const draft = planDraftFromRecentTrainingPlan(
     userId,
-    [fullPlan({ id: 'student-plan', date: '2026-05-28', source: 'student' })],
+    [
+      fullPlan({ id: 'coach-rest', date: '2026-05-30', is_training: false }),
+      sourcePlan,
+      fullPlan({ id: 'future-coach-training', date: '2026-05-31' }),
+    ],
     '2026-05-30',
-    {
-      date: '2026-05-30',
-      dayOfWeek: 6,
-      title: '模板训练',
-      focus: '平衡',
-      deadline: '22:30',
-      isTraining: true,
-      exercises: [
-        {
-          id: 'template-item',
-          name: '模板动作',
-          sets: '3 组',
-          reps: '20 秒',
-          note: '稳一点',
-        },
-      ],
-    },
+    'coach',
+    '22:30',
   )
 
-  assert.equal(draft.source, 'student')
-  assert.equal(draft.title, '模板训练')
+  assert.equal(draft.source, 'coach')
+  assert.equal(draft.title, sourcePlan.title)
   assert.equal(draft.deadline, '22:30')
-  assert.deepEqual(draft.items.map((item) => item.name), ['模板动作'])
+  assert.deepEqual(
+    draft.items.map((item) => [item.name, item.sort_order, 'id' in item]),
+    [
+      ['先做动作', 0, false],
+      ['后做动作', 1, false],
+    ],
+  )
+})
+
+test('plan draft falls back to blank training without history', () => {
+  const draft = planDraftFromRecentTrainingPlan(
+    userId,
+    [fullPlan({ id: 'rest-only', date: '2026-05-29', is_training: false })],
+    '2026-05-30',
+    'student',
+    '23:00',
+  )
+
+  assert.deepEqual(draft, blankTrainingPlanDraft(userId, '2026-05-30', 'student', '23:00'))
+  assert.equal(draft.title, '')
+  assert.equal(draft.focus, '')
+  assert.deepEqual(draft.items, [])
 })
 
 test('plan draft save normalization applies check-in deadline and rest defaults', () => {
@@ -362,4 +379,24 @@ test('plan draft save normalization applies check-in deadline and rest defaults'
   assert.equal(restDraft.focus, '恢复调整')
   assert.equal(restDraft.deadline, '23:30')
   assert.deepEqual(restDraft.items, [])
+})
+
+test('plan draft save normalization does not invent a training action', () => {
+  const draft = normalizePlanDraftForSave(
+    {
+      user_id: userId,
+      date: '2026-05-30',
+      title: '',
+      focus: '',
+      deadline: '21:00',
+      is_training: true,
+      source: 'coach',
+      items: [],
+    },
+    '22:30',
+  )
+
+  assert.equal(draft.title, '今日训练')
+  assert.equal(draft.focus, '基础训练')
+  assert.deepEqual(draft.items, [])
 })

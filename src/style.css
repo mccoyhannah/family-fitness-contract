@@ -858,7 +858,8 @@ textarea:focus-visible,
   gap: 6px;
 }
 
-.plan-calendar-compact-meta span {
+.plan-calendar-compact-meta span,
+.plan-calendar-unplanned-button {
   min-height: 30px;
   display: inline-flex;
   align-items: center;
@@ -870,6 +871,18 @@ textarea:focus-visible,
   font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.plan-calendar-unplanned-button {
+  border-color: rgba(65, 132, 86, 0.32);
+  color: var(--brand-2);
+  background: var(--brand-soft);
+  cursor: pointer;
+}
+
+.plan-calendar-unplanned-button:hover {
+  border-color: #6fae84;
+  background: #e5f2e8;
 }
 
 .plan-calendar-toolbar {

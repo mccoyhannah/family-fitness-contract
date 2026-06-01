@@ -11,10 +11,21 @@ type PlanEditorProps = {
   onSubmit: (draft: PlanDraft) => Promise<void>
 }
 
+const PLAN_ITEM_INDEX_LABELS = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
+
+function planItemIndexLabel(index: number) {
+  return `动作${PLAN_ITEM_INDEX_LABELS[index] ?? index + 1}`
+}
+
 export default function PlanEditor({ checkInDeadline, initial, onSubmit, submitLabel }: PlanEditorProps) {
   const initialKey = useMemo(
-    () => `${initial.id ?? 'new'}:${initial.user_id}:${initial.date}:${initial.source}`,
-    [initial.date, initial.id, initial.source, initial.user_id],
+    () => {
+      const itemKey = initial.items
+        .map((item) => [item.name, item.sets, item.reps, item.note, item.sort_order].join('~'))
+        .join('|')
+      return `${initial.id ?? 'new'}:${initial.user_id}:${initial.date}:${initial.source}:${initial.title}:${initial.focus}:${initial.deadline}:${initial.is_training}:${itemKey}`
+    },
+    [initial],
   )
   const [draft, setDraft] = useState(initial)
   const [saving, setSaving] = useState(false)
@@ -28,10 +39,15 @@ export default function PlanEditor({ checkInDeadline, initial, onSubmit, submitL
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    setSaving(true)
     setError('')
+    const normalizedDraft = normalizePlanDraftForSave(draft, checkInDeadline)
+    if (normalizedDraft.is_training && normalizedDraft.items.length === 0) {
+      setError('请先添加至少一个训练动作。')
+      return
+    }
+    setSaving(true)
     try {
-      await onSubmit(normalizePlanDraftForSave(draft, checkInDeadline))
+      await onSubmit(normalizedDraft)
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败，请稍后重试。')
     } finally {
@@ -110,15 +126,19 @@ export default function PlanEditor({ checkInDeadline, initial, onSubmit, submitL
             {draft.items.map((item, index) => (
               <article className="plan-item-editor contract-term-editor" key={item.id ?? index}>
                 <div className="plan-item-editor-head">
-                  <span className="plan-item-index">动作 {index + 1}</span>
-                  <button className="icon-action danger-action plan-item-remove" type="button" onClick={() => removeItem(index)} aria-label={`删除动作 ${index + 1}`}>
+                  <span className="plan-item-index">{planItemIndexLabel(index)}</span>
+                  <button className="icon-action danger-action plan-item-remove" type="button" onClick={() => removeItem(index)} aria-label={`删除${planItemIndexLabel(index)}`}>
                     <Trash2 size={17} />
                   </button>
                 </div>
                 <div className="plan-item-fields">
                   <label className="plan-item-name-field">
-                    动作名
-                    <input value={item.name} onChange={(event) => updateItem(index, 'name', event.target.value)} />
+                    <span className="visually-hidden">{planItemIndexLabel(index)}名称</span>
+                    <input
+                      placeholder="动作名称"
+                      value={item.name}
+                      onChange={(event) => updateItem(index, 'name', event.target.value)}
+                    />
                   </label>
                   <label>
                     组数

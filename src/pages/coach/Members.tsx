@@ -12,36 +12,9 @@ import { formatDay, fromISODate, toISODate } from '../../lib/date'
 import { displayMemberLabel } from '../../lib/memberLabels'
 import { notifyApp } from '../../lib/notice'
 import { getMonthCalendarDays, getMonthStartDate, getPlansInWeek, shiftMonth, type MonthCalendarDay } from '../../lib/planCalendar'
-import { buildPlan, planFromTemplate, planToExercises } from '../../lib/plan'
+import { buildPlan, planDraftFromPlan, planDraftFromRecentTrainingPlan, planToExercises } from '../../lib/plan'
 import { getRestConflict } from '../../lib/restRules'
 import type { Plan, PlanDraft } from '../../lib/types'
-
-function todayDraft(userId: string, date: string): PlanDraft {
-  const template = buildPlan(new Date(`${date}T12:00:00`)).find((day) => day.date === date) ?? buildPlan(new Date())[0]
-  return planFromTemplate(userId, template, 'coach')
-}
-
-function planToTodayDraft(userId: string, plan: Plan, date: string): PlanDraft {
-  return {
-    user_id: userId,
-    date,
-    title: plan.title,
-    focus: plan.focus,
-    deadline: plan.deadline,
-    is_training: plan.is_training,
-    source: 'coach',
-    items: plan.items
-      .slice()
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map((item, index) => ({
-        name: item.name,
-        sets: item.sets,
-        reps: item.reps,
-        note: item.note,
-        sort_order: index,
-      })),
-  }
-}
 
 function formatMonthTitle(date: string) {
   return new Intl.DateTimeFormat('zh-CN', {
@@ -115,8 +88,8 @@ export default function CoachMembers() {
     if (!selectedMember) return null
     if (copiedDraft?.user_id === selectedMember.id && copiedDraft.date === selectedDate) return copiedDraft
     if (selectedPlan) return { ...selectedPlan, source: 'coach', items: selectedPlan.items.map((item) => ({ ...item })) }
-    return todayDraft(selectedMember.id, selectedDate)
-  }, [copiedDraft, selectedDate, selectedMember, selectedPlan])
+    return planDraftFromRecentTrainingPlan(selectedMember.id, plans, selectedDate, 'coach', penaltySettings.check_in_deadline)
+  }, [copiedDraft, penaltySettings.check_in_deadline, plans, selectedDate, selectedMember, selectedPlan])
 
   const hasCopiedDraftForSelection = Boolean(
     copiedDraft &&
@@ -126,7 +99,7 @@ export default function CoachMembers() {
   )
   const draftKey = hasCopiedDraftForSelection
     ? `copied-${copyDraftToken}`
-    : `${draft?.id ?? 'new'}:${draft?.user_id ?? 'none'}:${draft?.date ?? 'none'}:${draft?.source ?? 'none'}`
+    : `${draft?.id ?? 'new'}:${draft?.user_id ?? 'none'}:${draft?.date ?? 'none'}:${draft?.source ?? 'none'}:${draft?.title ?? ''}:${draft?.items.map((item) => item.name).join('|') ?? ''}`
   const isEditingCurrentMember = Boolean(selectedMember && editingMemberId === selectedMember.id)
   const savingCurrentMember = Boolean(selectedMember && savingMemberId === selectedMember.id)
   const selectedCheckIns = selectedMember ? checkIns.filter((item) => item.user_id === selectedMember.id) : []
@@ -196,7 +169,10 @@ export default function CoachMembers() {
     const hasTodayPlan = plans.some((item) => item.date === today)
     const message = hasTodayPlan ? '已填入今天编辑框，保存后才会替换今天已有计划。' : '已填入今天编辑框，调整后再保存。'
     setSelectedDate(today)
-    setCopiedDraft(planToTodayDraft(selectedMember.id, plan, today))
+    setCopiedDraft({
+      ...planDraftFromPlan(selectedMember.id, plan, today, 'coach'),
+      deadline: penaltySettings.check_in_deadline,
+    })
     setCopyDraftToken((current) => current + 1)
     setCopyMessage(message)
     notifyApp({ tone: 'success', message: `已把 ${formatDay(plan.date)} 的计划填入今天编辑框。` })
@@ -346,6 +322,7 @@ export default function CoachMembers() {
             monthLabel={calendarMonthLabel}
             plansByDate={plansByDate}
             selectedDate={selectedDate}
+            onEditSelected={scrollToPlanWorkspace}
             onSelectDate={selectPlanDate}
             onShiftMonth={changeCalendarMonth}
             onToggle={() => setCalendarOpen((current) => !current)}
@@ -514,6 +491,7 @@ function PlanCalendarIndex({
   days,
   isOpen,
   monthLabel,
+  onEditSelected,
   onToggle,
   onSelectDate,
   onShiftMonth,
@@ -523,6 +501,7 @@ function PlanCalendarIndex({
   days: MonthCalendarDay[]
   isOpen: boolean
   monthLabel: string
+  onEditSelected: () => void
   onToggle: () => void
   onSelectDate: (date: string) => void
   onShiftMonth: (amount: number) => void
@@ -561,7 +540,18 @@ function PlanCalendarIndex({
             <strong>{formatDay(selectedDate)}</strong>
           </div>
           <div className="plan-calendar-compact-meta" aria-label="选中日期计划摘要">
-            <span>{selectedStatus}</span>
+            {selectedPlan ? (
+              <span>{selectedStatus}</span>
+            ) : (
+              <button
+                aria-label={`${formatDay(selectedDate)}，去制定计划`}
+                className="plan-calendar-unplanned-button"
+                type="button"
+                onClick={onEditSelected}
+              >
+                去安排
+              </button>
+            )}
             {selectedSource && <span>{selectedSource}</span>}
           </div>
         </div>

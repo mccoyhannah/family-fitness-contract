@@ -102,21 +102,40 @@ export function planDraftFromPlan(userId: string, plan: Plan, date: string, sour
   }
 }
 
-export function latestCoachTrainingPlanBefore(plans: Plan[], date: string) {
+export function latestTrainingPlanBefore(plans: Plan[], date: string) {
   return plans
-    .filter((plan) => plan.source === 'coach' && plan.is_training && plan.date < date)
+    .filter((plan) => plan.is_training && plan.date < date)
     .sort((a, b) => b.date.localeCompare(a.date))[0]
 }
 
-export function studentDraftFromRecentCoachPlan(
+export function blankTrainingPlanDraft(userId: string, date: string, source: PlanSource, deadline: string): PlanDraft {
+  return {
+    user_id: userId,
+    date,
+    title: '',
+    focus: '',
+    deadline: normalizeCheckInDeadline(deadline),
+    is_training: true,
+    source,
+    items: [],
+  }
+}
+
+export function planDraftFromRecentTrainingPlan(
   userId: string,
   plans: Plan[],
   date: string,
-  fallbackDay: PlanDay,
+  source: PlanSource,
+  deadline: string,
 ): PlanDraft {
-  const latestCoachPlan = latestCoachTrainingPlanBefore(plans, date)
-  if (latestCoachPlan) return planDraftFromPlan(userId, latestCoachPlan, date, 'student')
-  return planFromTemplate(userId, fallbackDay, 'student')
+  const latestTrainingPlan = latestTrainingPlanBefore(plans, date)
+  if (latestTrainingPlan) {
+    return {
+      ...planDraftFromPlan(userId, latestTrainingPlan, date, source),
+      deadline: normalizeCheckInDeadline(deadline, latestTrainingPlan.deadline),
+    }
+  }
+  return blankTrainingPlanDraft(userId, date, source, deadline)
 }
 
 export function normalizePlanDraftForSave(draft: PlanDraft, checkInDeadline: string): PlanDraft {
@@ -130,11 +149,7 @@ export function normalizePlanDraftForSave(draft: PlanDraft, checkInDeadline: str
     title: draft.title.trim() || (draft.is_training ? '今日训练' : '今日休息'),
     focus: draft.focus.trim() || fallbackFocus,
     deadline: normalizeCheckInDeadline(checkInDeadline, draft.deadline || undefined),
-    items: draft.is_training
-      ? items.length > 0
-        ? items
-        : [{ name: defaultPlanFocusForSource(draft.source), sets: '1 次', reps: '完成即可', note: '按身体状态量力而行', sort_order: 0 }]
-      : [],
+    items: draft.is_training ? items : [],
   }
 }
 

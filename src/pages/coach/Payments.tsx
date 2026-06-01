@@ -122,7 +122,7 @@ export default function CoachPayments() {
   const [editingExpenseId, setEditingExpenseId] = useState('')
   const [expenseHistoryOpen, setExpenseHistoryOpen] = useState(false)
   const [fundSettingsOpen, setFundSettingsOpen] = useState(false)
-  const [showAllPenalties, setShowAllPenalties] = useState(false)
+  const [penaltyPage, setPenaltyPage] = useState(1)
   const [savingExpense, setSavingExpense] = useState(false)
   const [updatingPenaltyId, setUpdatingPenaltyId] = useState('')
   const paymentReturnPointRef = useRef<PaymentReturnPoint | null>(null)
@@ -143,8 +143,11 @@ export default function CoachPayments() {
       return b.date.localeCompare(a.date)
     })
   }, [scopedPenalties, sortOrder, statusFilter])
-  const displayedPenalties = showAllPenalties ? visiblePenalties : visiblePenalties.slice(0, PAYMENT_LIST_LIMIT)
-  const hasMorePenalties = visiblePenalties.length > PAYMENT_LIST_LIMIT
+  const totalPenaltyPages = Math.max(1, Math.ceil(visiblePenalties.length / PAYMENT_LIST_LIMIT))
+  const safePenaltyPage = Math.min(penaltyPage, totalPenaltyPages)
+  const firstPenaltyIndex = (safePenaltyPage - 1) * PAYMENT_LIST_LIMIT
+  const displayedPenalties = visiblePenalties.slice(firstPenaltyIndex, firstPenaltyIndex + PAYMENT_LIST_LIMIT)
+  const hasPenaltyPages = visiblePenalties.length > PAYMENT_LIST_LIMIT
   const memberNameById = new Map(members.map((member) => [member.id, displayMemberLabel(member)]))
   const fundSummary = useMemo(() => {
     const paidTotal = penalties.filter((penalty) => penalty.status === 'paid').reduce((sum, penalty) => sum + penalty.amount, 0)
@@ -202,8 +205,12 @@ export default function CoachPayments() {
   }, [donationSettings, savingDonationSettings])
 
   useEffect(() => {
-    setShowAllPenalties(false)
+    setPenaltyPage(1)
   }, [selectedMemberId, sortOrder, statusFilter])
+
+  useEffect(() => {
+    if (penaltyPage > totalPenaltyPages) setPenaltyPage(totalPenaltyPages)
+  }, [penaltyPage, totalPenaltyPages])
 
   const findPaymentCard = (penaltyId: string) =>
     Array.from(document.querySelectorAll<HTMLElement>('[data-penalty-id]')).find(
@@ -525,14 +532,20 @@ export default function CoachPayments() {
             </article>
           )
         })}
-        {hasMorePenalties && (
-          <div className="payment-list-more">
+        {hasPenaltyPages && (
+          <div className="payment-list-pager" aria-label="基金记录分页">
             <span>
-              已显示 {displayedPenalties.length} / {visiblePenalties.length} 条
+              {firstPenaltyIndex + 1}-{firstPenaltyIndex + displayedPenalties.length} / {visiblePenalties.length} 条
             </span>
-            <button type="button" onClick={() => setShowAllPenalties((current) => !current)}>
-              {showAllPenalties ? '收起' : '展开全部'}
-            </button>
+            <div className="payment-list-pager-actions">
+              <button type="button" disabled={safePenaltyPage <= 1} onClick={() => setPenaltyPage((page) => Math.max(1, page - 1))}>
+                上一页
+              </button>
+              <strong>第 {safePenaltyPage} / {totalPenaltyPages} 页</strong>
+              <button type="button" disabled={safePenaltyPage >= totalPenaltyPages} onClick={() => setPenaltyPage((page) => Math.min(totalPenaltyPages, page + 1))}>
+                下一页
+              </button>
+            </div>
           </div>
         )}
       </div>

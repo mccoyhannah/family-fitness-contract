@@ -2473,6 +2473,13 @@ label {
   align-items: stretch;
 }
 
+.review-detail-card > .review-card-topline,
+.review-detail-card > .review-compact-brief,
+.review-detail-card > .review-card-foot,
+.review-detail-card > .review-actions {
+  width: 100%;
+}
+
 .review-summary-bar {
   min-height: 52px;
   display: flex;
@@ -5284,26 +5291,31 @@ button:active,
   }
 
   .review-card-topline {
-    flex-direction: column;
-    align-items: stretch;
+    align-items: center;
+    flex-direction: row;
   }
 
   .review-card-person {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
   }
 
   .review-status-column {
-    justify-items: start;
+    justify-items: end;
   }
 
   .review-brief-grid {
     grid-template-columns: 1fr;
   }
 
-  .review-card-foot,
-  .review-expand-button {
+  .review-card-foot {
     width: 100%;
+    justify-content: flex-start;
+  }
+
+  .review-expand-button {
+    width: auto;
+    min-width: 132px;
   }
 
   .review-card-title-row {

@@ -33,7 +33,28 @@ function isWaiverRequest(reason?: string | null) {
 }
 
 function cleanWaiverReason(reason?: string | null) {
-  return reason?.replace(WAIVER_PREFIX, '').trim() || '未填写理由'
+  return reason?.replace(WAIVER_PREFIX, '').trim() || ''
+}
+
+function cleanLeaveReason(reason?: string | null) {
+  const trimmed = reason?.trim() || ''
+  if (!trimmed || isWaiverRequest(trimmed)) return ''
+  return trimmed
+    .replace(/；?理由：\s*未填写\s*$/, '')
+    .replace(/；\s*$/, '')
+    .trim()
+}
+
+function cleanReviewNote(note?: string | null) {
+  const trimmed = note?.trim() || ''
+  const defaultNotes = new Set([
+    '已提交，等待教练确认。',
+    '补交打卡，等待教练确认。',
+    '请假申请，等待教练确认',
+    '请假申请，等待教练确认。',
+    '补卡免罚申请，等待管理端审核。',
+  ])
+  return defaultNotes.has(trimmed) ? '' : trimmed
 }
 
 function fatigueLabel(fatigue: number | null) {
@@ -152,7 +173,7 @@ export default function CoachReview() {
 
   const returnForResubmission = async (checkIn: CheckIn) => {
     if (checkIn.status !== 'pending_review') {
-      throw new Error('只能退回待审核的打卡。')
+      throw new Error('只能退回待审核记录。')
     }
     await deletePendingCheckIn(checkIn)
   }
@@ -287,13 +308,31 @@ export default function CoachReview() {
           const memberPlans = plans.filter((row) => row.user_id === item.user_id)
           const plan = memberPlans.find((row) => row.id === item.plan_id || row.date === item.date)
           const hasWaiverRequest = isWaiverRequest(item.leave_reason)
+          const hasLeaveRequest = Boolean(item.leave_reason && !hasWaiverRequest)
           const waiverReason = cleanWaiverReason(item.leave_reason)
           const isExpanded = expandedCheckInIds.has(item.id)
-          const reviewKind = hasWaiverRequest ? '补卡免罚' : item.leave_reason ? '请假' : '打卡'
+          const reviewKind = hasWaiverRequest ? '补卡免罚' : hasLeaveRequest ? '请假' : '打卡'
+          const reviewKindClass = hasWaiverRequest ? 'review-kind-text waiver' : hasLeaveRequest ? 'review-kind-text leave' : 'review-kind-text'
           const fatigueSummary = fatigueReviewSummary(item.fatigue)
           const issueSummary = item.issues.length > 0 ? `有不适 ${item.issues.length} 项` : null
           const fatigueText = fatigueSummary.detail ? `${fatigueSummary.score} · ${fatigueSummary.detail}` : fatigueSummary.score
           const reviewComment = reviewCommentById[item.id] ?? item.review_comment ?? ''
+          const primaryReviewAction = hasLeaveRequest
+            ? {
+                action: () => approveLeave(item.id, item.user_id, item.date, reviewComment),
+                actionLabel: '准假',
+                successMessage: '已准假。',
+                summary: '准假后这一天将不再按缺卡处理。',
+                title: '确认准假',
+              }
+            : {
+                action: () => approveCheckIn(item.id, item.user_id, item.date, reviewComment),
+                actionLabel: hasWaiverRequest ? '通过补卡' : '通过',
+                successMessage: hasWaiverRequest ? '已通过补卡。' : '已通过打卡。',
+                summary: hasWaiverRequest ? '通过后将补卡记为完成，并同步免罚。' : '通过后这次打卡将记为完成。',
+                title: hasWaiverRequest ? '确认通过补卡' : '确认通过打卡',
+              }
+          const returnActionLabel = item.leave_reason ? '退回申请' : '退回'
           return (
             <article className={`review-card review-detail-card${hasWaiverRequest ? ' waiver-review-card' : ''}`} key={item.id}>
               <div className="review-card-topline">
@@ -302,19 +341,21 @@ export default function CoachReview() {
                   <span className="review-date-chip">{formatDay(item.date)}</span>
                 </div>
                 <div className="review-status-column">
-                  <span className="review-task-status">待处理</span>
+                  <span className="review-task-status">待审核</span>
                 </div>
               </div>
               <div className="review-compact-brief" aria-label="待处理摘要">
                 <div className="review-compact-line">
-                  <span className={hasWaiverRequest ? 'review-kind-text waiver' : 'review-kind-text'}>{reviewKind}</span>
-                  <span className="review-fatigue-score">{fatigueText}</span>
+                  <span className={reviewKindClass}>{reviewKind}</span>
+                  {item.fatigue && <span className="review-fatigue-score">{fatigueText}</span>}
                   {issueSummary && <span className="review-issue-text warning">{issueSummary}</span>}
                 </div>
-                <div className={plan ? 'review-plan-mini' : 'review-plan-mini muted'}>
-                  {plan && <span>对应计划：</span>}
-                  <strong>{plan?.title ?? '计划未同步'}</strong>
-                </div>
+                {!item.leave_reason && plan && (
+                  <div className="review-plan-mini">
+                    <span>对应计划：</span>
+                    <strong>{plan.title}</strong>
+                  </div>
+                )}
               </div>
               <div className="review-card-foot">
                 <button
@@ -331,6 +372,7 @@ export default function CoachReview() {
                 <div className="review-expanded-stack">
                   <ReviewExpandedDetails
                     checkIn={item}
+                    hasLeaveRequest={hasLeaveRequest}
                     hasWaiverRequest={hasWaiverRequest}
                     plan={plan}
                     waiverReason={waiverReason}
@@ -356,63 +398,41 @@ export default function CoachReview() {
                   type="button"
                   onClick={() =>
                     requestReviewAction({
-                      action: () => approveCheckIn(item.id, item.user_id, item.date, reviewComment),
-                      actionLabel: hasWaiverRequest ? '通过补卡' : '通过',
+                      action: primaryReviewAction.action,
+                      actionLabel: primaryReviewAction.actionLabel,
                       checkInId: item.id,
                       dateLabel: formatDay(item.date),
                       memberName: displayName,
-                      successMessage: hasWaiverRequest ? '已通过补卡。' : '已通过打卡。',
-                      summary: hasWaiverRequest ? '通过后将补卡记为完成，并同步免罚。' : '通过后这次打卡将记为完成。',
-                      title: hasWaiverRequest ? '确认通过补卡' : '确认通过',
+                      successMessage: primaryReviewAction.successMessage,
+                      summary: primaryReviewAction.summary,
+                      title: primaryReviewAction.title,
                       tone: 'primary',
                     })
                   }
                   disabled={Boolean(reviewingCheckInId || confirmRequest)}
                 >
-                  {reviewingCheckInId === item.id ? '处理中' : hasWaiverRequest ? '通过补卡' : '通过'}
+                  {reviewingCheckInId === item.id ? '处理中' : primaryReviewAction.actionLabel}
                 </button>
-                {item.leave_reason && (
-                  <button
-                    className="review-action-secondary"
-                    type="button"
-                    onClick={() =>
-                      requestReviewAction({
-                        action: () => approveLeave(item.id, item.user_id, item.date, reviewComment),
-                        actionLabel: '准假',
-                        checkInId: item.id,
-                        dateLabel: formatDay(item.date),
-                        memberName: displayName,
-                        successMessage: '已准假。',
-                        summary: '准假后这一天将不再按缺卡处理。',
-                        title: '确认准假',
-                        tone: 'primary',
-                      })
-                    }
-                    disabled={Boolean(reviewingCheckInId || confirmRequest)}
-                  >
-                    准假
-                  </button>
-                )}
                 <button
                   className="return-review-button"
                   type="button"
                   onClick={() =>
                     requestReviewAction({
                       action: () => returnForResubmission(item),
-                      actionLabel: '退回',
+                      actionLabel: returnActionLabel,
                       checkInId: item.id,
                       dateLabel: formatDay(item.date),
                       memberName: displayName,
                       successMessage: '已退回。',
-                      summary: '退回后成员需要重新提交这次打卡。',
-                      title: '确认退回',
+                      summary: item.leave_reason ? '退回后成员需要重新提交这次申请。' : '退回后成员需要重新提交这次打卡。',
+                      title: item.leave_reason ? '确认退回申请' : '确认退回',
                       tone: 'primary',
                     })
                   }
                   disabled={Boolean(reviewingCheckInId || confirmRequest)}
                 >
                   <RotateCcw size={17} />
-                  退回
+                  {returnActionLabel}
                 </button>
                 <button
                   className="review-action-danger"
@@ -483,43 +503,57 @@ export default function CoachReview() {
 
 function ReviewExpandedDetails({
   checkIn,
+  hasLeaveRequest,
   hasWaiverRequest,
   plan,
   waiverReason,
 }: {
   checkIn: CheckIn
+  hasLeaveRequest: boolean
   hasWaiverRequest: boolean
   plan?: Plan
   waiverReason: string
 }) {
-  const note = checkIn.note || (checkIn.leave_reason && !hasWaiverRequest ? checkIn.leave_reason : '')
+  const note = cleanReviewNote(checkIn.note)
+  const leaveReason = hasLeaveRequest ? cleanLeaveReason(checkIn.leave_reason) : ''
+  const hasExplanation = Boolean(note || leaveReason || (hasWaiverRequest && waiverReason))
+  const hasBodyStatus = Boolean(checkIn.fatigue || checkIn.issues.length > 0)
+  const shouldShowDetailSection = hasExplanation || hasBodyStatus
+  const detailTitle = hasExplanation
+    ? hasWaiverRequest
+      ? '补卡说明'
+      : hasLeaveRequest
+        ? '请假说明'
+        : '打卡备注'
+    : '身体状态'
 
   return (
     <div className="review-detail-panel">
-      <section className="review-detail-section">
-        <div className="review-detail-head">
-          <strong>打卡备注</strong>
-          <span>疲劳度 {fatigueLabel(checkIn.fatigue)}</span>
-        </div>
-        {hasWaiverRequest && <p className="review-note-box">免罚申请：{waiverReason}</p>}
-        {note ? <p className="review-note-box">{note}</p> : <p className="review-empty-detail">暂无备注。</p>}
-        {checkIn.issues.length > 0 ? (
+      {shouldShowDetailSection && (
+        <section className="review-detail-section">
+          <div className="review-detail-head">
+            <strong>{detailTitle}</strong>
+            {checkIn.fatigue && <span>疲劳度 {fatigueLabel(checkIn.fatigue)}</span>}
+          </div>
+          {hasWaiverRequest && waiverReason && <p className="review-note-box">免罚申请：{waiverReason}</p>}
+          {leaveReason && <p className="review-note-box">{leaveReason}</p>}
+          {note && <p className="review-note-box">{note}</p>}
+          {checkIn.issues.length > 0 && (
           <div className="review-chip-row">
             {checkIn.issues.map((issue) => (
               <span className="mini-chip" key={issue}>{issue}</span>
             ))}
           </div>
-        ) : (
-          <p className="review-empty-detail">未填写身体不适项。</p>
-        )}
-      </section>
+          )}
+        </section>
+      )}
 
+      {plan && (
         <section className="review-detail-section">
           <div className="review-detail-head">
-            <strong>计划内容</strong>
-            <span>{plan ? (plan.source === 'coach' ? '教练制定' : '成员自定') : '未同步'}</span>
+            <strong>对应计划</strong>
+            <span>{plan.source === 'coach' ? '教练制定' : '成员自定'}</span>
           </div>
-        {plan ? (
           <>
             <p className="review-plan-summary">{plan.title} · {plan.focus}</p>
             {plan.items.length > 0 ? (
@@ -536,10 +570,8 @@ function ReviewExpandedDetails({
               <p className="review-empty-detail">{plan.is_training ? '暂无动作明细。' : '恢复日。'}</p>
             )}
           </>
-        ) : (
-          <p className="review-empty-detail">计划未同步。</p>
-        )}
-      </section>
+        </section>
+      )}
 
     </div>
   )

@@ -2838,6 +2838,12 @@ label {
   background: #fff8e7;
 }
 
+.review-kind-text.leave {
+  color: #7a560b;
+  border-color: #e8cf8e;
+  background: #fff8df;
+}
+
 .review-fatigue-score {
   color: var(--ink-soft);
   font-weight: 780;
@@ -2897,10 +2903,10 @@ label {
   align-items: center;
   justify-content: center;
   padding: 0 10px;
-  border: 1px solid #d9e5de;
+  border: 1px solid #e5c873;
   border-radius: var(--radius);
-  color: #425b4b;
-  background: #f7faf8;
+  color: #7a560b;
+  background: #fff8df;
   font-size: 12px;
   font-weight: 820;
   white-space: nowrap;

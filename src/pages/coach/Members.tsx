@@ -1,5 +1,5 @@
 import { Check, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Copy, Pencil, UserPlus, Users, X } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import ExerciseCard from '../../components/ExerciseCard'
 import Metric from '../../components/Metric'
 import PlanEditor from '../../components/PlanEditor'
@@ -32,6 +32,16 @@ function calendarPlanStatus(plan?: Plan) {
 function calendarPlanSource(plan?: Plan) {
   if (!plan) return null
   return plan.source === 'coach' ? '教练' : '成员'
+}
+
+function calendarPlanGridStatus(plan?: Plan) {
+  if (!plan) return null
+  return plan.is_training ? `${plan.items.length}个` : '休'
+}
+
+function calendarPlanSourceMark(plan?: Plan) {
+  if (!plan) return null
+  return plan.source === 'coach' ? '教' : '自'
 }
 
 const weekDayLabels = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
@@ -72,6 +82,7 @@ export default function CoachMembers() {
   const [copyMessage, setCopyMessage] = useState('')
   const [expandedPlanIds, setExpandedPlanIds] = useState<Set<string>>(() => new Set())
   const [calendarOpen, setCalendarOpen] = useState(false)
+  const calendarSectionRef = useRef<HTMLElement | null>(null)
   const planWorkspaceRef = useRef<HTMLElement | null>(null)
   const today = toISODate(new Date())
   const week = useMemo(() => buildPlan(new Date(`${selectedDate}T12:00:00`)), [selectedDate])
@@ -146,6 +157,17 @@ export default function CoachMembers() {
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     target.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' })
   }
+
+  useEffect(() => {
+    if (!calendarOpen) return undefined
+    const closeCalendarOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (!calendarSectionRef.current?.contains(target)) setCalendarOpen(false)
+    }
+    document.addEventListener('pointerdown', closeCalendarOnOutsidePointer)
+    return () => document.removeEventListener('pointerdown', closeCalendarOnOutsidePointer)
+  }, [calendarOpen])
 
   const editPlanDate = (date: string) => {
     selectPlanDate(date)
@@ -321,6 +343,7 @@ export default function CoachMembers() {
             isOpen={calendarOpen}
             monthLabel={calendarMonthLabel}
             plansByDate={plansByDate}
+            sectionRef={calendarSectionRef}
             selectedDate={selectedDate}
             onEditSelected={scrollToPlanWorkspace}
             onSelectDate={selectPlanDate}
@@ -496,6 +519,7 @@ function PlanCalendarIndex({
   onSelectDate,
   onShiftMonth,
   plansByDate,
+  sectionRef,
   selectedDate,
 }: {
   days: MonthCalendarDay[]
@@ -506,6 +530,7 @@ function PlanCalendarIndex({
   onSelectDate: (date: string) => void
   onShiftMonth: (amount: number) => void
   plansByDate: Map<string, Plan>
+  sectionRef: RefObject<HTMLElement | null>
   selectedDate: string
 }) {
   const selectedPlan = plansByDate.get(selectedDate)
@@ -517,7 +542,7 @@ function PlanCalendarIndex({
     : '未安排'
 
   return (
-    <section className={`plan-calendar-section coach-plan-module coach-plan-module-calendar${isOpen ? ' expanded' : ' collapsed'}`} aria-label="计划日历索引">
+    <section ref={sectionRef} className={`plan-calendar-section coach-plan-module coach-plan-module-calendar${isOpen ? ' expanded' : ' collapsed'}`} aria-label="计划日历索引">
       <div className="coach-plan-module-head">
         <div className="coach-plan-module-title">
           <span className="coach-plan-module-index">01</span>
@@ -558,24 +583,33 @@ function PlanCalendarIndex({
         {isOpen && (
           <>
             <div className="plan-calendar-toolbar">
-              <button className="month-nav-button" type="button" onClick={() => onShiftMonth(-1)} aria-label="上个月">
-                <ChevronLeft size={18} />
+              <button className="month-nav-button prev" type="button" onClick={() => onShiftMonth(-1)} aria-label="上个月">
+                <ChevronLeft size={16} aria-hidden="true" />
+                <span>上月</span>
               </button>
-              <strong>{monthLabel}</strong>
-              <button className="month-nav-button" type="button" onClick={() => onShiftMonth(1)} aria-label="下个月">
-                <ChevronRight size={18} />
+              <div className="plan-calendar-month-title" aria-live="polite">
+                <small>当前月份</small>
+                <strong>{monthLabel}</strong>
+              </div>
+              <button className="month-nav-button next" type="button" onClick={() => onShiftMonth(1)} aria-label="下个月">
+                <span>下月</span>
+                <ChevronRight size={16} aria-hidden="true" />
               </button>
             </div>
             <div className="plan-calendar-grid">
               {days.map((day) => {
                 const plan = plansByDate.get(day.date)
                 const source = calendarPlanSource(plan)
+                const sourceMark = calendarPlanSourceMark(plan)
+                const gridStatus = calendarPlanGridStatus(plan)
                 const className = [
                   'plan-calendar-day',
                   day.inCurrentMonth ? '' : 'outside',
                   day.isToday ? 'today' : '',
                   day.date === selectedDate ? 'selected' : '',
                   plan ? 'has-plan' : '',
+                  plan?.is_training ? 'training-plan' : '',
+                  plan && !plan.is_training ? 'rest-plan' : '',
                 ].filter(Boolean).join(' ')
 
                 return (
@@ -588,8 +622,9 @@ function PlanCalendarIndex({
                     onClick={() => onSelectDate(day.date)}
                   >
                     <span className="calendar-day-number">{day.dayOfMonth}</span>
-                    <span className="calendar-day-status">{calendarPlanStatus(plan)}</span>
-                    {source && <span className="calendar-day-source">{source}</span>}
+                    {day.isToday && <span className="calendar-day-today">今天</span>}
+                    {gridStatus && <span className="calendar-day-status">{gridStatus}</span>}
+                    {sourceMark && <span className="calendar-day-source" aria-label={source ?? undefined}>{sourceMark}</span>}
                   </button>
                 )
               })}

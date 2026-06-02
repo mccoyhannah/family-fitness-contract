@@ -1,4 +1,4 @@
-import { CheckCircle2, Loader2 } from 'lucide-react'
+import { CalendarDays, CheckCircle2, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FatigueCards from '../../components/FatigueCards'
@@ -113,9 +113,18 @@ export default function CheckIn() {
         />
       )}
       {!todayPlan && (
-        <div className="status-card">
-          <strong>今天还没有计划</strong>
-          <p>先回到今日页，让教练制定计划，或自己制定今日计划后再打卡。</p>
+        <div className="checkin-plan-notice" role="status" aria-live="polite">
+          <div className="checkin-plan-notice-icon" aria-hidden="true">
+            <CalendarDays size={22} />
+          </div>
+          <div className="checkin-plan-notice-copy">
+            <span>计划未就绪</span>
+            <strong>今天还没有训练计划</strong>
+            <p>先到今日页安排好今天的训练，再回来打卡。</p>
+          </div>
+          <button className="checkin-plan-notice-action" type="button" onClick={() => navigate('/')}>
+            去今日页
+          </button>
         </div>
       )}
       {todayPlan && restDay && (
@@ -156,7 +165,7 @@ export default function CheckIn() {
           )}
         </div>
       )}
-      {!restDay && (
+      {todayPlan && !restDay && (
       <div className="form-card checkin-panel">
         <div className="checkin-section-head">
           <span>01</span>

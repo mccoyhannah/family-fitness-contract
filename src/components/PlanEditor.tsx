@@ -90,7 +90,7 @@ export default function PlanEditor({ checkInDeadline, initial, onSubmit, submitL
           type="button"
           onClick={() => changeTrainingMode(true)}
         >
-          训练日
+          训练
         </button>
         <button
           aria-pressed={!draft.is_training}
@@ -98,7 +98,7 @@ export default function PlanEditor({ checkInDeadline, initial, onSubmit, submitL
           type="button"
           onClick={() => changeTrainingMode(false)}
         >
-          休息日
+          休息
         </button>
       </div>
 
@@ -161,8 +161,7 @@ export default function PlanEditor({ checkInDeadline, initial, onSubmit, submitL
         <section className="plan-rest-panel" aria-label="休息安排">
           <span className="plan-rest-mark" aria-hidden="true">休</span>
           <div className="plan-rest-copy">
-            <strong>今日设为休息日</strong>
-            <span className="plan-rest-badge">休息日</span>
+            <strong>设为恢复日</strong>
           </div>
         </section>
       )}

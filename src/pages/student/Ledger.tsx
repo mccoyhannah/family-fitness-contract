@@ -194,27 +194,50 @@ export default function Ledger() {
   }
 
   return (
-    <section className="screen with-nav">
-      <div className="hero-panel">
-        <span className="hero-kicker">家庭基金</span>
-        <h2>待贡献 ¥{formatAmount(pendingTotal)}</h2>
-      </div>
-      <div className="status-card action-card ledger-fund-summary">
-        <strong>已入账 ¥{formatAmount(paidTotal)} · 已用于 ¥{formatAmount(expenseTotal)}</strong>
-        <p>待核对 {reported} 笔 · 已处理 {settled} 条</p>
-      </div>
-      {fundExpenses.length > 0 && (
-        <div className="status-card ledger-expense-preview">
-          <strong>基金使用记录</strong>
-          <div className="ledger-expense-list">
-            {fundExpenses.slice(0, 3).map((expense) => (
-              <span key={expense.id}>
-                {expense.title} · {fundPurposeLabel[expense.purpose]} · ¥{formatAmount(expense.amount)}
-              </span>
-            ))}
-          </div>
+    <section className="screen with-nav ledger-screen">
+      <div className="ledger-overview-panel" aria-label="家庭基金总览">
+        <div className="ledger-overview-main">
+          <span>家庭基金</span>
+          <strong>待贡献 ¥{formatAmount(pendingTotal)}</strong>
         </div>
-      )}
+        <div className="ledger-overview-metrics" aria-label="基金统计">
+          <span>
+            <small>已入账</small>
+            <strong>¥{formatAmount(paidTotal)}</strong>
+          </span>
+          <span>
+            <small>已用于</small>
+            <strong>¥{formatAmount(expenseTotal)}</strong>
+          </span>
+          <span>
+            <small>待核对</small>
+            <strong>{reported} 笔</strong>
+          </span>
+          <span>
+            <small>已处理</small>
+            <strong>{settled} 条</strong>
+          </span>
+        </div>
+        {fundExpenses.length > 0 && (
+          <div className="ledger-expense-preview">
+            <strong>最近使用</strong>
+            <div className="ledger-expense-list">
+              {fundExpenses.slice(0, 3).map((expense) => (
+                <span key={expense.id}>
+                  {expense.title} · {fundPurposeLabel[expense.purpose]} · ¥{formatAmount(expense.amount)}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="ledger-section-head">
+        <div>
+          <span>明细</span>
+          <strong>缺卡贡献</strong>
+        </div>
+        {penalties.length > 0 && <em>{penalties.length} 条</em>}
+      </div>
       <div className="penalty-list">
         {penalties.length === 0 && <p className="muted">暂无待贡献记录。请假和今日休息不会生成家庭基金贡献。</p>}
         {displayedPenalties.map((penalty) => {

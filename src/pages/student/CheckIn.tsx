@@ -120,10 +120,10 @@ export default function CheckIn() {
           <div className="checkin-plan-notice-copy">
             <span>计划未就绪</span>
             <strong>今天还没有训练计划</strong>
-            <p>先到今日页安排好今天的训练，再回来打卡。</p>
+            <p>先到计划页安排今天的训练，再回来打卡。</p>
           </div>
-          <button className="checkin-plan-notice-action" type="button" onClick={() => navigate('/')}>
-            去今日页
+          <button className="checkin-plan-notice-action" type="button" onClick={() => navigate(`/plan?date=${today}&edit=1`)}>
+            去计划页安排
           </button>
         </div>
       )}

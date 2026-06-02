@@ -19,6 +19,7 @@ import {
 } from '../src/lib/plan.ts'
 import { getMonthCalendarDays, getPlansInWeek, getStudentPlanCardAction, getWeekDates } from '../src/lib/planCalendar.ts'
 import { getRestConflict } from '../src/lib/restRules.ts'
+import { friendlyPlanSaveMessage } from '../src/lib/supabaseErrors.ts'
 import { getContributionPromptState, getRestChoiceActionState } from '../src/lib/todayPrompts.ts'
 import type { CheckIn, Penalty, Plan } from '../src/lib/types.ts'
 
@@ -244,6 +245,30 @@ test('blocked rest action uses business feedback and does not allow rest save', 
   const allowed = getRestChoiceActionState(null)
   assert.equal(allowed.canSubmit, true)
   assert.equal(allowed.label, '今日休息')
+})
+
+test('plan save errors show Chinese rest and policy feedback', () => {
+  assert.equal(
+    friendlyPlanSaveMessage(
+      { code: '42501', message: 'new row violates row-level security policy for table "plans"' },
+      { is_training: false, source: 'student' },
+    ),
+    '今日休息保存失败：数据库没有允许这次计划写入。请刷新后重试；如果今天已有教练计划，不能改成休息。',
+  )
+  assert.equal(
+    friendlyPlanSaveMessage(
+      { code: '23514', message: '相邻日期已经是休息日，不能连续休息。' },
+      { is_training: false, source: 'student' },
+    ),
+    '相邻日期已经是休息日，不能连续休息。',
+  )
+  assert.equal(
+    friendlyPlanSaveMessage(
+      { code: '23505', message: 'duplicate key value violates unique constraint "plans_user_id_date_key"' },
+      { is_training: false, source: 'student' },
+    ),
+    '今天已经有计划，刷新后再看。',
+  )
 })
 
 test('plan calendar helpers build monday-first weeks and month grids', () => {

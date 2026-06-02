@@ -233,6 +233,14 @@ as $$
   );
 $$;
 
+create or replace function public.current_app_date()
+returns date
+language sql
+stable
+as $$
+  select (now() at time zone 'Asia/Shanghai')::date;
+$$;
+
 create or replace function public.can_manage_plan(plan_id uuid)
 returns boolean
 language sql
@@ -248,7 +256,7 @@ as $$
         or (
           user_id = auth.uid()
           and source = 'student'
-          and date = current_date
+          and date = public.current_app_date()
         )
       )
   );
@@ -794,7 +802,7 @@ with check (
   (
     user_id = auth.uid()
     and source = 'student'
-    and date = current_date
+    and date = public.current_app_date()
     and not exists (
       select 1 from public.plans existing
       where existing.user_id = auth.uid()
@@ -816,7 +824,7 @@ using (
   (
     user_id = auth.uid()
     and source = 'student'
-    and date = current_date
+    and date = public.current_app_date()
   )
   or public.is_member_coach(user_id)
 )
@@ -824,7 +832,7 @@ with check (
   (
     user_id = auth.uid()
     and source = 'student'
-    and date = current_date
+    and date = public.current_app_date()
   )
   or (
     source = 'coach'
@@ -840,7 +848,7 @@ using (
   (
     user_id = auth.uid()
     and source = 'student'
-    and date = current_date
+    and date = public.current_app_date()
   )
   or public.is_member_coach(user_id)
 );

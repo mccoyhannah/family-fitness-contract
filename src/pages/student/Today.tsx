@@ -89,7 +89,7 @@ export default function Today() {
   const { checkIns, loading: checkInsLoading, reload: reloadCheckIns, setCheckIns, upsertCheckIn, withdrawCheckIn } = useCheckIns(profile?.id)
   const { penalties, loading: penaltiesLoading, reload: reloadPenalties, setPenalties, upsertPenalty } = usePenalties(profile?.id)
   const { ready: penaltySettingsReady, settings: penaltySettings } = usePenaltySettings()
-  const { loading: plansLoading, plans, savePlan, withdrawPlan } = usePlans(profile?.id)
+  const { loading: plansLoading, plans, reload: reloadPlans, savePlan, withdrawPlan } = usePlans(profile?.id)
   const [leaveFatigue, setLeaveFatigue] = useState<number | null>(null)
   const [leaveOffWorkTime, setLeaveOffWorkTime] = useState('')
   const [leaveReason, setLeaveReason] = useState('')
@@ -254,7 +254,17 @@ export default function Today() {
       })
       notifyApp({ tone: 'success', message: '今天已记为休息日，不会按缺卡处理。' })
     } catch (err) {
-      notifyApp({ tone: 'warning', message: rawErrorMessage(err, restBlockedMessage ?? '今日休息保存失败，请稍后重试。') })
+      let message = rawErrorMessage(err, restBlockedMessage ?? '今日休息保存失败，请稍后重试。')
+      try {
+        const refreshedPlans = await reloadPlans()
+        const refreshedTodayPlan = refreshedPlans.find((plan) => plan.date === today)
+        if (refreshedTodayPlan?.source === 'coach') {
+          message = '今天已有教练计划，不能改成休息。'
+        }
+      } catch {
+        // Keep the save error. The next realtime/load cycle can still refresh state.
+      }
+      notifyApp({ tone: 'warning', message })
     } finally {
       setRestSaving(false)
     }

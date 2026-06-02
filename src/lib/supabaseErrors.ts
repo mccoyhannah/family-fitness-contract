@@ -15,6 +15,19 @@ function asSupabaseError(error: unknown): SupabaseLikeError | null {
   return null
 }
 
+function isPermissionError(error: SupabaseLikeError | null, raw: string) {
+  const lower = raw.toLowerCase()
+  const status = normalizeStatus(error?.status ?? error?.statusCode)
+  return (
+    error?.code === '42501' ||
+    status === 401 ||
+    status === 403 ||
+    lower.includes('permission denied') ||
+    lower.includes('row-level security') ||
+    lower.includes('unauthorized')
+  )
+}
+
 export function rawErrorMessage(error: unknown, fallback = '操作失败，请稍后重试。') {
   if (error instanceof Error && error.message) return error.message
   const supabaseError = asSupabaseError(error)
@@ -29,17 +42,9 @@ export function friendlySupabaseMessage(error: unknown, prefix: string) {
   const raw = rawErrorMessage(error)
   const lower = raw.toLowerCase()
   const code = supabaseError?.code
-  const status = normalizeStatus(supabaseError?.status ?? supabaseError?.statusCode)
 
   let hint = raw
-  if (
-    code === '42501' ||
-    status === 401 ||
-    status === 403 ||
-    lower.includes('permission denied') ||
-    lower.includes('row-level security') ||
-    lower.includes('unauthorized')
-  ) {
+  if (isPermissionError(supabaseError, raw)) {
     hint = '数据库权限拒绝了这次操作，权限已同步后请刷新重试。'
   } else if (code === '23505' || lower.includes('duplicate key')) {
     hint = '今天已经有一条记录，刷新后再重新提交。'
@@ -53,6 +58,35 @@ export function friendlySupabaseMessage(error: unknown, prefix: string) {
 
   const suffix = code ? `（${code}）` : ''
   return `${prefix}${hint}${suffix}`
+}
+
+export function friendlyPlanSaveMessage(
+  error: unknown,
+  context: { is_training?: boolean; source?: string } = {},
+) {
+  const supabaseError = asSupabaseError(error)
+  const raw = rawErrorMessage(error)
+  const lower = raw.toLowerCase()
+  const code = supabaseError?.code
+  const isStudentRest = context.source === 'student' && context.is_training === false
+  const prefix = isStudentRest ? '今日休息保存失败：' : '计划保存失败：'
+
+  if (code === '23514' && raw) return raw
+  if (code === '23505' || lower.includes('duplicate key')) return '今天已经有计划，刷新后再看。'
+  if (isPermissionError(supabaseError, raw)) {
+    return `${prefix}数据库没有允许这次计划写入。请刷新后重试；如果今天已有教练计划，不能改成休息。`
+  }
+
+  return friendlySupabaseMessage(error, prefix)
+}
+
+export function friendlyPlanSaveError(error: unknown, context: { is_training?: boolean; source?: string } = {}) {
+  const supabaseError = asSupabaseError(error)
+  const wrapped = new Error(friendlyPlanSaveMessage(error, context)) as Error & SupabaseLikeError
+  wrapped.code = supabaseError?.code
+  wrapped.details = supabaseError?.details ?? supabaseError?.hint ?? supabaseError?.message ?? supabaseError?.error
+  wrapped.status = normalizeStatus(supabaseError?.status ?? supabaseError?.statusCode)
+  return wrapped
 }
 
 export function friendlySupabaseError(error: unknown, prefix: string) {

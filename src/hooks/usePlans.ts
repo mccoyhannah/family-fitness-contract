@@ -3,7 +3,7 @@ import { readCache, writeCache } from '../lib/cache'
 import { toISODate } from '../lib/date'
 import { shouldUsePreviewLocalScope } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
-import { friendlySupabaseMessage } from '../lib/supabaseErrors'
+import { friendlyPlanSaveError, friendlySupabaseMessage } from '../lib/supabaseErrors'
 import { notifySyncError } from '../lib/syncError'
 import type { Plan, PlanDraft, PlanItem } from '../lib/types'
 
@@ -35,14 +35,15 @@ export function usePlans(userId?: string) {
   const planIds = useMemo(() => plans.map((plan) => plan.id).sort().join(','), [plans])
 
   const load = useCallback(async () => {
-    if (!userId) return
+    if (!userId) return []
     if (shouldUseLocalPlans(userId)) {
-      setPlans(readCache(cacheScope).plans.filter((plan) => plan.user_id === userId))
+      const nextPlans = readCache(cacheScope).plans.filter((plan) => plan.user_id === userId)
+      setPlans(nextPlans)
       setLoadedUserId(userId)
-      return
+      return nextPlans
     }
     const client = supabase
-    if (!client) return
+    if (!client) return []
 
     try {
       setLoading(true)
@@ -56,6 +57,7 @@ export function usePlans(userId?: string) {
       setPlans(nextPlans)
       writeCache({ ...readCache(cacheScope), plans: nextPlans }, cacheScope)
       setLoadedUserId(userId)
+      return nextPlans
     } finally {
       setLoading(false)
     }
@@ -125,7 +127,7 @@ export function usePlans(userId?: string) {
       .upsert(planRow, { onConflict: 'user_id,date' })
       .select('*')
       .single()
-    if (error) throw error
+    if (error) throw friendlyPlanSaveError(error, draft)
 
     const itemRows = draft.items.map((item, index) => ({
       id: isUuid(item.id) ? item.id : undefined,
@@ -145,7 +147,7 @@ export function usePlans(userId?: string) {
         .from('plan_items')
         .upsert(existingRows, { onConflict: 'id' })
         .select('id')
-      if (itemError) throw itemError
+      if (itemError) throw friendlyPlanSaveError(itemError, draft)
       keptItemIds.push(...((savedItems ?? []) as Pick<PlanItem, 'id'>[]).map((item) => item.id))
     }
     if (newRows.length > 0) {
@@ -153,21 +155,21 @@ export function usePlans(userId?: string) {
         .from('plan_items')
         .insert(newRows)
         .select('id')
-      if (itemError) throw itemError
+      if (itemError) throw friendlyPlanSaveError(itemError, draft)
       keptItemIds.push(...((insertedItems ?? []) as Pick<PlanItem, 'id'>[]).map((item) => item.id))
     }
     if (keptItemIds.length === 0) {
       const { error: deleteError } = await client.from('plan_items').delete().eq('plan_id', data.id)
-      if (deleteError) throw deleteError
+      if (deleteError) throw friendlyPlanSaveError(deleteError, draft)
     } else {
       const { data: currentItems, error: listError } = await client.from('plan_items').select('id').eq('plan_id', data.id)
-      if (listError) throw listError
+      if (listError) throw friendlyPlanSaveError(listError, draft)
       const staleItemIds = ((currentItems ?? []) as Pick<PlanItem, 'id'>[])
         .map((item) => item.id)
         .filter((id) => !keptItemIds.includes(id))
       if (staleItemIds.length > 0) {
         const { error: deleteError } = await client.from('plan_items').delete().in('id', staleItemIds)
-        if (deleteError) throw deleteError
+        if (deleteError) throw friendlyPlanSaveError(deleteError, draft)
       }
     }
 

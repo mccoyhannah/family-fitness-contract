@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, PencilLine } from 'lucide-react'
+import { ChevronDown, ChevronUp, PencilLine, RotateCcw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import ExerciseCard from '../../components/ExerciseCard'
 import PlanEditor from '../../components/PlanEditor'
@@ -7,7 +7,7 @@ import { useCheckIns } from '../../hooks/useCheckIns'
 import { usePenalties } from '../../hooks/usePenalties'
 import { usePenaltySettings } from '../../hooks/usePenaltySettings'
 import { usePlans } from '../../hooks/usePlans'
-import { formatDay } from '../../lib/date'
+import { formatDay, toISODate } from '../../lib/date'
 import { notifyApp } from '../../lib/notice'
 import { buildPlan, planFromTemplate, planToExercises } from '../../lib/plan'
 import { getStudentPlanCardAction } from '../../lib/planCalendar'
@@ -20,13 +20,16 @@ export default function Plan() {
   const { checkIns } = useCheckIns(profile?.id)
   const { penalties } = usePenalties(profile?.id)
   const { settings: penaltySettings } = usePenaltySettings()
-  const { plans, savePlan } = usePlans(profile?.id)
+  const { plans, savePlan, withdrawPlan } = usePlans(profile?.id)
   const [expandedDates, setExpandedDates] = useState<Set<string>>(() => new Set())
   const [editingDate, setEditingDate] = useState<string | null>(null)
+  const [withdrawingDate, setWithdrawingDate] = useState<string | null>(null)
   const week = useMemo(() => buildPlan(new Date()), [])
+  const today = toISODate(new Date())
   const weekDates = useMemo(() => new Set(week.map((day) => day.date)), [week])
   const weekPlans = plans.filter((plan) => weekDates.has(plan.date))
   const trainingDays = weekPlans.filter((plan) => plan.is_training).length
+  const restDays = Math.max(0, weekPlans.length - trainingDays)
 
   const toggleExpanded = (date: string) => {
     setExpandedDates((current) => {
@@ -51,28 +54,74 @@ export default function Plan() {
     notifyApp({ tone: 'success', message: '自定计划已保存。' })
   }
 
+  const withdrawStudentRest = async (plan: Plan) => {
+    if (plan.date !== today || plan.source !== 'student' || plan.is_training) {
+      notifyApp({ tone: 'warning', message: '只有今天自己设置的休息可以撤回。' })
+      return
+    }
+    if (checkIns.some((item) => item.date === plan.date)) {
+      notifyApp({ tone: 'warning', message: '今天已有记录，不能撤回休息安排。' })
+      return
+    }
+    setWithdrawingDate(plan.date)
+    try {
+      await withdrawPlan(plan)
+      setEditingDate(null)
+      setExpandedDates((current) => {
+        const next = new Set(current)
+        next.delete(plan.date)
+        return next
+      })
+      notifyApp({ tone: 'success', message: '已撤回休息安排。' })
+    } catch (err) {
+      notifyApp({ tone: 'warning', message: err instanceof Error ? err.message : '撤回休息失败，请刷新后重试。' })
+    } finally {
+      setWithdrawingDate(null)
+    }
+  }
+
   return (
     <section className="screen with-nav plan-screen">
       <div className="page-title">
         <h2>本周计划</h2>
       </div>
-      <div className="status-card action-card">
-        <strong>本周已安排 {weekPlans.length} 天</strong>
-        <p>{trainingDays} 天训练，{Math.max(0, weekPlans.length - trainingDays)} 天恢复。</p>
+      <div className="plan-week-overview" aria-label="本周计划概览">
+        <div className="plan-week-overview-title">
+          <span>本周概览</span>
+          <strong>{weekPlans.length} 天</strong>
+        </div>
+        <div className="plan-week-overview-stats">
+          <span>
+            <strong>{weekPlans.length}</strong>
+            <small>已安排</small>
+          </span>
+          <span>
+            <strong>{trainingDays}</strong>
+            <small>训练</small>
+          </span>
+          <span>
+            <strong>{restDays}</strong>
+            <small>恢复</small>
+          </span>
+        </div>
       </div>
       <div className="week-list">
         {week.map((day) => {
           const plan = plans.find((item) => item.date === day.date)
           const editing = editingDate === day.date
+          const hasCheckIn = checkIns.some((item) => item.date === day.date)
           return (
             <PlanDayCard
               checkInDeadline={penaltySettings.check_in_deadline}
               day={day}
               editing={editing}
               expanded={expandedDates.has(day.date)}
+              hasCheckIn={hasCheckIn}
               key={day.date}
               plan={plan}
               studentId={profile?.id}
+              today={today}
+              withdrawing={withdrawingDate === day.date}
               onCancelEdit={() => setEditingDate(null)}
               onEdit={() => {
                 setEditingDate(day.date)
@@ -80,6 +129,7 @@ export default function Plan() {
               }}
               onSave={saveStudentPlan}
               onToggle={() => toggleExpanded(day.date)}
+              onWithdrawRest={withdrawStudentRest}
             />
           )
         })}
@@ -93,26 +143,35 @@ function PlanDayCard({
   day,
   editing,
   expanded,
+  hasCheckIn,
   onCancelEdit,
   onEdit,
   onSave,
   onToggle,
+  onWithdrawRest,
   plan,
   studentId,
+  today,
+  withdrawing,
 }: {
   checkInDeadline: string
   day: PlanDay
   editing: boolean
   expanded: boolean
+  hasCheckIn: boolean
   onCancelEdit: () => void
   onEdit: () => void
   onSave: (draft: PlanDraft) => Promise<void>
   onToggle: () => void
+  onWithdrawRest: (plan: Plan) => Promise<void>
   plan?: Plan
   studentId?: string
+  today: string
+  withdrawing: boolean
 }) {
   const exercises = plan ? planToExercises(plan) : []
-  const action = getStudentPlanCardAction(plan)
+  const action = getStudentPlanCardAction(plan, today)
+  const canWithdrawRest = Boolean(plan && action.canWithdrawRest && !hasCheckIn && !editing)
   const draft = useMemo(() => {
     if (!studentId) return null
     if (plan && action.canConvertRestToTraining) return planToTrainingDraft(plan, day, studentId)
@@ -153,6 +212,12 @@ function PlanDayCard({
           <button className="ghost-button plan-edit-trigger" disabled={!draft} type="button" onClick={onEdit}>
             <PencilLine size={18} />
             {action.editLabel}
+          </button>
+        )}
+        {canWithdrawRest && plan && (
+          <button className="ghost-button withdraw-rest-button" disabled={withdrawing} type="button" onClick={() => void onWithdrawRest(plan)}>
+            <RotateCcw size={18} />
+            {withdrawing ? '撤回中' : '撤回休息'}
           </button>
         )}
       </div>

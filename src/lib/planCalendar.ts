@@ -11,6 +11,7 @@ export type MonthCalendarDay = {
 export type StudentPlanCardAction = {
   canConvertRestToTraining: boolean
   canEdit: boolean
+  canWithdrawRest: boolean
   canView: boolean
   editLabel: '制定计划' | '编辑计划' | '改成训练' | null
 }
@@ -49,11 +50,15 @@ export function getPlansInWeek<T extends Pick<Plan, 'date'>>(plans: T[], selecte
     .sort((a, b) => a.date.localeCompare(b.date))
 }
 
-export function getStudentPlanCardAction(plan?: Pick<Plan, 'is_training' | 'source'>): StudentPlanCardAction {
+export function getStudentPlanCardAction(
+  plan?: Pick<Plan, 'is_training' | 'source'> & Partial<Pick<Plan, 'date'>>,
+  today = toISODate(new Date()),
+): StudentPlanCardAction {
   if (!plan) {
     return {
       canConvertRestToTraining: false,
       canEdit: true,
+      canWithdrawRest: false,
       canView: false,
       editLabel: '制定计划',
     }
@@ -63,6 +68,7 @@ export function getStudentPlanCardAction(plan?: Pick<Plan, 'is_training' | 'sour
     return {
       canConvertRestToTraining: false,
       canEdit: plan.source === 'student',
+      canWithdrawRest: false,
       canView: true,
       editLabel: plan.source === 'student' ? '编辑计划' : null,
     }
@@ -71,6 +77,7 @@ export function getStudentPlanCardAction(plan?: Pick<Plan, 'is_training' | 'sour
   return {
     canConvertRestToTraining: plan.source === 'student',
     canEdit: false,
+    canWithdrawRest: plan.source === 'student' && plan.date === today,
     canView: false,
     editLabel: plan.source === 'student' ? '改成训练' : null,
   }

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { readCache, writeCache } from '../lib/cache'
+import { toISODate } from '../lib/date'
 import { shouldUsePreviewLocalScope } from '../lib/preview'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
+import { friendlySupabaseMessage } from '../lib/supabaseErrors'
 import { notifySyncError } from '../lib/syncError'
 import type { Plan, PlanDraft, PlanItem } from '../lib/types'
 
@@ -173,5 +175,41 @@ export function usePlans(userId?: string) {
     return normalizePlan({ ...(data as Omit<Plan, 'items'>), plan_items: [] })
   }
 
-  return { loading: loadingState, plans, reload: load, savePlan, setPlans }
+  const withdrawPlan = async (plan: Plan) => {
+    const today = toISODate(new Date())
+    if (plan.source !== 'student' || plan.date !== today || plan.is_training) {
+      throw new Error('只有自己设置的今日休息可以撤回。')
+    }
+
+    if (shouldUseLocalPlans(plan.user_id)) {
+      const cache = readCache(cacheScope)
+      const nextPlans = cache.plans.filter((item) => item.id !== plan.id)
+      writeCache({ ...cache, plans: nextPlans }, cacheScope)
+      const visibleUserId = userId ?? plan.user_id
+      setPlans(nextPlans.filter((item) => item.user_id === visibleUserId))
+      setLoadedUserId(visibleUserId)
+      return
+    }
+
+    const client = supabase
+    if (!client) throw new Error('Supabase 未配置，无法撤回休息。')
+    const { data, error } = await client
+      .from('plans')
+      .delete()
+      .eq('id', plan.id)
+      .eq('user_id', plan.user_id)
+      .eq('source', 'student')
+      .eq('date', today)
+      .eq('is_training', false)
+      .select('id')
+
+    if (error) throw new Error(friendlySupabaseMessage(error, '撤回休息失败：'))
+    if (!data || data.length === 0) {
+      throw new Error('撤回休息失败，请刷新后重试。')
+    }
+
+    await load()
+  }
+
+  return { loading: loadingState, plans, reload: load, savePlan, setPlans, withdrawPlan }
 }

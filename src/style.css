@@ -1535,6 +1535,77 @@ textarea:focus-visible,
   gap: 16px;
 }
 
+.plan-week-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
+  align-items: stretch;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid rgba(184, 207, 192, 0.82);
+  border-left: 5px solid var(--brand);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(135deg, rgba(248, 252, 249, 0.98), rgba(255, 253, 245, 0.94)),
+    var(--paper);
+  box-shadow: 0 10px 24px rgba(40, 92, 61, 0.08);
+}
+
+.plan-week-overview-title {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+}
+
+.plan-week-overview-title span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.plan-week-overview-title strong {
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.plan-week-overview-stats {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.plan-week-overview-stats span {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 3px;
+  min-height: 62px;
+  padding: 9px 6px;
+  border: 1px solid rgba(220, 226, 216, 0.95);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.plan-week-overview-stats strong {
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.plan-week-overview-stats small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 780;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
 .plan-day-card {
   display: grid;
   gap: 14px;
@@ -1617,6 +1688,30 @@ textarea:focus-visible,
   color: var(--brand-2);
   border-color: #aad4b9;
   background: var(--brand-soft);
+}
+
+.withdraw-rest-button {
+  color: #8a5f00;
+  border-color: #e0c16d;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 246, 0.98), rgba(255, 247, 225, 0.96)),
+    #fff7df;
+  box-shadow: inset 0 -3px 0 rgba(177, 111, 16, 0.1);
+}
+
+.withdraw-rest-button:active {
+  transform: translateY(1px);
+}
+
+.withdraw-rest-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+  transform: none;
+}
+
+.hero-withdraw-rest-button {
+  width: fit-content;
+  margin-top: 12px;
 }
 
 .plan-day-detail {
@@ -5357,6 +5452,29 @@ button:active,
     min-width: 0;
   }
 
+  .plan-week-overview {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 13px;
+  }
+
+  .plan-week-overview-title {
+    grid-template-columns: 1fr auto;
+    align-items: end;
+  }
+
+  .plan-week-overview-title strong {
+    font-size: 24px;
+  }
+
+  .plan-week-overview-stats span {
+    min-height: 56px;
+  }
+
+  .plan-week-overview-stats strong {
+    font-size: 22px;
+  }
+
   .plan-day-title,
   .plan-editor-strip {
     align-items: stretch;
@@ -5378,6 +5496,10 @@ button:active,
   }
 
   .plan-card-actions .ghost-button {
+    width: 100%;
+  }
+
+  .hero-withdraw-rest-button {
     width: 100%;
   }
 

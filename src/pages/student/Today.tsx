@@ -61,12 +61,13 @@ export default function Today() {
   const { checkIns, loading: checkInsLoading, reload: reloadCheckIns, setCheckIns, upsertCheckIn, withdrawCheckIn } = useCheckIns(profile?.id)
   const { penalties, loading: penaltiesLoading, reload: reloadPenalties, setPenalties, upsertPenalty } = usePenalties(profile?.id)
   const { ready: penaltySettingsReady, settings: penaltySettings } = usePenaltySettings()
-  const { loading: plansLoading, plans, savePlan } = usePlans(profile?.id)
+  const { loading: plansLoading, plans, savePlan, withdrawPlan } = usePlans(profile?.id)
   const [leaveFatigue, setLeaveFatigue] = useState<number | null>(null)
   const [leaveOffWorkTime, setLeaveOffWorkTime] = useState('')
   const [leaveReason, setLeaveReason] = useState('')
   const [memberCodeOpen, setMemberCodeOpen] = useState(false)
   const [restSaving, setRestSaving] = useState(false)
+  const [restWithdrawing, setRestWithdrawing] = useState(false)
   const [requestingLeave, setRequestingLeave] = useState(false)
   const [selfPlanOpen, setSelfPlanOpen] = useState(false)
   const [shownContributionPromptKey, setShownContributionPromptKey] = useState(readShownContributionPromptKey)
@@ -80,6 +81,7 @@ export default function Today() {
   const todayPlan = plans.find((plan) => plan.date === today)
   const todayExercises = todayPlan ? planToExercises(todayPlan) : []
   const todayCheckIn = checkIns.find((checkIn) => checkIn.date === today)
+  const canWithdrawTodayRest = Boolean(todayPlan && !todayPlan.is_training && todayPlan.source === 'student' && !todayCheckIn)
   const restConflict = useMemo(
     () => getRestConflict(today, plans, checkIns, penalties),
     [checkIns, penalties, plans, today],
@@ -269,6 +271,28 @@ export default function Today() {
     }
   }
 
+  const withdrawTodayRest = async () => {
+    if (!todayPlan || restWithdrawing) return
+    if (todayPlan.is_training || todayPlan.source !== 'student') {
+      notifyApp({ tone: 'warning', message: '只有自己设置的今日休息可以撤回。' })
+      return
+    }
+    if (todayCheckIn) {
+      notifyApp({ tone: 'warning', message: '今天已有记录，不能撤回休息安排。' })
+      return
+    }
+
+    setRestWithdrawing(true)
+    try {
+      await withdrawPlan(todayPlan)
+      notifyApp({ tone: 'success', message: '已撤回休息安排。' })
+    } catch (err) {
+      notifyApp({ tone: 'warning', message: rawErrorMessage(err, '撤回休息失败，请刷新后重试。') })
+    } finally {
+      setRestWithdrawing(false)
+    }
+  }
+
   const selfPlanDraft = useMemo<PlanDraft | null>(() => {
     if (!profile) return null
     return planDraftFromRecentTrainingPlan(profile.id, plans, today, 'student', penaltySettings.check_in_deadline)
@@ -293,9 +317,12 @@ export default function Today() {
     <section className="screen with-nav contract-home-screen">
       <TodayHeroSection
         checkIn={todayCheckIn}
+        canWithdrawRest={canWithdrawTodayRest}
+        restWithdrawing={restWithdrawing}
         pendingTotal={pendingTotal}
         plan={todayPlan}
         todayExercises={todayExercises}
+        onWithdrawRest={withdrawTodayRest}
       />
       {todayCheckIn && (
         <TodayCheckInSummary
@@ -412,13 +439,19 @@ function ContributionPromptModal({
 
 function TodayHeroSection({
   checkIn,
+  canWithdrawRest,
+  onWithdrawRest,
   pendingTotal,
   plan,
+  restWithdrawing,
   todayExercises,
 }: {
   checkIn?: CheckIn
+  canWithdrawRest: boolean
+  onWithdrawRest: () => void
   pendingTotal: number
   plan?: Plan
+  restWithdrawing: boolean
   todayExercises: Exercise[]
 }) {
   const isRestDay = Boolean(plan && !plan.is_training)
@@ -434,6 +467,12 @@ function TodayHeroSection({
         {plan && <span className={`plan-source-tag ${plan.source}`}>{formatPlanSourceLabel(plan.source)}</span>}
       </h2>
       {plan && plan.is_training && <p className="plan-focus-strip">{formatPlanFocusText(plan.focus, plan.source)}</p>}
+      {isRestDay && canWithdrawRest && (
+        <button className="ghost-button withdraw-rest-button hero-withdraw-rest-button" disabled={restWithdrawing} type="button" onClick={() => void onWithdrawRest()}>
+          <RotateCcw size={18} />
+          {restWithdrawing ? '撤回中' : '撤回休息'}
+        </button>
+      )}
       {isRestDay ? (
         <div className="metric-row rest-metric-row">
           <Metric icon={<Flame />} label="待付罚款" value={`¥${pendingTotal}`} />

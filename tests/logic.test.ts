@@ -256,30 +256,49 @@ test('student plan card actions hide rest details and keep training actions', ()
   assert.deepEqual(getStudentPlanCardAction(), {
     canConvertRestToTraining: false,
     canEdit: true,
+    canWithdrawRest: false,
     canView: false,
     editLabel: '制定计划',
   })
   assert.deepEqual(getStudentPlanCardAction({ is_training: true, source: 'coach' }), {
     canConvertRestToTraining: false,
     canEdit: false,
+    canWithdrawRest: false,
     canView: true,
     editLabel: null,
   })
   assert.deepEqual(getStudentPlanCardAction({ is_training: true, source: 'student' }), {
     canConvertRestToTraining: false,
     canEdit: true,
+    canWithdrawRest: false,
     canView: true,
     editLabel: '编辑计划',
   })
   assert.deepEqual(getStudentPlanCardAction({ is_training: false, source: 'student' }), {
     canConvertRestToTraining: true,
     canEdit: false,
+    canWithdrawRest: false,
+    canView: false,
+    editLabel: '改成训练',
+  })
+  assert.deepEqual(getStudentPlanCardAction({ date: '2026-06-02', is_training: false, source: 'student' }, '2026-06-02'), {
+    canConvertRestToTraining: true,
+    canEdit: false,
+    canWithdrawRest: true,
+    canView: false,
+    editLabel: '改成训练',
+  })
+  assert.deepEqual(getStudentPlanCardAction({ date: '2026-06-03', is_training: false, source: 'student' }, '2026-06-02'), {
+    canConvertRestToTraining: true,
+    canEdit: false,
+    canWithdrawRest: false,
     canView: false,
     editLabel: '改成训练',
   })
   assert.deepEqual(getStudentPlanCardAction({ is_training: false, source: 'coach' }), {
     canConvertRestToTraining: false,
     canEdit: false,
+    canWithdrawRest: false,
     canView: false,
     editLabel: null,
   })

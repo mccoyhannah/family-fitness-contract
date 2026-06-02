@@ -1,4 +1,5 @@
 import { addDays, fromISODate, getWeekStart, toISODate } from './date'
+import { isLeaveArrangementCheckIn } from './leaveRequest'
 import type { Plan } from './types'
 
 export type MonthCalendarDay = {
@@ -14,6 +15,11 @@ export type StudentPlanCardAction = {
   canWithdrawRest: boolean
   canView: boolean
   editLabel: '制定计划' | '编辑计划' | '改成训练' | null
+}
+
+type StudentPlanCheckInState = {
+  leave_reason?: string | null
+  status: 'completed' | 'excused' | 'missed' | 'pending_review'
 }
 
 export function getWeekDates(date: string) {
@@ -53,7 +59,18 @@ export function getPlansInWeek<T extends Pick<Plan, 'date'>>(plans: T[], selecte
 export function getStudentPlanCardAction(
   plan?: Pick<Plan, 'is_training' | 'source'> & Partial<Pick<Plan, 'date'>>,
   today = toISODate(new Date()),
+  checkIn?: StudentPlanCheckInState,
 ): StudentPlanCardAction {
+  if (isLeaveArrangementCheckIn(checkIn)) {
+    return {
+      canConvertRestToTraining: false,
+      canEdit: false,
+      canWithdrawRest: false,
+      canView: false,
+      editLabel: null,
+    }
+  }
+
   if (!plan) {
     return {
       canConvertRestToTraining: false,

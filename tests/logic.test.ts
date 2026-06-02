@@ -2,7 +2,13 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { computeConsecutiveMisses } from '../src/lib/penalty.ts'
 import { buildMissedSync } from '../src/lib/sync.ts'
-import { buildLeaveRequestReason, validateLeaveRequest } from '../src/lib/leaveRequest.ts'
+import {
+  buildLeaveRequestReason,
+  formatLeaveRequestSummary,
+  parseLeaveRequestReason,
+  validateLeaveRequest,
+  WAIVER_REQUEST_PREFIX,
+} from '../src/lib/leaveRequest.ts'
 import { normalizePenaltySettings } from '../src/lib/penaltySettings.ts'
 import {
   blankTrainingPlanDraft,
@@ -180,6 +186,24 @@ test('leave request requires off-work time and fatigue, then formats them for re
     buildLeaveRequestReason({ offWorkTime: '21:00-21:30', fatigue: 4, reason: '加班太晚' }),
     '到家时间段 21:00-21:30；疲劳度 4/5；理由：加班太晚',
   )
+  assert.equal(
+    buildLeaveRequestReason({ offWorkTime: '21:00-21:30', fatigue: 4, reason: '' }),
+    '到家时间段 21:00-21:30；疲劳度 4/5',
+  )
+})
+
+test('leave request display parsing hides legacy empty reasons', () => {
+  const parsed = parseLeaveRequestReason('到家时间段 21:00-21:30；疲劳度 4/5；理由：未填写')
+
+  assert.deepEqual(parsed, {
+    arrivalRange: '21:00-21:30',
+    fatigueText: '4/5',
+    reason: '',
+  })
+  assert.equal(
+    formatLeaveRequestSummary('到家时间段 21:00-21:30；疲劳度 4/5；理由：未填写'),
+    '到家 21:00-21:30 · 疲劳 4/5',
+  )
 })
 
 test('contribution prompt appears once per login run when pending penalties exist', () => {
@@ -301,6 +325,36 @@ test('student plan card actions hide rest details and keep training actions', ()
     canWithdrawRest: false,
     canView: false,
     editLabel: null,
+  })
+  assert.deepEqual(getStudentPlanCardAction(undefined, '2026-06-02', {
+    leave_reason: '到家时间段 21:00-21:30；疲劳度 4/5',
+    status: 'pending_review',
+  }), {
+    canConvertRestToTraining: false,
+    canEdit: false,
+    canWithdrawRest: false,
+    canView: false,
+    editLabel: null,
+  })
+  assert.deepEqual(getStudentPlanCardAction({ is_training: true, source: 'student' }, '2026-06-02', {
+    leave_reason: '到家时间段 21:00-21:30；疲劳度 4/5',
+    status: 'excused',
+  }), {
+    canConvertRestToTraining: false,
+    canEdit: false,
+    canWithdrawRest: false,
+    canView: false,
+    editLabel: null,
+  })
+  assert.deepEqual(getStudentPlanCardAction(undefined, '2026-06-02', {
+    leave_reason: `${WAIVER_REQUEST_PREFIX} 家里网络坏了`,
+    status: 'pending_review',
+  }), {
+    canConvertRestToTraining: false,
+    canEdit: true,
+    canWithdrawRest: false,
+    canView: false,
+    editLabel: '制定计划',
   })
 })
 

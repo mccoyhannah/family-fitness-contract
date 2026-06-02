@@ -453,6 +453,12 @@ textarea:focus-visible,
   background: #fff7df;
 }
 
+.plan-source-tag.leave {
+  border-color: #e0c16d;
+  color: #805b0b;
+  background: #fff7df;
+}
+
 .plan-source-tag.empty {
   border-color: var(--line);
   color: var(--muted);
@@ -1611,6 +1617,13 @@ textarea:focus-visible,
   gap: 14px;
 }
 
+.plan-day-card.leave-arranged {
+  border-color: #ecdcae;
+  background:
+    linear-gradient(180deg, rgba(255, 254, 250, 0.98), rgba(255, 250, 232, 0.9)),
+    var(--warning-soft);
+}
+
 .plan-day-summary {
   min-width: 0;
   display: grid;
@@ -1673,6 +1686,35 @@ textarea:focus-visible,
   line-height: 1.18;
   overflow-wrap: anywhere;
   box-shadow: 0 8px 18px rgba(40, 92, 61, 0.08);
+}
+
+.plan-day-leave-summary {
+  display: grid;
+  gap: 7px;
+  padding: 11px 12px;
+  border: 1px solid rgba(224, 193, 109, 0.72);
+  border-left: 4px solid #d59b2d;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.plan-day-leave-summary span {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #805b0b;
+  font-size: 13px;
+  font-weight: 860;
+}
+
+.plan-day-leave-summary p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 720;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .plan-card-actions {
@@ -3741,6 +3783,10 @@ code {
   box-shadow: var(--shadow-soft);
 }
 
+.dashboard-record-backdrop {
+  z-index: 80;
+}
+
 .dashboard-record-copy {
   min-width: 0;
   display: grid;
@@ -3761,8 +3807,11 @@ code {
   --record-modal-pad: 22px;
   width: min(760px, calc(100vw - 32px));
   max-height: min(84vh, 760px);
-  padding: var(--record-modal-pad);
-  overflow: auto;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
 }
 
 .dashboard-record-modal:focus {
@@ -3770,14 +3819,10 @@ code {
 }
 
 .dashboard-record-modal-head {
-  position: sticky;
-  z-index: 2;
-  top: 0;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin: calc(var(--record-modal-pad) * -1) calc(var(--record-modal-pad) * -1) 0;
   padding: 18px var(--record-modal-pad) 14px;
   border-bottom: 1px solid var(--line);
   background:
@@ -3792,6 +3837,14 @@ code {
 
 .dashboard-record-meta {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-record-modal-body {
+  min-height: 0;
+  display: grid;
+  gap: 12px;
+  overflow: auto;
+  padding: 14px var(--record-modal-pad) var(--record-modal-pad);
 }
 
 .dashboard-record-detail-panel {
@@ -6020,7 +6073,7 @@ button:active,
 
   .dashboard-record-modal {
     --record-modal-pad: 18px;
-    padding: var(--record-modal-pad);
+    padding: 0;
   }
 
   .waiver-modal-actions,

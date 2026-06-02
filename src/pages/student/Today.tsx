@@ -11,7 +11,13 @@ import { usePenalties } from '../../hooks/usePenalties'
 import { usePenaltySettings } from '../../hooks/usePenaltySettings'
 import { usePlans } from '../../hooks/usePlans'
 import { formatDay, toISODate } from '../../lib/date'
-import { buildLeaveRequestReason, validateLeaveRequest } from '../../lib/leaveRequest'
+import {
+  buildLeaveRequestReason,
+  formatLeaveRequestSummary,
+  isLeaveArrangementCheckIn,
+  leaveArrangementStatusLabel,
+  validateLeaveRequest,
+} from '../../lib/leaveRequest'
 import { notifyApp } from '../../lib/notice'
 import { planToExercises } from '../../lib/plan'
 import { formatPlanFocusText, formatPlanSourceLabel } from '../../lib/planDisplay'
@@ -55,6 +61,29 @@ function formatAmount(amount: number) {
   return new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 0 }).format(amount)
 }
 
+type LeaveArrangementState = {
+  heroTitle: string
+  metricValue: string
+  summary: string
+}
+
+function getLeaveArrangementState(checkIn?: CheckIn): LeaveArrangementState | null {
+  if (!isLeaveArrangementCheckIn(checkIn)) return null
+  const label = leaveArrangementStatusLabel(checkIn.status)
+  return {
+    heroTitle: label,
+    metricValue: label,
+    summary: formatLeaveRequestSummary(checkIn.leave_reason, checkIn.fatigue),
+  }
+}
+
+function formatTodayRecordSummary(checkIn: CheckIn) {
+  if (isLeaveArrangementCheckIn(checkIn)) {
+    return formatLeaveRequestSummary(checkIn.leave_reason, checkIn.fatigue) || leaveArrangementStatusLabel(checkIn.status)
+  }
+  return checkIn.note || '记录已同步。'
+}
+
 export default function Today() {
   const { loginRunId, profile } = useAuth()
   const { checkIns, loading: checkInsLoading, reload: reloadCheckIns, setCheckIns, upsertCheckIn, withdrawCheckIn } = useCheckIns(profile?.id)
@@ -78,6 +107,7 @@ export default function Today() {
   const todayPlan = plans.find((plan) => plan.date === today)
   const todayExercises = todayPlan ? planToExercises(todayPlan) : []
   const todayCheckIn = checkIns.find((checkIn) => checkIn.date === today)
+  const todayLeaveArrangement = getLeaveArrangementState(todayCheckIn)
   const canWithdrawTodayRest = Boolean(todayPlan && !todayPlan.is_training && todayPlan.source === 'student' && !todayCheckIn)
   const restConflict = useMemo(
     () => getRestConflict(today, plans, checkIns, penalties),
@@ -250,7 +280,10 @@ export default function Today() {
     setWithdrawing(true)
     try {
       await withdrawCheckIn(todayCheckIn)
-      notifyApp({ tone: 'success', message: '已撤回本次打卡，可以重新提交。' })
+      notifyApp({
+        tone: 'success',
+        message: isLeaveArrangementCheckIn(todayCheckIn) ? '已撤回请假申请。' : '已撤回本次打卡，可以重新提交。',
+      })
     } catch (err) {
       notifyApp({ tone: 'warning', message: rawErrorMessage(err, '撤回失败，请稍后重试。') })
     } finally {
@@ -287,6 +320,7 @@ export default function Today() {
       <TodayHeroSection
         checkIn={todayCheckIn}
         canWithdrawRest={canWithdrawTodayRest}
+        leaveArrangement={todayLeaveArrangement}
         restWithdrawing={restWithdrawing}
         pendingTotal={pendingTotal}
         plan={todayPlan}
@@ -303,7 +337,7 @@ export default function Today() {
         />
       )}
 
-      {todayPlan ? (
+      {!todayLeaveArrangement && todayPlan ? (
         <TodayTrainingSection
           checkIn={todayCheckIn}
           exercises={todayExercises}
@@ -320,7 +354,7 @@ export default function Today() {
           onLeaveReasonChange={setLeaveReason}
           onPlanEdit={openPlanEditor}
         />
-      ) : (
+      ) : !todayLeaveArrangement ? (
         profile && (
           <TodayOpenPlanSection
             checkIn={todayCheckIn}
@@ -339,7 +373,7 @@ export default function Today() {
             onOpenPlan={openPlanEditor}
           />
         )
-      )}
+      ) : null}
 
       {activeContributionPrompt && (
         <ContributionPromptModal
@@ -404,6 +438,7 @@ function ContributionPromptModal({
 function TodayHeroSection({
   checkIn,
   canWithdrawRest,
+  leaveArrangement,
   onWithdrawRest,
   pendingTotal,
   plan,
@@ -412,6 +447,7 @@ function TodayHeroSection({
 }: {
   checkIn?: CheckIn
   canWithdrawRest: boolean
+  leaveArrangement: LeaveArrangementState | null
   onWithdrawRest: () => void
   pendingTotal: number
   plan?: Plan
@@ -419,6 +455,7 @@ function TodayHeroSection({
   todayExercises: Exercise[]
 }) {
   const isRestDay = Boolean(plan && !plan.is_training)
+  const title = leaveArrangement ? leaveArrangement.heroTitle : plan?.title ?? '今天还没有计划'
 
   return (
     <div className="hero-panel contract-cover-panel">
@@ -427,17 +464,23 @@ function TodayHeroSection({
         今日计划
       </span>
       <h2 className="plan-title-with-source">
-        <span>{plan?.title ?? '今天还没有计划'}</span>
-        {plan && <span className={`plan-source-tag ${plan.source}`}>{formatPlanSourceLabel(plan.source)}</span>}
+        <span>{title}</span>
+        {!leaveArrangement && plan && <span className={`plan-source-tag ${plan.source}`}>{formatPlanSourceLabel(plan.source)}</span>}
       </h2>
-      {plan && plan.is_training && <p className="plan-focus-strip">{formatPlanFocusText(plan.focus, plan.source)}</p>}
+      {leaveArrangement?.summary && <p className="plan-focus-strip">{leaveArrangement.summary}</p>}
+      {!leaveArrangement && plan && plan.is_training && <p className="plan-focus-strip">{formatPlanFocusText(plan.focus, plan.source)}</p>}
       {isRestDay && canWithdrawRest && (
         <button className="ghost-button withdraw-rest-button hero-withdraw-rest-button" disabled={restWithdrawing} type="button" onClick={() => void onWithdrawRest()}>
           <RotateCcw size={18} />
           {restWithdrawing ? '撤回中' : '撤回休息'}
         </button>
       )}
-      {isRestDay ? (
+      {leaveArrangement ? (
+        <div className="metric-row rest-metric-row">
+          <Metric icon={<CalendarCheck />} label="今日状态" value={leaveArrangement.metricValue} />
+          <Metric icon={<Flame />} label="待付罚款" value={`¥${pendingTotal}`} />
+        </div>
+      ) : isRestDay ? (
         <div className="metric-row rest-metric-row">
           <Metric icon={<Flame />} label="待付罚款" value={`¥${pendingTotal}`} />
         </div>
@@ -494,13 +537,15 @@ function TodayCheckInSummary({
   withdrawing: boolean
 }) {
   const canWithdraw = checkIn.status === 'pending_review'
+  const isLeaveRequest = isLeaveArrangementCheckIn(checkIn)
+  const summary = formatTodayRecordSummary(checkIn)
   return (
     <div className={`status-card checkin-clause-card contract-clause-card${canWithdraw ? ' pending-checkin-card' : ''}`}>
       <div className="checkin-summary-head">
         <StatusPill status={checkIn.status} />
-        <span>{canWithdraw ? '等待教练审核' : canMakeUp ? '可补交审核' : '今日记录'}</span>
+        <span>{canWithdraw ? (isLeaveRequest ? '请假待审核' : '等待教练审核') : canMakeUp ? '可补交审核' : '今日记录'}</span>
       </div>
-      <p>{checkIn.leave_reason || checkIn.note || '记录已同步。'}</p>
+      {summary && <p>{summary}</p>}
       {checkIn.review_comment && (
         <div className="coach-comment-box">
           <strong>教练留言</strong>
@@ -510,7 +555,7 @@ function TodayCheckInSummary({
       {canWithdraw && (
         <button className="withdraw-checkin-button" disabled={withdrawing} type="button" onClick={() => void onWithdraw()}>
           <RotateCcw size={18} />
-          {withdrawing ? '撤回中' : '撤回本次打卡'}
+          {withdrawing ? '撤回中' : isLeaveRequest ? '撤回请假申请' : '撤回本次打卡'}
         </button>
       )}
       {canMakeUp && (

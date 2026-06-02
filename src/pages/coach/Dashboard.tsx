@@ -10,6 +10,7 @@ import { useMembers } from '../../hooks/useMembers'
 import { usePenaltySettings } from '../../hooks/usePenaltySettings'
 import { usePlans } from '../../hooks/usePlans'
 import { formatDay, isPastDeadline, toISODate } from '../../lib/date'
+import { isWaiverRequestReason, parseLeaveRequestReason, WAIVER_REQUEST_PREFIX } from '../../lib/leaveRequest'
 import type { CheckIn, CheckInEvidence, CheckInStatus, Plan } from '../../lib/types'
 
 type RecentRecord = {
@@ -22,7 +23,7 @@ type RecentRecord = {
   tone: CheckInStatus | 'rest' | 'scheduled' | 'today_due'
 }
 
-const WAIVER_PREFIX = '[免罚申请]'
+const WAIVER_PREFIX = WAIVER_REQUEST_PREFIX
 
 const checkInStatusLabel: Record<CheckInStatus, string> = {
   completed: '已完成',
@@ -51,11 +52,11 @@ const systemSubmissionNotes = new Set([
 ])
 
 function isWaiverRequest(reason?: string | null) {
-  return Boolean(reason?.includes(WAIVER_PREFIX))
+  return isWaiverRequestReason(reason)
 }
 
 function cleanWaiverReason(reason?: string | null) {
-  return reason?.replace(WAIVER_PREFIX, '').trim() || '未填写理由'
+  return reason?.replace(WAIVER_PREFIX, '').trim() || ''
 }
 
 function fatigueLabel(fatigue: number | null) {
@@ -75,6 +76,11 @@ function formatTimestamp(value?: string | null) {
     dateStyle: 'short',
     timeStyle: 'short',
   }).format(date)
+}
+
+function optionalTimestamp(value?: string | null) {
+  const formatted = formatTimestamp(value)
+  return formatted === '无' ? '' : formatted
 }
 
 function cleanRecentRecordDetail(detail: string) {
@@ -303,14 +309,30 @@ function DashboardRecordModal({
 }) {
   const checkIn = record.checkIn
   const plan = record.plan
-  const waiverReason = isWaiverRequest(checkIn?.leave_reason) ? cleanWaiverReason(checkIn?.leave_reason) : null
-  const leaveReason = checkIn?.leave_reason && !waiverReason ? checkIn.leave_reason : null
-  const hasReview = Boolean(checkIn?.review_comment || checkIn?.reviewed_at)
+  const hasWaiver = isWaiverRequest(checkIn?.leave_reason)
+  const waiverReason = hasWaiver ? cleanWaiverReason(checkIn?.leave_reason) : ''
+  const hasLeaveRequest = Boolean(checkIn?.leave_reason && !hasWaiver)
+  const leaveDetails = hasLeaveRequest ? parseLeaveRequestReason(checkIn?.leave_reason) : null
+  const reviewComment = checkIn?.review_comment?.trim() || ''
   const note = visibleCheckInNote(checkIn?.note)
+  const submittedAt = optionalTimestamp(checkIn?.created_at)
+  const reviewedAt = optionalTimestamp(checkIn?.reviewed_at)
+  const subtitle = cleanRecentRecordDetail(record.detail)
+  const metaItems = [
+    { label: '状态', value: record.statusLabel },
+    ...(submittedAt ? [{ label: '提交时间', value: submittedAt }] : []),
+  ]
+  const submitFacts = [
+    ...(leaveDetails?.arrivalRange ? [{ label: '到家', value: leaveDetails.arrivalRange }] : []),
+    ...(leaveDetails?.fatigueText ? [{ label: '疲劳', value: leaveDetails.fatigueText }] : checkIn?.fatigue ? [{ label: '疲劳', value: fatigueLabel(checkIn.fatigue) }] : []),
+  ]
+  const submitText = hasWaiver ? waiverReason : hasLeaveRequest ? leaveDetails?.reason || '' : note
+  const hasSubmitSection = Boolean(checkIn && (submitFacts.length > 0 || submitText || checkIn.issues.length > 0))
+  const hasReviewSection = Boolean(reviewComment)
 
   return (
     <section
-      aria-describedby="dashboard-record-detail"
+      aria-describedby={subtitle && subtitle !== record.statusLabel ? 'dashboard-record-detail' : undefined}
       aria-labelledby="dashboard-record-title"
       aria-modal="true"
       className="waiver-modal dashboard-record-modal"
@@ -322,70 +344,76 @@ function DashboardRecordModal({
         <div className="review-confirm-copy">
           <span className="review-confirm-kicker">记录回看</span>
           <h3 id="dashboard-record-title">{formatDay(record.date)}</h3>
-          <p id="dashboard-record-detail">{record.statusLabel} · {cleanRecentRecordDetail(record.detail)}</p>
+          {subtitle && subtitle !== record.statusLabel && <p id="dashboard-record-detail">{subtitle}</p>}
         </div>
         <button className="icon-action dashboard-record-close" type="button" onClick={onClose} aria-label="关闭记录详情">
           <X size={18} />
         </button>
       </div>
 
-      <div className="review-confirm-meta dashboard-record-meta" aria-label="记录摘要">
-        <span>
-          <small>状态</small>
-          <strong>{record.statusLabel}</strong>
-        </span>
-        <span>
-          <small>提交时间</small>
-          <strong>{formatTimestamp(checkIn?.created_at)}</strong>
-        </span>
-      </div>
+      <div className="dashboard-record-modal-body">
+        <div className="review-confirm-meta dashboard-record-meta" aria-label="记录摘要">
+          {metaItems.map((item) => (
+            <span key={item.label}>
+              <small>{item.label}</small>
+              <strong>{item.value}</strong>
+            </span>
+          ))}
+        </div>
 
-      <div className="review-detail-panel dashboard-record-detail-panel">
-        <section className="review-detail-section">
-          <div className="review-detail-head">
-            <strong>学员提交</strong>
-            <span>{checkIn ? `疲劳度 ${fatigueLabel(checkIn.fatigue)}` : '无提交'}</span>
-          </div>
-          {checkIn ? (
-            <>
-              {waiverReason && <p className="review-note-box">补卡免罚：{waiverReason}</p>}
-              {leaveReason && <p className="review-note-box">请假理由：{leaveReason}</p>}
-              {note ? <p className="review-note-box">{note}</p> : <p className="review-empty-detail">未填写备注。</p>}
-              {checkIn.issues.length > 0 ? (
+        <div className="review-detail-panel dashboard-record-detail-panel">
+          {hasSubmitSection && (
+            <section className={`review-detail-section review-dossier-section${hasLeaveRequest ? ' leave' : ''}`}>
+              <div className="review-detail-head">
+                <strong>{hasWaiver ? '补卡说明' : hasLeaveRequest ? '请假说明' : '学员提交'}</strong>
+                {!hasLeaveRequest && checkIn?.fatigue && <span>{fatigueLabel(checkIn.fatigue)}</span>}
+              </div>
+              {submitFacts.length > 0 && (
+                <div className="review-detail-facts">
+                  {submitFacts.map((fact) => (
+                    <span className="review-detail-fact" key={`${fact.label}-${fact.value}`}>
+                      <small>{fact.label}</small>
+                      <strong>{fact.value}</strong>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {submitText && (
+                <div className="review-note-box">
+                  <small>{hasWaiver ? '免罚申请' : hasLeaveRequest ? '说明' : '备注'}</small>
+                  <p>{submitText}</p>
+                </div>
+              )}
+              {checkIn && checkIn.issues.length > 0 && (
                 <div className="review-chip-row">
                   {checkIn.issues.map((issue) => (
                     <span className="mini-chip" key={issue}>{issue}</span>
                   ))}
                 </div>
-              ) : (
-                <p className="review-empty-detail">无异常标记。</p>
               )}
-            </>
-          ) : (
-            <p className="review-empty-detail">这条记录来自当天计划，还没有单独提交打卡内容。</p>
+            </section>
           )}
-        </section>
 
-        <section className="review-detail-section">
-          <div className="review-detail-head">
-            <strong>审核信息</strong>
-            <span>{formatTimestamp(checkIn?.reviewed_at)}</span>
-          </div>
-          {hasReview ? (
-            <p className="review-note-box">{checkIn?.review_comment || '已审核，未填写留言。'}</p>
-          ) : (
-            <p className="review-empty-detail">暂无审核留言。</p>
+          {hasReviewSection && (
+            <section className="review-detail-section review-dossier-section">
+              <div className="review-detail-head">
+                <strong>审核留言</strong>
+                {reviewedAt && <span>{reviewedAt}</span>}
+              </div>
+              <div className="review-note-box">
+                <small>教练留言</small>
+                <p>{reviewComment}</p>
+              </div>
+            </section>
           )}
-        </section>
 
-        <section className="review-detail-section">
-          <div className="review-detail-head">
-            <strong>当天计划</strong>
-            <span>{plan ? (plan.source === 'coach' ? '教练制定' : '成员自定') : '未同步'}</span>
-          </div>
           {plan ? (
-            <>
-              <p className="review-plan-summary">{plan.title} · {plan.focus || (plan.is_training ? '训练日' : '恢复日')}</p>
+            <section className="review-detail-section review-dossier-section">
+              <div className="review-detail-head">
+                <strong>当天计划</strong>
+                <span>{plan.source === 'coach' ? '教练制定' : '成员自定'}</span>
+              </div>
+              <p className="review-plan-summary">{[plan.title, plan.focus].filter(Boolean).join(' · ')}</p>
               {plan.is_training && plan.items.length > 0 ? (
                 <div className="review-plan-list">
                   {plan.items.map((item) => (
@@ -396,36 +424,30 @@ function DashboardRecordModal({
                     </article>
                   ))}
                 </div>
-              ) : (
-                <p className="review-empty-detail">{plan.is_training ? '暂无动作明细。' : '恢复日，无需训练打卡。'}</p>
-              )}
-            </>
-          ) : (
-            <p className="review-empty-detail">计划未同步。</p>
-          )}
-        </section>
+              ) : null}
+            </section>
+          ) : null}
 
-        <section className="review-detail-section">
-          <div className="review-detail-head">
-            <strong>历史照片</strong>
-            <span>{evidence.length} 张</span>
-          </div>
           {evidence.length > 0 ? (
-            <div className="evidence-grid dashboard-evidence-grid">
-              {evidence.map((item) =>
-                item.signed_url ? (
-                  <a href={item.signed_url} key={item.id} target="_blank" rel="noreferrer" aria-label={`打开 ${item.file_name}`}>
-                    <img src={item.signed_url} alt={item.file_name || '打卡照片'} />
-                  </a>
-                ) : (
-                  <span className="mini-chip" key={item.id}>{item.file_name || '照片记录'}</span>
-                ),
-              )}
-            </div>
-          ) : (
-            <p className="review-empty-detail">本次记录没有历史照片证据。</p>
-          )}
-        </section>
+            <section className="review-detail-section review-dossier-section">
+              <div className="review-detail-head">
+                <strong>历史照片</strong>
+                <span>{evidence.length} 张</span>
+              </div>
+              <div className="evidence-grid dashboard-evidence-grid">
+                {evidence.map((item) =>
+                  item.signed_url ? (
+                    <a href={item.signed_url} key={item.id} target="_blank" rel="noreferrer" aria-label={`打开 ${item.file_name}`}>
+                      <img src={item.signed_url} alt={item.file_name || '打卡照片'} />
+                    </a>
+                  ) : (
+                    <span className="mini-chip" key={item.id}>{item.file_name || '照片记录'}</span>
+                  ),
+                )}
+              </div>
+            </section>
+          ) : null}
+        </div>
       </div>
     </section>
   )

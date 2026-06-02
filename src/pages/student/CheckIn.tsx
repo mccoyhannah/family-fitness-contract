@@ -7,6 +7,7 @@ import { useCheckIns } from '../../hooks/useCheckIns'
 import { usePenaltySettings } from '../../hooks/usePenaltySettings'
 import { usePlans } from '../../hooks/usePlans'
 import { toISODate } from '../../lib/date'
+import { formatLeaveRequestSummary, isLeaveArrangementCheckIn, leaveArrangementStatusLabel } from '../../lib/leaveRequest'
 import { notifyApp } from '../../lib/notice'
 import { planToExercises } from '../../lib/plan'
 import { formatPlanFocusText, formatPlanSourceLabel } from '../../lib/planDisplay'
@@ -32,6 +33,7 @@ export default function CheckIn() {
   const todayCheckIn = checkIns.find((checkIn) => checkIn.date === today)
   const todayPendingCheckIn = checkIns.find((checkIn) => checkIn.date === today && checkIn.status === 'pending_review')
   const todayMissedCheckIn = checkIns.find((checkIn) => checkIn.date === today && checkIn.status === 'missed')
+  const todayLeaveArrangement = getCheckInLeaveArrangement(todayCheckIn)
   const restDay = Boolean(todayPlan && !todayPlan.is_training)
   const submitting = !['idle', 'failed'].includes(submitStage)
 
@@ -96,7 +98,9 @@ export default function CheckIn() {
       <div className="checkin-title-block">
         <h2>训练打卡</h2>
         <p>
-          {restDay
+          {todayLeaveArrangement
+            ? `${todayLeaveArrangement.label}，不需要提交训练打卡。`
+            : restDay
             ? '今天已记为休息日，不需要提交训练打卡。'
             : todayMissedCheckIn
             ? '今天已记缺卡，可以补交训练记录给教练审核。'
@@ -112,7 +116,16 @@ export default function CheckIn() {
           status={submitStatus}
         />
       )}
-      {!todayPlan && (
+      {todayLeaveArrangement && (
+        <div className="day-card checkin-rest-card checkin-leave-card">
+          <div className="checkin-rest-head">
+            <strong>{todayLeaveArrangement.label}</strong>
+            <span className="plan-source-tag leave">请假</span>
+          </div>
+          {todayLeaveArrangement.summary && <p className="muted">{todayLeaveArrangement.summary}</p>}
+        </div>
+      )}
+      {!todayLeaveArrangement && !todayPlan && (
         <div className="checkin-plan-notice" role="status" aria-live="polite">
           <div className="checkin-plan-notice-icon" aria-hidden="true">
             <CalendarDays size={22} />
@@ -127,7 +140,7 @@ export default function CheckIn() {
           </button>
         </div>
       )}
-      {todayPlan && restDay && (
+      {!todayLeaveArrangement && todayPlan && restDay && (
         <div className="day-card checkin-rest-card">
           <div className="checkin-rest-head">
             <strong>今日休息</strong>
@@ -135,7 +148,7 @@ export default function CheckIn() {
           </div>
         </div>
       )}
-      {todayPlan && !restDay && (
+      {!todayLeaveArrangement && todayPlan && !restDay && (
         <div className="day-card checkin-plan-card">
           <div className="checkin-plan-head">
             <div>
@@ -165,7 +178,7 @@ export default function CheckIn() {
           )}
         </div>
       )}
-      {todayPlan && !restDay && (
+      {!todayLeaveArrangement && todayPlan && !restDay && (
       <div className="form-card checkin-panel">
         <div className="checkin-section-head">
           <span>01</span>
@@ -235,6 +248,14 @@ export default function CheckIn() {
       )}
     </section>
   )
+}
+
+function getCheckInLeaveArrangement(checkIn?: { fatigue: number | null; leave_reason: string | null; status: string }) {
+  if (!isLeaveArrangementCheckIn(checkIn)) return null
+  return {
+    label: leaveArrangementStatusLabel(checkIn.status),
+    summary: formatLeaveRequestSummary(checkIn.leave_reason, checkIn.fatigue),
+  }
 }
 
 function SubmitTopNotice({ error, stage, status }: { error: string; stage: SubmitStage; status: string }) {

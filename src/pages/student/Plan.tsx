@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, PencilLine, RotateCcw } from 'lucide-react'
+import { CalendarCheck, ChevronDown, ChevronUp, PencilLine, RotateCcw } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import ExerciseCard from '../../components/ExerciseCard'
@@ -9,12 +9,13 @@ import { usePenalties } from '../../hooks/usePenalties'
 import { usePenaltySettings } from '../../hooks/usePenaltySettings'
 import { usePlans } from '../../hooks/usePlans'
 import { formatDay, toISODate } from '../../lib/date'
+import { formatLeaveRequestSummary, isLeaveArrangementCheckIn, leaveArrangementStatusLabel } from '../../lib/leaveRequest'
 import { notifyApp } from '../../lib/notice'
 import { buildPlan, planDraftFromRecentTrainingPlan, planToExercises } from '../../lib/plan'
 import { getStudentPlanCardAction } from '../../lib/planCalendar'
 import { formatPlanFocusText, formatPlanSourceLabel } from '../../lib/planDisplay'
 import { getRestConflict } from '../../lib/restRules'
-import type { Plan, PlanDay, PlanDraft } from '../../lib/types'
+import type { CheckIn, Plan, PlanDay, PlanDraft } from '../../lib/types'
 
 export default function Plan() {
   const { profile } = useAuth()
@@ -31,8 +32,11 @@ export default function Plan() {
   const today = toISODate(new Date())
   const weekDates = useMemo(() => new Set(week.map((day) => day.date)), [week])
   const weekPlans = plans.filter((plan) => weekDates.has(plan.date))
-  const trainingDays = weekPlans.filter((plan) => plan.is_training).length
-  const restDays = Math.max(0, weekPlans.length - trainingDays)
+  const weekLeaveCheckIns = checkIns.filter((checkIn) => weekDates.has(checkIn.date) && isLeaveArrangementCheckIn(checkIn))
+  const leaveDates = new Set(weekLeaveCheckIns.map((checkIn) => checkIn.date))
+  const arrangedDayCount = new Set([...weekPlans.map((plan) => plan.date), ...weekLeaveCheckIns.map((checkIn) => checkIn.date)]).size
+  const trainingDays = weekPlans.filter((plan) => plan.is_training && !leaveDates.has(plan.date)).length
+  const restDays = Math.max(0, arrangedDayCount - trainingDays)
   const requestedDate = searchParams.get('date')
   const shouldAutoEdit = searchParams.get('edit') === '1'
 
@@ -45,7 +49,8 @@ export default function Plan() {
     handledAutoEditKeyRef.current = autoEditKey
 
     const targetPlan = plans.find((plan) => plan.date === requestedDate)
-    const action = getStudentPlanCardAction(targetPlan, today)
+    const targetLeave = checkIns.find((checkIn) => checkIn.date === requestedDate && isLeaveArrangementCheckIn(checkIn))
+    const action = getStudentPlanCardAction(targetPlan, today, targetLeave)
     setExpandedDates((current) => new Set(current).add(requestedDate))
     if (!targetPlan || action.canEdit || action.canConvertRestToTraining) {
       setEditingDate(requestedDate)
@@ -61,7 +66,7 @@ export default function Plan() {
     }, 120)
 
     return () => window.clearTimeout(scrollTimer)
-  }, [plans, plansLoading, requestedDate, searchParams, setSearchParams, shouldAutoEdit, today, week])
+  }, [checkIns, plans, plansLoading, requestedDate, searchParams, setSearchParams, shouldAutoEdit, today, week])
 
   const toggleExpanded = (date: string) => {
     setExpandedDates((current) => {
@@ -120,11 +125,11 @@ export default function Plan() {
       <div className="plan-week-overview" aria-label="本周计划概览">
         <div className="plan-week-overview-title">
           <span>本周概览</span>
-          <strong>{weekPlans.length} 天</strong>
+          <strong>{arrangedDayCount} 天</strong>
         </div>
         <div className="plan-week-overview-stats">
           <span>
-            <strong>{weekPlans.length}</strong>
+            <strong>{arrangedDayCount}</strong>
             <small>已安排</small>
           </span>
           <span>
@@ -140,6 +145,7 @@ export default function Plan() {
       <div className="week-list">
         {week.map((day) => {
           const plan = plans.find((item) => item.date === day.date)
+          const leaveCheckIn = checkIns.find((item) => item.date === day.date && isLeaveArrangementCheckIn(item))
           const editing = editingDate === day.date
           const hasCheckIn = checkIns.some((item) => item.date === day.date)
           return (
@@ -150,6 +156,7 @@ export default function Plan() {
               expanded={expandedDates.has(day.date)}
               hasCheckIn={hasCheckIn}
               key={day.date}
+              leaveCheckIn={leaveCheckIn}
               plan={plan}
               plans={plans}
               studentId={profile?.id}
@@ -177,6 +184,7 @@ function PlanDayCard({
   editing,
   expanded,
   hasCheckIn,
+  leaveCheckIn,
   onCancelEdit,
   onEdit,
   onSave,
@@ -193,6 +201,7 @@ function PlanDayCard({
   editing: boolean
   expanded: boolean
   hasCheckIn: boolean
+  leaveCheckIn?: CheckIn
   onCancelEdit: () => void
   onEdit: () => void
   onSave: (draft: PlanDraft) => Promise<void>
@@ -205,7 +214,8 @@ function PlanDayCard({
   withdrawing: boolean
 }) {
   const exercises = plan ? planToExercises(plan) : []
-  const action = getStudentPlanCardAction(plan, today)
+  const leaveArrangement = getPlanLeaveArrangement(leaveCheckIn)
+  const action = getStudentPlanCardAction(plan, today, leaveCheckIn)
   const canWithdrawRest = Boolean(plan && action.canWithdrawRest && !hasCheckIn && !editing)
   const draft = useMemo(() => {
     if (!studentId) return null
@@ -222,18 +232,29 @@ function PlanDayCard({
   const restTitle = plan && !plan.is_training ? formatRestPlanTitle(plan.title) : ''
 
   return (
-    <article className={`day-card plan-day-card${expanded ? ' expanded' : ''}${editing ? ' editing' : ''}`} id={`plan-day-${day.date}`}>
+    <article className={`day-card plan-day-card${expanded ? ' expanded' : ''}${editing && !leaveArrangement ? ' editing' : ''}${leaveArrangement ? ' leave-arranged' : ''}`} id={`plan-day-${day.date}`}>
       <div className="plan-day-summary">
         <div className="plan-day-title">
           <strong>{formatDay(day.date)}</strong>
-          <span className={plan ? `plan-source-tag ${plan.source}` : 'plan-source-tag empty'}>
-            {plan ? formatPlanSourceLabel(plan.source) : '未制定'}
-            {plan?.source === 'coach' && <small>只读</small>}
+          <span className={leaveArrangement ? 'plan-source-tag leave' : plan ? `plan-source-tag ${plan.source}` : 'plan-source-tag empty'}>
+            {leaveArrangement ? leaveArrangement.label : plan ? formatPlanSourceLabel(plan.source) : '未制定'}
+            {!leaveArrangement && plan?.source === 'coach' && <small>只读</small>}
           </span>
         </div>
-        {plan?.is_training && <strong className="plan-day-training-title">{plan.title}</strong>}
-        {plan && !plan.is_training && <p className="muted">{restTitle}</p>}
-        {plan?.is_training && (
+        {leaveArrangement ? (
+          <div className="plan-day-leave-summary">
+            <span>
+              <CalendarCheck size={16} />
+              今日请假
+            </span>
+            {leaveArrangement.summary && <p>{leaveArrangement.summary}</p>}
+          </div>
+        ) : plan?.is_training ? (
+          <strong className="plan-day-training-title">{plan.title}</strong>
+        ) : plan && !plan.is_training ? (
+          <p className="muted">{restTitle}</p>
+        ) : null}
+        {!leaveArrangement && plan?.is_training && (
           <div className="plan-day-meta">
             <span>{plan.items.length} 个动作</span>
           </div>
@@ -270,7 +291,7 @@ function PlanDayCard({
         </div>
       )}
 
-      {editing && draft && (
+      {editing && draft && !leaveArrangement && (
         <div className="plan-day-editor" id={`plan-editor-${day.date}`}>
           <div className="plan-editor-mini-toolbar">
             <button className="ghost-button plan-editor-collapse-button" type="button" onClick={onCancelEdit}>
@@ -293,6 +314,14 @@ function PlanDayCard({
 function formatRestPlanTitle(title: string) {
   const normalized = title.trim()
   return normalized && normalized !== '今日休息' ? normalized : '恢复日'
+}
+
+function getPlanLeaveArrangement(checkIn?: CheckIn) {
+  if (!isLeaveArrangementCheckIn(checkIn)) return null
+  return {
+    label: leaveArrangementStatusLabel(checkIn.status),
+    summary: formatLeaveRequestSummary(checkIn.leave_reason, checkIn.fatigue),
+  }
 }
 
 function planToDraft(plan: Plan): PlanDraft {

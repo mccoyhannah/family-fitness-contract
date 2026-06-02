@@ -28,6 +28,18 @@ type ReviewConfirmRequest = {
   tone: ReviewConfirmTone
 }
 
+type LeaveRequestDetails = {
+  arrivalRange: string
+  fatigueText: string
+  reason: string
+}
+
+type ReviewFact = {
+  label: string
+  tone?: 'warning'
+  value: string
+}
+
 function isWaiverRequest(reason?: string | null) {
   return Boolean(reason?.includes(WAIVER_PREFIX))
 }
@@ -43,6 +55,52 @@ function cleanLeaveReason(reason?: string | null) {
     .replace(/；?理由：\s*未填写\s*$/, '')
     .replace(/；\s*$/, '')
     .trim()
+}
+
+function isMissingLeaveText(text: string) {
+  return !text.trim() || ['未填写', '无', '没有'].includes(text.trim())
+}
+
+function parseLeaveRequestDetails(reason?: string | null): LeaveRequestDetails {
+  const cleaned = cleanLeaveReason(reason)
+  if (!cleaned) return { arrivalRange: '', fatigueText: '', reason: '' }
+
+  const unmatched: string[] = []
+  let arrivalRange = ''
+  let fatigueText = ''
+
+  cleaned
+    .split(/[；;]/)
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .forEach((segment) => {
+      const arrivalMatch = segment.match(/^(?:到家时间段|到家时间|下班时间)\s*[:：]?\s*(.+)$/)
+      if (arrivalMatch?.[1]) {
+        arrivalRange = arrivalMatch[1].trim()
+        return
+      }
+
+      const fatigueMatch = segment.match(/^疲劳(?:度)?\s*[:：]?\s*(.+)$/)
+      if (fatigueMatch?.[1]) {
+        fatigueText = fatigueMatch[1].trim()
+        return
+      }
+
+      const reasonMatch = segment.match(/^理由\s*[:：]\s*(.+)$/)
+      if (reasonMatch?.[1]) {
+        const reasonText = reasonMatch[1].trim()
+        if (!isMissingLeaveText(reasonText)) unmatched.push(reasonText)
+        return
+      }
+
+      if (!isMissingLeaveText(segment)) unmatched.push(segment)
+    })
+
+  return {
+    arrivalRange,
+    fatigueText,
+    reason: unmatched.join('；'),
+  }
 }
 
 function cleanReviewNote(note?: string | null) {
@@ -82,6 +140,13 @@ function fatigueReviewSummary(fatigue: number | null) {
     detail,
     score: `疲劳 ${level}/5`,
   }
+}
+
+function fatigueReviewValue(fatigue: number | null) {
+  if (!fatigue) return ''
+  const summary = fatigueReviewSummary(fatigue)
+  const score = summary.score.replace(/^疲劳\s*/, '')
+  return summary.detail ? `${score} · ${summary.detail}` : score
 }
 
 function reviewDraftStorageKey(coachId?: string) {
@@ -310,13 +375,18 @@ export default function CoachReview() {
           const hasWaiverRequest = isWaiverRequest(item.leave_reason)
           const hasLeaveRequest = Boolean(item.leave_reason && !hasWaiverRequest)
           const waiverReason = cleanWaiverReason(item.leave_reason)
+          const leaveDetails = hasLeaveRequest ? parseLeaveRequestDetails(item.leave_reason) : null
           const isExpanded = expandedCheckInIds.has(item.id)
-          const reviewKind = hasWaiverRequest ? '补卡免罚' : hasLeaveRequest ? '请假' : '打卡'
-          const reviewKindClass = hasWaiverRequest ? 'review-kind-text waiver' : hasLeaveRequest ? 'review-kind-text leave' : 'review-kind-text'
-          const fatigueSummary = fatigueReviewSummary(item.fatigue)
+          const reviewKind = hasWaiverRequest ? '补卡免罚' : hasLeaveRequest ? '请假申请' : '打卡审核'
+          const reviewToneClass = hasWaiverRequest ? ' waiver' : hasLeaveRequest ? ' leave' : ''
           const issueSummary = item.issues.length > 0 ? `有不适 ${item.issues.length} 项` : null
-          const fatigueText = fatigueSummary.detail ? `${fatigueSummary.score} · ${fatigueSummary.detail}` : fatigueSummary.score
           const reviewComment = reviewCommentById[item.id] ?? item.review_comment ?? ''
+          const summaryFacts: ReviewFact[] = [
+            ...(item.fatigue ? [{ label: '疲劳', value: fatigueReviewValue(item.fatigue) }] : []),
+            ...(hasLeaveRequest && leaveDetails?.arrivalRange ? [{ label: '到家', value: leaveDetails.arrivalRange }] : []),
+            ...(issueSummary ? [{ label: '身体', tone: 'warning' as const, value: issueSummary }] : []),
+            ...(!item.leave_reason && plan ? [{ label: '计划', value: plan.title }] : []),
+          ]
           const primaryReviewAction = hasLeaveRequest
             ? {
                 action: () => approveLeave(item.id, item.user_id, item.date, reviewComment),
@@ -344,20 +414,21 @@ export default function CoachReview() {
                   <span className="review-task-status">待审核</span>
                 </div>
               </div>
-              <div className="review-compact-brief" aria-label="待处理摘要">
-                <div className="review-compact-line">
-                  <span className={reviewKindClass}>{reviewKind}</span>
-                  {item.fatigue && <span className="review-fatigue-score">{fatigueText}</span>}
-                  {issueSummary && <span className="review-issue-text warning">{issueSummary}</span>}
+              <div className={`review-work-order${reviewToneClass}`} aria-label="待处理摘要">
+                <div className="review-work-copy">
+                  <span className="review-work-kicker">审核任务</span>
+                  <strong>{reviewKind}</strong>
+                  {summaryFacts.length > 0 && (
+                    <div className="review-fact-grid">
+                      {summaryFacts.map((fact) => (
+                        <span className={`review-fact-pill${fact.tone ? ` ${fact.tone}` : ''}`} key={`${fact.label}-${fact.value}`}>
+                          <small>{fact.label}</small>
+                          <b>{fact.value}</b>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {!item.leave_reason && plan && (
-                  <div className="review-plan-mini">
-                    <span>对应计划：</span>
-                    <strong>{plan.title}</strong>
-                  </div>
-                )}
-              </div>
-              <div className="review-card-foot">
                 <button
                   aria-expanded={isExpanded}
                   className="review-expand-button"
@@ -515,41 +586,69 @@ function ReviewExpandedDetails({
   waiverReason: string
 }) {
   const note = cleanReviewNote(checkIn.note)
-  const leaveReason = hasLeaveRequest ? cleanLeaveReason(checkIn.leave_reason) : ''
-  const hasExplanation = Boolean(note || leaveReason || (hasWaiverRequest && waiverReason))
+  const leaveDetails = hasLeaveRequest ? parseLeaveRequestDetails(checkIn.leave_reason) : null
+  const leaveFacts: ReviewFact[] = [
+    ...(leaveDetails?.arrivalRange ? [{ label: '到家', value: leaveDetails.arrivalRange }] : []),
+    ...(checkIn.fatigue
+      ? [{ label: '疲劳', value: fatigueReviewValue(checkIn.fatigue) }]
+      : leaveDetails?.fatigueText
+        ? [{ label: '疲劳', value: leaveDetails.fatigueText }]
+        : []),
+  ]
+  const explanation = hasLeaveRequest ? leaveDetails?.reason || '' : note
+  const hasExplanation = Boolean(explanation || (hasWaiverRequest && waiverReason))
   const hasBodyStatus = Boolean(checkIn.fatigue || checkIn.issues.length > 0)
-  const shouldShowDetailSection = hasExplanation || hasBodyStatus
-  const detailTitle = hasExplanation
-    ? hasWaiverRequest
-      ? '补卡说明'
-      : hasLeaveRequest
-        ? '请假说明'
-        : '打卡备注'
-    : '身体状态'
+  const shouldShowDetailSection = hasExplanation || hasBodyStatus || leaveFacts.length > 0
+  const detailTitle = hasWaiverRequest
+    ? '补卡说明'
+    : hasLeaveRequest
+      ? '请假说明'
+      : hasExplanation
+        ? '打卡备注'
+        : '身体状态'
 
   return (
     <div className="review-detail-panel">
       {shouldShowDetailSection && (
-        <section className="review-detail-section">
+        <section className={`review-detail-section review-dossier-section${hasLeaveRequest ? ' leave' : ''}`}>
           <div className="review-detail-head">
             <strong>{detailTitle}</strong>
-            {checkIn.fatigue && <span>疲劳度 {fatigueLabel(checkIn.fatigue)}</span>}
+            {checkIn.fatigue && !hasLeaveRequest && <span>疲劳度 {fatigueLabel(checkIn.fatigue)}</span>}
           </div>
-          {hasWaiverRequest && waiverReason && <p className="review-note-box">免罚申请：{waiverReason}</p>}
-          {leaveReason && <p className="review-note-box">{leaveReason}</p>}
-          {note && <p className="review-note-box">{note}</p>}
+          {leaveFacts.length > 0 && (
+            <div className="review-detail-facts">
+              {leaveFacts.map((fact) => (
+                <span className="review-detail-fact" key={`${fact.label}-${fact.value}`}>
+                  <small>{fact.label}</small>
+                  <strong>{fact.value}</strong>
+                </span>
+              ))}
+            </div>
+          )}
+          {hasWaiverRequest && waiverReason && (
+            <div className="review-note-box">
+              <small>免罚申请</small>
+              <p>{waiverReason}</p>
+            </div>
+          )}
+          {explanation && (
+            <div className="review-note-box">
+              <small>{hasLeaveRequest ? '说明' : '备注'}</small>
+              <p>{explanation}</p>
+            </div>
+          )}
           {checkIn.issues.length > 0 && (
-          <div className="review-chip-row">
-            {checkIn.issues.map((issue) => (
-              <span className="mini-chip" key={issue}>{issue}</span>
-            ))}
-          </div>
+            <div className="review-chip-row">
+              {checkIn.issues.map((issue) => (
+                <span className="mini-chip" key={issue}>{issue}</span>
+              ))}
+            </div>
           )}
         </section>
       )}
 
       {plan && (
-        <section className="review-detail-section">
+        <section className="review-detail-section review-dossier-section">
           <div className="review-detail-head">
             <strong>对应计划</strong>
             <span>{plan.source === 'coach' ? '教练制定' : '成员自定'}</span>

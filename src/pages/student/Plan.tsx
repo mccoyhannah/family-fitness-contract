@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronUp, PencilLine, RotateCcw } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import ExerciseCard from '../../components/ExerciseCard'
 import PlanEditor from '../../components/PlanEditor'
 import { useAuth } from '../../hooks/useAuth'
@@ -9,7 +10,7 @@ import { usePenaltySettings } from '../../hooks/usePenaltySettings'
 import { usePlans } from '../../hooks/usePlans'
 import { formatDay, toISODate } from '../../lib/date'
 import { notifyApp } from '../../lib/notice'
-import { buildPlan, planFromTemplate, planToExercises } from '../../lib/plan'
+import { buildPlan, planDraftFromRecentTrainingPlan, planToExercises } from '../../lib/plan'
 import { getStudentPlanCardAction } from '../../lib/planCalendar'
 import { formatPlanFocusText, formatPlanSourceLabel } from '../../lib/planDisplay'
 import { getRestConflict } from '../../lib/restRules'
@@ -20,16 +21,47 @@ export default function Plan() {
   const { checkIns } = useCheckIns(profile?.id)
   const { penalties } = usePenalties(profile?.id)
   const { settings: penaltySettings } = usePenaltySettings()
-  const { plans, savePlan, withdrawPlan } = usePlans(profile?.id)
+  const { loading: plansLoading, plans, savePlan, withdrawPlan } = usePlans(profile?.id)
+  const [searchParams, setSearchParams] = useSearchParams()
   const [expandedDates, setExpandedDates] = useState<Set<string>>(() => new Set())
   const [editingDate, setEditingDate] = useState<string | null>(null)
   const [withdrawingDate, setWithdrawingDate] = useState<string | null>(null)
+  const handledAutoEditKeyRef = useRef<string | null>(null)
   const week = useMemo(() => buildPlan(new Date()), [])
   const today = toISODate(new Date())
   const weekDates = useMemo(() => new Set(week.map((day) => day.date)), [week])
   const weekPlans = plans.filter((plan) => weekDates.has(plan.date))
   const trainingDays = weekPlans.filter((plan) => plan.is_training).length
   const restDays = Math.max(0, weekPlans.length - trainingDays)
+  const requestedDate = searchParams.get('date')
+  const shouldAutoEdit = searchParams.get('edit') === '1'
+
+  useEffect(() => {
+    if (!requestedDate || !shouldAutoEdit || plansLoading) return
+    if (!week.some((day) => day.date === requestedDate)) return
+
+    const autoEditKey = `${requestedDate}:${plans.map((plan) => plan.id).sort().join(',')}`
+    if (handledAutoEditKeyRef.current === autoEditKey) return
+    handledAutoEditKeyRef.current = autoEditKey
+
+    const targetPlan = plans.find((plan) => plan.date === requestedDate)
+    const action = getStudentPlanCardAction(targetPlan, today)
+    setExpandedDates((current) => new Set(current).add(requestedDate))
+    if (!targetPlan || action.canEdit || action.canConvertRestToTraining) {
+      setEditingDate(requestedDate)
+    }
+
+    const scrollTimer = window.setTimeout(() => {
+      const target = document.getElementById(`plan-editor-${requestedDate}`) ?? document.getElementById(`plan-day-${requestedDate}`)
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
+      const nextParams = new URLSearchParams(searchParams)
+      nextParams.delete('edit')
+      setSearchParams(nextParams, { replace: true })
+    }, 120)
+
+    return () => window.clearTimeout(scrollTimer)
+  }, [plans, plansLoading, requestedDate, searchParams, setSearchParams, shouldAutoEdit, today, week])
 
   const toggleExpanded = (date: string) => {
     setExpandedDates((current) => {
@@ -119,6 +151,7 @@ export default function Plan() {
               hasCheckIn={hasCheckIn}
               key={day.date}
               plan={plan}
+              plans={plans}
               studentId={profile?.id}
               today={today}
               withdrawing={withdrawingDate === day.date}
@@ -150,6 +183,7 @@ function PlanDayCard({
   onToggle,
   onWithdrawRest,
   plan,
+  plans,
   studentId,
   today,
   withdrawing,
@@ -165,6 +199,7 @@ function PlanDayCard({
   onToggle: () => void
   onWithdrawRest: (plan: Plan) => Promise<void>
   plan?: Plan
+  plans: Plan[]
   studentId?: string
   today: string
   withdrawing: boolean
@@ -174,16 +209,21 @@ function PlanDayCard({
   const canWithdrawRest = Boolean(plan && action.canWithdrawRest && !hasCheckIn && !editing)
   const draft = useMemo(() => {
     if (!studentId) return null
-    if (plan && action.canConvertRestToTraining) return planToTrainingDraft(plan, day, studentId)
+    if (plan && action.canConvertRestToTraining) {
+      return {
+        ...planDraftFromRecentTrainingPlan(studentId, plans, day.date, 'student', checkInDeadline),
+        id: plan.id,
+      }
+    }
     if (plan) return planToDraft(plan)
-    return planFromTemplate(studentId, day, 'student')
-  }, [action.canConvertRestToTraining, day, plan, studentId])
+    return planDraftFromRecentTrainingPlan(studentId, plans, day.date, 'student', checkInDeadline)
+  }, [action.canConvertRestToTraining, checkInDeadline, day.date, plan, plans, studentId])
   const editorTitle = action.canConvertRestToTraining ? '改成训练计划' : plan ? '编辑自定计划' : '制定这一天的计划'
   const submitLabel = action.canConvertRestToTraining ? '保存训练计划' : plan ? '保存自定计划' : '保存这天计划'
   const restTitle = plan && !plan.is_training ? formatRestPlanTitle(plan.title) : ''
 
   return (
-    <article className={`day-card plan-day-card${expanded ? ' expanded' : ''}${editing ? ' editing' : ''}`}>
+    <article className={`day-card plan-day-card${expanded ? ' expanded' : ''}${editing ? ' editing' : ''}`} id={`plan-day-${day.date}`}>
       <div className="plan-day-summary">
         <div className="plan-day-title">
           <strong>{formatDay(day.date)}</strong>
@@ -232,7 +272,7 @@ function PlanDayCard({
       )}
 
       {editing && draft && (
-        <div className="plan-day-editor">
+        <div className="plan-day-editor" id={`plan-editor-${day.date}`}>
           <div className="plan-editor-strip">
             <strong>{editorTitle}</strong>
             <button className="ghost-button" type="button" onClick={onCancelEdit}>
@@ -254,11 +294,6 @@ function PlanDayCard({
 function formatRestPlanTitle(title: string) {
   const normalized = title.trim()
   return normalized && normalized !== '今日休息' ? normalized : '恢复日'
-}
-
-function planToTrainingDraft(plan: Plan, day: PlanDay, userId: string): PlanDraft {
-  const draft = planFromTemplate(userId, day, 'student')
-  return { ...draft, id: plan.id }
 }
 
 function planToDraft(plan: Plan): PlanDraft {

@@ -1,10 +1,9 @@
-import { AlertTriangle, CalendarCheck, ChevronDown, ChevronUp, Flame, RotateCcw, Umbrella } from 'lucide-react'
-import { type RefObject, useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, CalendarCheck, ChevronDown, ChevronUp, Flame, PencilLine, RotateCcw, Umbrella } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ExerciseCard from '../../components/ExerciseCard'
 import FatigueCards from '../../components/FatigueCards'
 import Metric from '../../components/Metric'
-import PlanEditor from '../../components/PlanEditor'
 import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
 import { useCheckIns } from '../../hooks/useCheckIns'
@@ -14,13 +13,13 @@ import { usePlans } from '../../hooks/usePlans'
 import { formatDay, toISODate } from '../../lib/date'
 import { buildLeaveRequestReason, validateLeaveRequest } from '../../lib/leaveRequest'
 import { notifyApp } from '../../lib/notice'
-import { planDraftFromRecentTrainingPlan, planToExercises } from '../../lib/plan'
+import { planToExercises } from '../../lib/plan'
 import { formatPlanFocusText, formatPlanSourceLabel } from '../../lib/planDisplay'
 import { getRestConflict } from '../../lib/restRules'
 import { buildMissedSync } from '../../lib/sync'
 import { rawErrorMessage } from '../../lib/supabaseErrors'
 import { getContributionPromptState, getRestChoiceActionState, type ContributionPromptState } from '../../lib/todayPrompts'
-import type { CheckIn, Exercise, Plan, PlanDraft } from '../../lib/types'
+import type { CheckIn, Exercise, Plan } from '../../lib/types'
 
 const CONTRIBUTION_PROMPT_SHOWN_KEY = 'family-fitness-contract:contribution-prompt-shown-key'
 const LEAVE_OFF_WORK_TIME_OPTIONS = [
@@ -69,13 +68,11 @@ export default function Today() {
   const [restSaving, setRestSaving] = useState(false)
   const [restWithdrawing, setRestWithdrawing] = useState(false)
   const [requestingLeave, setRequestingLeave] = useState(false)
-  const [selfPlanOpen, setSelfPlanOpen] = useState(false)
   const [shownContributionPromptKey, setShownContributionPromptKey] = useState(readShownContributionPromptKey)
   const [activeContributionPrompt, setActiveContributionPrompt] = useState<ContributionPromptState | null>(null)
   const [withdrawing, setWithdrawing] = useState(false)
   const navigate = useNavigate()
   const completedSyncKeyRef = useRef<string | null>(null)
-  const selfPlanEditorRef = useRef<HTMLDivElement | null>(null)
   const syncingKeyRef = useRef<string | null>(null)
   const today = toISODate(new Date())
   const todayPlan = plans.find((plan) => plan.date === today)
@@ -233,17 +230,7 @@ export default function Today() {
     }
   }
 
-  const toggleSelfPlan = () => {
-    if (selfPlanOpen) {
-      setSelfPlanOpen(false)
-      return
-    }
-
-    setSelfPlanOpen(true)
-    window.requestAnimationFrame(() => {
-      selfPlanEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
-  }
+  const openPlanEditor = () => navigate(`/plan?date=${today}&edit=1`)
 
   const closeContributionPrompt = () => {
     setActiveContributionPrompt(null)
@@ -293,24 +280,6 @@ export default function Today() {
     }
   }
 
-  const selfPlanDraft = useMemo<PlanDraft | null>(() => {
-    if (!profile) return null
-    return planDraftFromRecentTrainingPlan(profile.id, plans, today, 'student', penaltySettings.check_in_deadline)
-  }, [penaltySettings.check_in_deadline, plans, profile, today])
-
-  const saveSelfPlan = async (nextDraft: PlanDraft) => {
-    if (!nextDraft.is_training) {
-      const conflict = getRestConflict(nextDraft.date, plans, checkIns, penalties)
-      if (conflict) {
-        notifyApp({ tone: 'warning', message: conflict.message })
-        throw new Error(conflict.message)
-      }
-    }
-    const savedPlan = await savePlan(nextDraft)
-    notifyApp({ tone: 'success', message: '今日计划已保存。' })
-    return savedPlan
-  }
-
   if (showLoadingSkeleton) return <TodayLoadingSkeleton />
 
   return (
@@ -349,19 +318,15 @@ export default function Today() {
           onLeaveOffWorkTimeChange={setLeaveOffWorkTime}
           onStartCheckIn={startCheckIn}
           onLeaveReasonChange={setLeaveReason}
-          onPlanEdit={() => navigate('/plan')}
+          onPlanEdit={openPlanEditor}
         />
       ) : (
-        selfPlanDraft && (
+        profile && (
           <TodayOpenPlanSection
             checkIn={todayCheckIn}
-            draft={selfPlanDraft}
-            editorRef={selfPlanEditorRef}
             leaveFatigue={leaveFatigue}
             leaveOffWorkTime={leaveOffWorkTime}
             leaveReason={leaveReason}
-            open={selfPlanOpen}
-            checkInDeadline={penaltySettings.check_in_deadline}
             requestingLeave={requestingLeave}
             restBlockedMessage={restBlockedMessage}
             restSaving={restSaving}
@@ -371,8 +336,7 @@ export default function Today() {
             onLeaveReasonChange={setLeaveReason}
             onMarkRest={markTodayRest}
             onRestBlockedNotice={(message) => notifyApp({ tone: 'warning', message })}
-            onSave={saveSelfPlan}
-            onTogglePlan={toggleSelfPlan}
+            onOpenPlan={openPlanEditor}
           />
         )
       )}
@@ -645,9 +609,6 @@ function TodayTrainingSection({
 
 function TodayOpenPlanSection({
   checkIn,
-  checkInDeadline,
-  draft,
-  editorRef,
   leaveFatigue,
   leaveOffWorkTime,
   leaveReason,
@@ -656,18 +617,13 @@ function TodayOpenPlanSection({
   onLeaveOffWorkTimeChange,
   onLeaveReasonChange,
   onMarkRest,
+  onOpenPlan,
   onRestBlockedNotice,
-  onSave,
-  onTogglePlan,
-  open,
   requestingLeave,
   restBlockedMessage,
   restSaving,
 }: {
   checkIn?: CheckIn
-  checkInDeadline: string
-  draft: PlanDraft
-  editorRef: RefObject<HTMLDivElement | null>
   leaveFatigue: number | null
   leaveOffWorkTime: string
   leaveReason: string
@@ -676,10 +632,8 @@ function TodayOpenPlanSection({
   onLeaveOffWorkTimeChange: (value: string) => void
   onLeaveReasonChange: (value: string) => void
   onMarkRest: () => Promise<void>
+  onOpenPlan: () => void
   onRestBlockedNotice: (message: string) => void
-  onSave: (draft: PlanDraft) => Promise<Plan>
-  onTogglePlan: () => void
-  open: boolean
   requestingLeave: boolean
   restBlockedMessage?: string | null
   restSaving: boolean
@@ -722,9 +676,9 @@ function TodayOpenPlanSection({
             <Umbrella size={18} />
             {requestingLeave ? '提交中' : '暂停训练，申请请假'}
           </button>
-          <button aria-expanded={open} className="ghost-button" disabled={disabled} type="button" onClick={onTogglePlan}>
-            {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            {open ? '收起自定计划' : '自己制定计划'}
+          <button className="ghost-button" disabled={disabled} type="button" onClick={onOpenPlan}>
+            <PencilLine size={18} />
+            自己制定计划
           </button>
         </div>
         <LeaveRequestFields
@@ -737,16 +691,6 @@ function TodayOpenPlanSection({
           onReasonChange={onLeaveReasonChange}
         />
       </div>
-      {open && (
-        <div className="self-plan-editor-scroll-target" ref={editorRef}>
-          <PlanEditor
-            checkInDeadline={checkInDeadline}
-            initial={draft}
-            submitLabel="保存计划"
-            onSubmit={async (nextDraft) => void (await onSave(nextDraft))}
-          />
-        </div>
-      )}
     </section>
   )
 }

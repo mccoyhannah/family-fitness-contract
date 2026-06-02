@@ -218,7 +218,6 @@ function PlanDayCard({
     if (plan) return planToDraft(plan)
     return planDraftFromRecentTrainingPlan(studentId, plans, day.date, 'student', checkInDeadline)
   }, [action.canConvertRestToTraining, checkInDeadline, day.date, plan, plans, studentId])
-  const editorTitle = action.canConvertRestToTraining ? '改成训练计划' : plan ? '编辑自定计划' : '制定这一天的计划'
   const submitLabel = action.canConvertRestToTraining ? '保存训练计划' : plan ? '保存自定计划' : '保存这天计划'
   const restTitle = plan && !plan.is_training ? formatRestPlanTitle(plan.title) : ''
 
@@ -273,10 +272,10 @@ function PlanDayCard({
 
       {editing && draft && (
         <div className="plan-day-editor" id={`plan-editor-${day.date}`}>
-          <div className="plan-editor-strip">
-            <strong>{editorTitle}</strong>
-            <button className="ghost-button" type="button" onClick={onCancelEdit}>
-              取消
+          <div className="plan-editor-mini-toolbar">
+            <button className="ghost-button plan-editor-collapse-button" type="button" onClick={onCancelEdit}>
+              <ChevronUp size={17} />
+              收起编辑
             </button>
           </div>
           <PlanEditor

@@ -1736,28 +1736,37 @@ textarea:focus-visible,
 
 .plan-day-editor {
   display: grid;
-  gap: 12px;
-  padding-top: 4px;
+  gap: 8px;
+  padding-top: 0;
 }
 
 .plan-day-editor .plan-editor {
   margin-top: 0;
 }
 
-.plan-editor-strip {
+.plan-editor-mini-toolbar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid #d9eadb;
-  border-radius: var(--radius);
-  background: linear-gradient(180deg, #ffffff, var(--brand-soft));
+  justify-content: flex-end;
+  min-height: 40px;
 }
 
-.plan-editor-strip strong {
-  color: var(--ink);
-  font-size: 15px;
+.plan-editor-collapse-button {
+  width: fit-content;
+  min-height: 40px;
+  padding: 0 12px;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-soft);
+  border-color: #dce6df;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: none;
+}
+
+.plan-editor-collapse-button:hover {
+  border-color: #b9d8c4;
+  color: var(--brand-2);
+  background: var(--brand-soft);
 }
 
 .exercise-card {
@@ -5475,8 +5484,7 @@ button:active,
     font-size: 22px;
   }
 
-  .plan-day-title,
-  .plan-editor-strip {
+  .plan-day-title {
     align-items: stretch;
     flex-direction: column;
   }

@@ -1,5 +1,5 @@
 import type { FormEvent } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
 import { useCheckIns } from '../../hooks/useCheckIns'
@@ -61,6 +61,8 @@ export default function Ledger() {
   const [waiverReason, setWaiverReason] = useState('')
   const [penaltyPage, setPenaltyPage] = useState(1)
   const [submittingWaiver, setSubmittingWaiver] = useState(false)
+  const penaltyListRef = useRef<HTMLDivElement | null>(null)
+  const scrollPenaltyListOnPageChangeRef = useRef(false)
   const pendingTotal = penalties.filter((item) => item.status === 'pending').reduce((sum, item) => sum + item.amount, 0)
   const reported = penalties.filter((item) => item.status === 'payment_reported').length
   const settled = penalties.filter((item) => item.status === 'paid' || item.status === 'waived').length
@@ -94,6 +96,14 @@ export default function Ledger() {
     resetInlinePanels()
     setPenaltyPage(1)
   }, [profile?.id])
+
+  useEffect(() => {
+    if (!scrollPenaltyListOnPageChangeRef.current) return
+    scrollPenaltyListOnPageChangeRef.current = false
+    window.requestAnimationFrame(() => {
+      penaltyListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }, [safePenaltyPage])
 
   const openDonationConfirm = (penalty: Penalty) => {
     setDonationTargetId(penalty.id)
@@ -152,6 +162,7 @@ export default function Ledger() {
     const boundedPage = Math.min(Math.max(nextPage, 1), totalPenaltyPages)
     if (boundedPage === safePenaltyPage) return
     resetInlinePanels()
+    scrollPenaltyListOnPageChangeRef.current = true
     setPenaltyPage(boundedPage)
   }
 
@@ -238,7 +249,7 @@ export default function Ledger() {
         </div>
         {penalties.length > 0 && <em>{penalties.length} 条</em>}
       </div>
-      <div className="penalty-list">
+      <div className="penalty-list" ref={penaltyListRef}>
         {penalties.length === 0 && <p className="muted">暂无待贡献记录。请假和今日休息不会生成家庭基金贡献。</p>}
         {displayedPenalties.map((penalty) => {
           const checkIn = checkInByDate.get(penalty.date)

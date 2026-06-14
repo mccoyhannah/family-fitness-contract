@@ -17,6 +17,10 @@ function planItemIndexLabel(index: number) {
   return `动作${PLAN_ITEM_INDEX_LABELS[index] ?? index + 1}`
 }
 
+function planItemNumberLabel(index: number) {
+  return String(index + 1).padStart(2, '0')
+}
+
 export default function PlanEditor({ checkInDeadline, initial, onSubmit, submitLabel }: PlanEditorProps) {
   const initialKey = useMemo(
     () => {
@@ -83,40 +87,55 @@ export default function PlanEditor({ checkInDeadline, initial, onSubmit, submitL
 
   return (
     <form className={`form-card plan-editor contract-clause-editor ${modeClass}`} onSubmit={submit}>
-      <div className="plan-mode-group plan-mode-toolbar" role="group" aria-label="计划类型">
-        <button
-          aria-pressed={draft.is_training}
-          className={`plan-mode-option${draft.is_training ? ' selected' : ''}`}
-          type="button"
-          onClick={() => changeTrainingMode(true)}
-        >
-          训练
-        </button>
-        <button
-          aria-pressed={!draft.is_training}
-          className={`plan-mode-option${!draft.is_training ? ' selected' : ''}`}
-          type="button"
-          onClick={() => changeTrainingMode(false)}
-        >
-          休息
-        </button>
-      </div>
+      <section className="plan-editor-section plan-editor-mode-section" aria-label="今日性质">
+        <div className="plan-editor-section-head">
+          <span>今日性质</span>
+          <strong>{draft.is_training ? '训练日' : '恢复日'}</strong>
+        </div>
+        <div className="plan-mode-group plan-mode-toolbar" role="group" aria-label="计划类型">
+          <button
+            aria-pressed={draft.is_training}
+            className={`plan-mode-option${draft.is_training ? ' selected' : ''}`}
+            type="button"
+            onClick={() => changeTrainingMode(true)}
+          >
+            训练
+          </button>
+          <button
+            aria-pressed={!draft.is_training}
+            className={`plan-mode-option${!draft.is_training ? ' selected' : ''}`}
+            type="button"
+            onClick={() => changeTrainingMode(false)}
+          >
+            休息
+          </button>
+        </div>
+      </section>
 
       {draft.is_training ? (
         <>
-          <div className="plan-title-focus-row">
-            <label>
-              标题
-              <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
-            </label>
-            <label>
-              重点
-              <input value={draft.focus} onChange={(event) => setDraft({ ...draft, focus: event.target.value })} />
-            </label>
-          </div>
+          <section className="plan-editor-section plan-summary-card" aria-label="计划摘要">
+            <div className="plan-editor-section-head">
+              <span>计划摘要</span>
+              <strong>{draft.title || '未命名计划'}</strong>
+            </div>
+            <div className="plan-title-focus-row">
+              <label className="plan-title-field">
+                标题
+                <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
+              </label>
+              <label>
+                重点
+                <input value={draft.focus} onChange={(event) => setDraft({ ...draft, focus: event.target.value })} />
+              </label>
+            </div>
+          </section>
 
-          <div className="section-heading compact-heading contract-section-heading">
-            <h3>动作</h3>
+          <div className="section-heading compact-heading contract-section-heading plan-items-heading">
+            <div>
+              <span>训练内容</span>
+              <h3>动作清单</h3>
+            </div>
             <button className="icon-action" type="button" onClick={addItem} aria-label="添加动作">
               <Plus size={18} />
             </button>
@@ -126,6 +145,7 @@ export default function PlanEditor({ checkInDeadline, initial, onSubmit, submitL
             {draft.items.map((item, index) => (
               <article className="plan-item-editor contract-term-editor" key={item.id ?? index}>
                 <div className="plan-item-editor-head">
+                  <span className="plan-item-number" aria-hidden="true">{planItemNumberLabel(index)}</span>
                   <span className="plan-item-index">{planItemIndexLabel(index)}</span>
                   <button className="icon-action danger-action plan-item-remove" type="button" onClick={() => removeItem(index)} aria-label={`删除${planItemIndexLabel(index)}`}>
                     <Trash2 size={17} />
@@ -135,6 +155,7 @@ export default function PlanEditor({ checkInDeadline, initial, onSubmit, submitL
                   <label className="plan-item-name-field">
                     <span className="visually-hidden">{planItemIndexLabel(index)}名称</span>
                     <input
+                      aria-label={`${planItemIndexLabel(index)}名称`}
                       placeholder="动作名称"
                       value={item.name}
                       onChange={(event) => updateItem(index, 'name', event.target.value)}

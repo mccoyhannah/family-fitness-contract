@@ -1,5 +1,6 @@
 import { AlertTriangle, CalendarCheck, ChevronDown, ChevronUp, Flame, PencilLine, RotateCcw, Umbrella } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import ExerciseCard from '../../components/ExerciseCard'
 import FatigueCards from '../../components/FatigueCards'
@@ -413,7 +414,7 @@ function ContributionPromptModal({
   onOpenLedger: () => void
   prompt: ContributionPromptState
 }) {
-  return (
+  return createPortal(
     <div className="waiver-modal-backdrop contribution-modal-backdrop" role="presentation">
       <section className="waiver-modal contribution-modal" role="dialog" aria-modal="true" aria-labelledby="contribution-modal-title">
         <div className="contribution-modal-mark">
@@ -441,7 +442,8 @@ function ContributionPromptModal({
           </button>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

@@ -14,6 +14,7 @@ import { formatDay, toISODate } from '../../lib/date'
 import { displayMemberLabel } from '../../lib/memberLabels'
 import { notifyApp } from '../../lib/notice'
 import { CHECK_IN_DEADLINE_OPTIONS } from '../../lib/penaltySettings'
+import { scrollListStartIntoScreenView } from '../../lib/scroll'
 import type { FundExpense, FundExpensePurpose, Penalty, PenaltySettings, PenaltyStatus } from '../../lib/types'
 
 type PenaltyAction = {
@@ -125,6 +126,8 @@ export default function CoachPayments() {
   const [penaltyPage, setPenaltyPage] = useState(1)
   const [savingExpense, setSavingExpense] = useState(false)
   const [updatingPenaltyId, setUpdatingPenaltyId] = useState('')
+  const paymentListRef = useRef<HTMLDivElement | null>(null)
+  const scrollPaymentListOnPageChangeRef = useRef(false)
   const paymentReturnPointRef = useRef<PaymentReturnPoint | null>(null)
   const scopedPenalties = useMemo(
     () => membersReady ? selectedMember ? penalties.filter((penalty) => penalty.user_id === selectedMember.id) : penalties : [],
@@ -211,6 +214,21 @@ export default function CoachPayments() {
   useEffect(() => {
     if (penaltyPage > totalPenaltyPages) setPenaltyPage(totalPenaltyPages)
   }, [penaltyPage, totalPenaltyPages])
+
+  useEffect(() => {
+    if (!scrollPaymentListOnPageChangeRef.current) return
+    scrollPaymentListOnPageChangeRef.current = false
+    window.requestAnimationFrame(() => {
+      scrollListStartIntoScreenView(paymentListRef.current)
+    })
+  }, [safePenaltyPage])
+
+  const goToPenaltyPage = (nextPage: number) => {
+    const boundedPage = Math.min(Math.max(nextPage, 1), totalPenaltyPages)
+    if (boundedPage === safePenaltyPage) return
+    scrollPaymentListOnPageChangeRef.current = true
+    setPenaltyPage(boundedPage)
+  }
 
   const findPaymentCard = (penaltyId: string) =>
     Array.from(document.querySelectorAll<HTMLElement>('[data-penalty-id]')).find(
@@ -455,7 +473,7 @@ export default function CoachPayments() {
         </div>
       </div>
 
-      <div className="penalty-list payment-list">
+      <div className="penalty-list payment-list" ref={paymentListRef}>
         {visiblePenalties.length === 0 && <p className="muted">当前没有符合筛选条件的基金记录。</p>}
         {displayedPenalties.map((penalty) => {
           const displayName = memberNameById.get(penalty.user_id) || '成员'
@@ -538,11 +556,11 @@ export default function CoachPayments() {
               {firstPenaltyIndex + 1}-{firstPenaltyIndex + displayedPenalties.length} / {visiblePenalties.length} 条
             </span>
             <div className="payment-list-pager-actions">
-              <button type="button" disabled={safePenaltyPage <= 1} onClick={() => setPenaltyPage((page) => Math.max(1, page - 1))}>
+              <button type="button" disabled={safePenaltyPage <= 1} onClick={() => goToPenaltyPage(safePenaltyPage - 1)}>
                 上一页
               </button>
               <strong>第 {safePenaltyPage} / {totalPenaltyPages} 页</strong>
-              <button type="button" disabled={safePenaltyPage >= totalPenaltyPages} onClick={() => setPenaltyPage((page) => Math.min(totalPenaltyPages, page + 1))}>
+              <button type="button" disabled={safePenaltyPage >= totalPenaltyPages} onClick={() => goToPenaltyPage(safePenaltyPage + 1)}>
                 下一页
               </button>
             </div>

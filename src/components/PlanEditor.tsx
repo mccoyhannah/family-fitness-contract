@@ -114,11 +114,7 @@ export default function PlanEditor({ checkInDeadline, initial, onSubmit, submitL
 
       {draft.is_training ? (
         <>
-          <section className="plan-editor-section plan-summary-card" aria-label="计划摘要">
-            <div className="plan-editor-section-head">
-              <span>计划摘要</span>
-              <strong>{draft.title || '未命名计划'}</strong>
-            </div>
+          <section className="plan-editor-section plan-summary-card" aria-label="训练目标">
             <div className="plan-title-focus-row">
               <label className="plan-title-field">
                 标题

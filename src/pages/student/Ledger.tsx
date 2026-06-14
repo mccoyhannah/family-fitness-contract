@@ -8,6 +8,7 @@ import { useFundExpenses } from '../../hooks/useFundExpenses'
 import { usePenalties } from '../../hooks/usePenalties'
 import { formatDay } from '../../lib/date'
 import { notifyApp } from '../../lib/notice'
+import { scrollListStartIntoScreenView } from '../../lib/scroll'
 import type { FundExpensePurpose, Penalty } from '../../lib/types'
 
 const WAIVER_PREFIX = '[免罚申请]'
@@ -101,7 +102,7 @@ export default function Ledger() {
     if (!scrollPenaltyListOnPageChangeRef.current) return
     scrollPenaltyListOnPageChangeRef.current = false
     window.requestAnimationFrame(() => {
-      penaltyListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      scrollListStartIntoScreenView(penaltyListRef.current)
     })
   }, [safePenaltyPage])
 
